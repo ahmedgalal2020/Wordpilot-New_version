@@ -4,17 +4,59 @@
 
 # Run and deploy your AI Studio app
 
-This contains everything you need to run your app locally.
+This repo now includes:
+- **Frontend** (Vite + React) on port `3000`
+- **Backend** (Express API) on port `8787`
 
 View your app in AI Studio: https://ai.studio/apps/2e0a213e-6b14-427b-be3f-0efec4058677
 
-## Run Locally
+## Prerequisites
 
-**Prerequisites:**  Node.js
+- Node.js 18+
 
+## Environment
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+Create `.env.local` and add:
+
+```bash
+GEMINI_API_KEY=your_key_here
+# Optional
+# GEMINI_MODEL=gemini-2.0-flash
+# PORT=8787
+```
+
+## Install
+
+```bash
+npm install
+```
+
+## Run locally
+
+Terminal 1 (backend):
+
+```bash
+npm run dev:server
+```
+
+Terminal 2 (frontend):
+
+```bash
+npm run dev
+```
+
+Frontend API calls to `/api/*` are proxied to the backend server.
+
+## Backend endpoints
+
+- `GET /api/health`
+- `POST /api/ai/generate`
+  - body: `{ "prompt": "...", "systemInstruction": "optional" }`
+  - returns: `{ "text": "..." }`
+
+## Build and checks
+
+```bash
+npm run lint
+npm run build
+```
