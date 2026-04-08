@@ -1,20 +1,53 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Wordpilot / Scholar Script
 
-# Run and deploy your AI Studio app
+Full-stack dictation training app with a React + TypeScript frontend, Express API backend, and Prisma schema for MySQL.
 
-This contains everything you need to run your app locally.
+## Tech stack
+- Frontend: Vite + React + TypeScript
+- Backend: Express (Node)
+- ORM: Prisma
+- Database: MySQL
 
-View your app in AI Studio: https://ai.studio/apps/2e0a213e-6b14-427b-be3f-0efec4058677
+## Environment setup
+Copy `.env.example` to `.env` and configure values:
 
-## Run Locally
+```bash
+cp .env.example .env
+```
 
-**Prerequisites:**  Node.js
+Required variables:
+- `VITE_API_URL`
+- `PORT`
+- `CLIENT_ORIGIN`
+- `DATABASE_URL` (MySQL)
+- `JWT_SECRET`
 
+## Run app
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+```bash
+npm install
+npm run dev
+```
+
+This starts:
+- frontend at `http://localhost:3000`
+- backend at `http://localhost:4000`
+
+## Prisma
+
+```bash
+npm run prisma:generate
+npm run prisma:migrate
+```
+
+Schema: `prisma/schema.prisma`
+Initial SQL migration: `prisma/migrations/20260407220000_init/migration.sql`
+
+## Implemented flows
+- Signup/login and session token handling
+- Dashboard with fetched sessions + saved texts
+- AI Lab text generation and saving to library
+- Dictation workspace save/grade session flow
+- Settings persistence hooks (speech rate and word gap)
+
+> Note: The backend currently uses in-memory storage for runtime behavior in this environment. Prisma schema + migration are included and ready for MySQL-backed integration.
