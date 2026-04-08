@@ -2,29 +2,52 @@ import React, { useState } from 'react';
 import { Send, Share2, Download, Plus, Bot, User, Bolt, MoreVertical, Edit3, RefreshCw, Bookmark, Keyboard } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 import { ChatMessage } from '@/src/types';
+import { api } from '@/src/lib/api';
 
 const INITIAL_MESSAGES: ChatMessage[] = [
   { id: '1', role: 'assistant', content: "Hello! I'm your Academic Assistant. What kind of practice text should we create today? You can specify the topic, CEFR level, or specific vocabulary goals." },
-  { id: '2', role: 'user', content: "Generate a B2 English text about sustainability focusing on renewable energy trends in 2024." },
-  { id: '3', role: 'assistant', content: "Of course. I've drafted a text focusing on solar and wind innovations. You can see it in the panel to the right. Should we adjust the tone to be more academic or more journalistic?" },
 ];
 
-const GENERATED_TEXT = `Title: The Clean Energy Surge: Sustainability in 2024
-
-As we progress through 2024, the global landscape of renewable energy is undergoing a dramatic transformation. This shift is not merely a reaction to environmental pressures but is increasingly driven by economic viability and technological breakthroughs.
-
-Recent data suggests that solar photovoltaics and wind power have reached a tipping point, becoming the primary choice for new electrical grid capacity worldwide. In Northern Europe, offshore wind projects are expanding into deeper waters using floating platform technology, while in the Sun Belt regions, concentrated solar power is proving that renewable storage can provide consistent energy even after the sun sets.
-
-However, the transition is not without its hurdles. Infrastructure limitations and the fluctuating nature of wind and solar sources require a more robust, digitized smart grid. Governments are now prioritizing investment in long-duration energy storage systems (LDES) and green hydrogen production to bridge these gaps.
-
-For students of English at a B2 level, these developments offer a rich vocabulary of technical terms such as 'carbon footprint,' 'intermittency,' and 'grid parity.' Understanding these concepts is essential for navigating modern discourse on the climate crisis.`;
-
 export default function AILab() {
-  const [messages] = useState<ChatMessage[]>(INITIAL_MESSAGES);
+  const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES);
+  const [prompt, setPrompt] = useState('Generate a B2 English text about sustainability focusing on renewable energy trends.');
+  const [generatedText, setGeneratedText] = useState('Your generated practice text will appear here after you send a prompt.');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submitPrompt = async () => {
+    if (!prompt.trim() || isLoading) return;
+
+    const userMessage: ChatMessage = {
+      id: `${Date.now()}-user`,
+      role: 'user',
+      content: prompt.trim(),
+    };
+
+    setMessages((current) => [...current, userMessage]);
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const result = await api.generateText(prompt.trim());
+      const assistantMessage: ChatMessage = {
+        id: `${Date.now()}-assistant`,
+        role: 'assistant',
+        content: 'Done. I generated a new dictation text in the right panel.',
+      };
+
+      setGeneratedText(result.text);
+      setMessages((current) => [...current, assistantMessage]);
+    } catch (requestError) {
+      const message = requestError instanceof Error ? requestError.message : 'Failed to generate text.';
+      setError(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <main className="flex h-[calc(100vh-64px)] overflow-hidden pt-16">
-      {/* Sidebar: Chat History */}
       <aside className="w-72 bg-surface-container-low flex flex-col border-r border-surface-container">
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">
@@ -39,10 +62,7 @@ export default function AILab() {
         <div className="flex-1 overflow-y-auto px-4 pb-6">
           <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest px-2 mb-4">Past Generations</p>
           <div className="space-y-1">
-            <HistoryItem title="Sustainability Trends B2" time="2 mins ago" active />
-            <HistoryItem title="History of Ancient Rome" time="Yesterday" />
-            <HistoryItem title="Climate Change Perspectives" time="Oct 24, 2024" />
-            <HistoryItem title="Business Ethics in Tech" time="Oct 22, 2024" />
+            <HistoryItem title="Sustainability Trends B2" time="Now" active />
           </div>
         </div>
         <div className="p-4 bg-surface-container mt-auto">
@@ -58,9 +78,7 @@ export default function AILab() {
         </div>
       </aside>
 
-      {/* Main Workspace Area */}
       <div className="flex-1 flex flex-col md:flex-row bg-surface overflow-hidden">
-        {/* Left: Chat Interface */}
         <section className="flex-1 flex flex-col border-r border-surface-container relative">
           <div className="p-6 border-b border-surface-container flex items-center justify-between">
             <div>
@@ -71,46 +89,41 @@ export default function AILab() {
               <MoreVertical className="w-5 h-5" />
             </button>
           </div>
-          
+
           <div className="flex-1 overflow-y-auto p-8 space-y-8 scroll-smooth">
             {messages.map((msg) => (
-              <div key={msg.id} className={cn("flex gap-4 max-w-[85%]", msg.role === 'user' && "ml-auto flex-row-reverse")}>
-                <div className={cn(
-                  "w-8 h-8 rounded-full flex items-center justify-center shrink-0",
-                  msg.role === 'assistant' ? "bg-secondary-container text-secondary" : "bg-primary text-on-primary"
-                )}>
+              <div key={msg.id} className={cn('flex gap-4 max-w-[85%]', msg.role === 'user' && 'ml-auto flex-row-reverse')}>
+                <div className={cn('w-8 h-8 rounded-full flex items-center justify-center shrink-0', msg.role === 'assistant' ? 'bg-secondary-container text-secondary' : 'bg-primary text-on-primary')}>
                   {msg.role === 'assistant' ? <Bot className="w-4 h-4 fill-secondary" /> : <User className="w-4 h-4 fill-on-primary" />}
                 </div>
-                <div className={cn(
-                  "p-4 rounded-2xl shadow-sm leading-relaxed text-sm",
-                  msg.role === 'assistant' ? "bg-surface-container-highest rounded-tl-none text-on-surface" : "bg-primary-container rounded-tr-none text-on-primary-container"
-                )}>
+                <div className={cn('p-4 rounded-2xl shadow-sm leading-relaxed text-sm', msg.role === 'assistant' ? 'bg-surface-container-highest rounded-tl-none text-on-surface' : 'bg-primary-container rounded-tr-none text-on-primary-container')}>
                   {msg.content}
                 </div>
               </div>
             ))}
+            {error && <p className="text-sm text-error bg-error-container/30 rounded-xl p-3">{error}</p>}
           </div>
 
-          {/* Chat Input Bar */}
           <div className="p-6 glass-panel">
             <div className="max-w-2xl mx-auto relative">
-              <textarea 
-                className="w-full bg-surface-container-lowest border border-surface-container rounded-2xl py-4 pl-5 pr-14 text-sm focus:ring-2 focus:ring-primary/10 focus:border-primary outline-none resize-none shadow-sm placeholder:text-on-surface-variant/50" 
-                placeholder="Type instructions here... (e.g. 'Make it more professional')" 
-                rows={1}
+              <textarea
+                className="w-full bg-surface-container-lowest border border-surface-container rounded-2xl py-4 pl-5 pr-14 text-sm focus:ring-2 focus:ring-primary/10 focus:border-primary outline-none resize-none shadow-sm placeholder:text-on-surface-variant/50"
+                placeholder="Type instructions here... (e.g. 'Make it more professional')"
+                rows={2}
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
               />
-              <button className="absolute right-2 top-2 p-3 bg-primary text-on-primary rounded-xl hover:bg-primary-dim transition-all active:scale-95 shadow-lg shadow-primary/20">
+              <button onClick={submitPrompt} disabled={isLoading} className="absolute right-2 top-2 p-3 bg-primary text-on-primary rounded-xl hover:bg-primary-dim transition-all active:scale-95 shadow-lg shadow-primary/20 disabled:opacity-60">
                 <Send className="w-5 h-5" />
               </button>
             </div>
           </div>
         </section>
 
-        {/* Right: Generated Text Panel */}
         <section className="flex-1 flex flex-col bg-surface-container-lowest overflow-hidden">
           <div className="p-6 border-b border-surface-container flex items-center justify-between bg-surface-container-lowest">
             <div className="flex items-center gap-3">
-              <div className="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
+              <div className={cn('w-2 h-2 rounded-full', isLoading ? 'bg-primary animate-pulse' : 'bg-outline-variant')}></div>
               <h2 className="font-headline font-bold text-lg text-on-surface">Generated Text</h2>
             </div>
             <div className="flex items-center gap-2">
@@ -122,18 +135,13 @@ export default function AILab() {
               </button>
             </div>
           </div>
-          
+
           <div className="flex-1 overflow-y-auto p-10">
             <div className="max-w-prose mx-auto">
-              <textarea 
-                className="w-full h-full min-h-[500px] border-none focus:ring-0 p-0 text-lg leading-loose text-on-surface font-normal" 
-                spellCheck={false}
-                defaultValue={GENERATED_TEXT}
-              />
+              <textarea className="w-full h-full min-h-[500px] border-none focus:ring-0 p-0 text-lg leading-loose text-on-surface font-normal" spellCheck={false} value={generatedText} onChange={(e) => setGeneratedText(e.target.value)} />
             </div>
           </div>
 
-          {/* Controls Area */}
           <div className="p-8 border-t border-surface-container bg-surface-container-low/30">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <ControlButton icon={<Edit3 className="w-4 h-4" />} label="Refine via Chat" />
@@ -153,11 +161,8 @@ export default function AILab() {
 
 function HistoryItem({ title, time, active }: { title: string; time: string; active?: boolean }) {
   return (
-    <button className={cn(
-      "w-full text-left p-3 rounded-xl transition-colors group",
-      active ? "bg-surface-container-highest/50 border-l-4 border-primary" : "hover:bg-surface-container"
-    )}>
-      <p className={cn("text-sm line-clamp-1", active ? "font-semibold text-on-surface" : "font-medium text-on-surface-variant group-hover:text-on-surface")}>
+    <button className={cn('w-full text-left p-3 rounded-xl transition-colors group', active ? 'bg-surface-container-highest/50 border-l-4 border-primary' : 'hover:bg-surface-container')}>
+      <p className={cn('text-sm line-clamp-1', active ? 'font-semibold text-on-surface' : 'font-medium text-on-surface-variant group-hover:text-on-surface')}>
         {title}
       </p>
       <p className="text-[11px] text-on-surface-variant/60 mt-1">{time}</p>

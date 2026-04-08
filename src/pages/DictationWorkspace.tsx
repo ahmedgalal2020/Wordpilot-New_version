@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { api } from '@/src/lib/api';
 import { Pause, Play, Settings, CheckCircle, Volume2, RotateCcw, SlidersHorizontal } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 import { motion } from 'motion/react';
@@ -12,6 +13,9 @@ export default function DictationWorkspace() {
   const [speechRate, setSpeechRate] = useState(1);
   const [wordGap, setWordGap] = useState(0.5); // Base delay in seconds
   const [currentWordIndex, setCurrentWordIndex] = useState(-1);
+  const [serverAccuracy, setServerAccuracy] = useState<number | null>(null);
+  const [gradeLoading, setGradeLoading] = useState(false);
+  const [gradeError, setGradeError] = useState<string | null>(null);
   
   const isPlayingRef = useRef(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -59,6 +63,22 @@ export default function DictationWorkspace() {
       setIsPlaying(true);
       isPlayingRef.current = true;
       speakWord(0);
+    }
+  };
+
+
+  const gradeDictation = async () => {
+    setGradeLoading(true);
+    setGradeError(null);
+
+    try {
+      const result = await api.gradeDictation(sourceText, inputText);
+      setServerAccuracy(result.accuracy);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to grade dictation.';
+      setGradeError(message);
+    } finally {
+      setGradeLoading(false);
     }
   };
 
@@ -238,6 +258,13 @@ export default function DictationWorkspace() {
             </div>
           </div>
 
+          <div className="flex justify-center">
+            {gradeError && <p className="text-sm text-error">{gradeError}</p>}
+            {serverAccuracy !== null && !gradeError && (
+              <p className="text-sm font-semibold text-primary">Server grade: {serverAccuracy}%</p>
+            )}
+          </div>
+
           <div className="flex justify-center gap-4">
             <button 
               onClick={() => setInputText("")}
@@ -246,8 +273,8 @@ export default function DictationWorkspace() {
               <RotateCcw className="w-5 h-5" />
               Reset
             </button>
-            <button className="bg-primary text-on-primary px-12 py-4 rounded-2xl font-bold font-headline text-lg transition-all hover:bg-primary-dim hover:shadow-lg active:scale-95 flex items-center gap-3 whisper-shadow">
-              Finish & Grade
+            <button onClick={gradeDictation} disabled={gradeLoading} className="bg-primary text-on-primary px-12 py-4 rounded-2xl font-bold font-headline text-lg transition-all hover:bg-primary-dim hover:shadow-lg active:scale-95 flex items-center gap-3 whisper-shadow disabled:opacity-60">
+              {gradeLoading ? 'Grading...' : 'Finish & Grade'}
               <CheckCircle className="w-6 h-6" />
             </button>
           </div>
