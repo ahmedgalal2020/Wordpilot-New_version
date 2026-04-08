@@ -1,11 +1,36 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Github, Eye } from 'lucide-react';
-import { cn } from '@/src/lib/utils';
+import { login, signup } from '@/src/lib/api';
 
 export default function AuthPage() {
   const location = useLocation();
   const isLogin = location.pathname === '/login';
+
+  const [fullName, setFullName] = React.useState('');
+  const [email, setEmail] = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const [message, setMessage] = React.useState('');
+  const [isError, setIsError] = React.useState(false);
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    try {
+      if (isLogin) {
+        await login(email, password);
+        setMessage('Login successful ✅');
+      } else {
+        await signup(fullName, email, password);
+        setMessage('Account created successfully ✅');
+      }
+
+      setIsError(false);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Something went wrong');
+      setIsError(true);
+    }
+  }
 
   return (
     <main className="flex-grow flex items-center justify-center px-6 py-12 relative overflow-hidden">
@@ -39,17 +64,17 @@ export default function AuthPage() {
             <div className="h-px flex-grow bg-surface-container-high"></div>
           </div>
 
-          <form className="space-y-6">
+          <form className="space-y-6" onSubmit={handleSubmit}>
             <div className="space-y-4">
               {!isLogin && (
                 <div className="space-y-2">
                   <label className="text-[0.6875rem] uppercase tracking-wider text-on-surface-variant font-bold ml-1">Full Name</label>
-                  <input className="w-full bg-surface-container-low border-none rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/10 transition-all text-on-surface placeholder:text-outline text-sm" placeholder="Alex Sterling" type="text" />
+                  <input value={fullName} onChange={(event) => setFullName(event.target.value)} className="w-full bg-surface-container-low border-none rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/10 transition-all text-on-surface placeholder:text-outline text-sm" placeholder="Alex Sterling" type="text" required />
                 </div>
               )}
               <div className="space-y-2">
                 <label className="text-[0.6875rem] uppercase tracking-wider text-on-surface-variant font-bold ml-1">Email Address</label>
-                <input className="w-full bg-surface-container-low border-none rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/10 transition-all text-on-surface placeholder:text-outline text-sm" placeholder="student@university.edu" type="email" />
+                <input value={email} onChange={(event) => setEmail(event.target.value)} className="w-full bg-surface-container-low border-none rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/10 transition-all text-on-surface placeholder:text-outline text-sm" placeholder="student@university.edu" type="email" required />
               </div>
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
@@ -57,11 +82,15 @@ export default function AuthPage() {
                   {isLogin && <a href="#" className="text-xs text-primary font-medium hover:underline">Forgot password?</a>}
                 </div>
                 <div className="relative">
-                  <input className="w-full bg-surface-container-low border-none rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/10 transition-all text-on-surface placeholder:text-outline text-sm" placeholder="••••••••" type="password" />
+                  <input value={password} onChange={(event) => setPassword(event.target.value)} className="w-full bg-surface-container-low border-none rounded-xl px-4 py-3 focus:ring-2 focus:ring-primary/10 transition-all text-on-surface placeholder:text-outline text-sm" placeholder="••••••••" type="password" required />
                   {!isLogin && <button type="button" className="absolute right-4 top-1/2 -translate-y-1/2 text-on-surface-variant/60"><Eye className="w-5 h-5" /></button>}
                 </div>
               </div>
             </div>
+
+            {message && (
+              <p className={isError ? 'text-red-600 text-sm font-medium' : 'text-green-600 text-sm font-medium'}>{message}</p>
+            )}
 
             <div className="flex items-center gap-3">
               <input type="checkbox" className="w-4 h-4 rounded border-outline-variant/40 text-primary focus:ring-primary/20 bg-surface-container-low" />
@@ -70,7 +99,7 @@ export default function AuthPage() {
               </span>
             </div>
 
-            <button className="w-full py-4 px-6 primary-gradient text-on-primary rounded-full font-headline font-bold tracking-tight shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all">
+            <button type="submit" className="w-full py-4 px-6 primary-gradient text-on-primary rounded-full font-headline font-bold tracking-tight shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all">
               {isLogin ? 'Sign In' : 'Create Account'}
             </button>
           </form>

@@ -1,32 +1,49 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { TrendingUp, BookOpen, History, Award, ChevronRight } from 'lucide-react';
+import { TrendingUp, BookOpen, History, Award } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 import { Session, SavedText } from '@/src/types';
+import { getDashboard } from '@/src/lib/api';
 
-const RECENT_SESSIONS: Session[] = [
+const FALLBACK_SESSIONS: Session[] = [
   { id: '1', date: 'Oct 24, 2023', title: 'Modern Economics Vol I', language: 'English', score: 96 },
   { id: '2', date: 'Oct 22, 2023', title: 'Philosophical Meditations', language: 'German', score: 89 },
   { id: '3', date: 'Oct 19, 2023', title: 'Advanced Biology Notes', language: 'English', score: 92 },
 ];
 
-const SAVED_TEXTS: SavedText[] = [
+const FALLBACK_SAVED_TEXTS: SavedText[] = [
   { id: '1', title: 'The Great Gatsby - Ch 1', level: 'C1', category: 'Literary Narrative', icon: 'book' },
   { id: '2', title: 'World War II Overview', level: 'B2', category: 'Historical Non-fiction', icon: 'history' },
 ];
 
 export default function Dashboard() {
+  const [sessions, setSessions] = React.useState<Session[]>(FALLBACK_SESSIONS);
+  const [savedTexts, setSavedTexts] = React.useState<SavedText[]>(FALLBACK_SAVED_TEXTS);
+  const [userName, setUserName] = React.useState('Julian');
+
+  React.useEffect(() => {
+    getDashboard('student@wordpilot.app')
+      .then((payload) => {
+        setSessions(payload.sessions);
+        setSavedTexts(payload.savedTexts);
+        setUserName(payload.user.fullName.split(' ')[0] || payload.user.fullName);
+      })
+      .catch(() => {
+        // Keep the fallback content if backend/database is not running yet.
+      });
+  }, []);
+
   return (
     <main className="pt-24 pb-20 px-8 max-w-[1440px] mx-auto min-h-screen">
       <header className="mb-12">
-        <h1 className="font-headline font-extrabold text-4xl tracking-tight text-on-surface mb-2">Welcome back, Julian</h1>
+        <h1 className="font-headline font-extrabold text-4xl tracking-tight text-on-surface mb-2">Welcome back, {userName}</h1>
         <p className="text-on-surface-variant font-medium">Your learning journey is progressing beautifully. Ready for another session?</p>
       </header>
 
       <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
         <StatCard 
           label="Average Score" 
-          value="94%" 
+          value="94" 
           trend="+2% from last week" 
           icon={<TrendingUp className="w-4 h-4 mr-1" />}
           primary
@@ -72,7 +89,7 @@ export default function Dashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-container">
-                {RECENT_SESSIONS.map((session) => (
+                {sessions.map((session) => (
                   <tr key={session.id} className="hover:bg-surface-container-low/30 transition-colors">
                     <td className="py-5 px-6 text-sm text-on-surface">{session.date}</td>
                     <td className="py-5 px-6 font-semibold text-on-surface">{session.title}</td>
@@ -98,7 +115,7 @@ export default function Dashboard() {
             <button className="text-primary text-sm font-bold hover:underline">Library</button>
           </div>
           <div className="space-y-4">
-            {SAVED_TEXTS.map((text) => (
+            {savedTexts.map((text) => (
               <div key={text.id} className="bg-surface-container-lowest rounded-2xl p-5 group hover:shadow-sm transition-all flex items-start space-x-4 whisper-shadow">
                 <div className={cn(
                   "w-12 h-12 rounded-xl flex items-center justify-center shrink-0",
