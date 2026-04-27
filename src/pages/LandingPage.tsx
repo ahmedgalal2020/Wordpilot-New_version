@@ -1,49 +1,41 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { SpellCheck, Activity, Beaker, CheckCircle, PlayCircle, SkipBack, SkipForward, Waves } from 'lucide-react';
+import { Activity, Beaker, CheckCircle, PlayCircle, SkipBack, SkipForward, SpellCheck, Waves } from 'lucide-react';
 import { motion } from 'motion/react';
-import { cn } from '@/src/lib/utils';
+import { cn } from '../lib/utils';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function LandingPage() {
+  const { user } = useAuth();
+
   return (
     <div className="pt-16">
-      {/* Hero Section */}
-      <section className="relative overflow-hidden pt-24 pb-32 px-8">
-        <div className="max-w-[1440px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="lg:col-span-6 space-y-8"
-          >
-            <h1 className="font-headline font-extrabold text-5xl md:text-7xl text-on-surface tracking-tight leading-[1.1]">
-              Master Dictation. <br/>
+      <section className="relative overflow-hidden pt-16 sm:pt-20 lg:pt-24 pb-20 sm:pb-24 lg:pb-32 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-[1440px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="lg:col-span-6 space-y-6 sm:space-y-8 text-center lg:text-left">
+            <h1 className="font-headline font-extrabold text-4xl sm:text-5xl md:text-6xl lg:text-7xl text-on-surface tracking-tight leading-[1.05]">
+              Master Dictation. <br />
               <span className="text-primary">Master Language.</span>
             </h1>
-            <p className="text-on-surface-variant text-xl md:text-2xl leading-relaxed max-w-xl">
+            <p className="text-on-surface-variant text-lg sm:text-xl md:text-2xl leading-relaxed max-w-xl mx-auto lg:mx-0">
               A professional platform for practicing dictation with real-time feedback and AI-powered text generation.
             </p>
-            <div className="flex flex-wrap gap-4 pt-4">
-              <Link to="/signup" className="primary-gradient text-on-primary font-headline font-bold px-8 py-4 rounded-full text-lg whisper-shadow hover:scale-105 transition-transform">
-                Get Started for Free
+            <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:gap-4 pt-2 sm:pt-4 justify-center lg:justify-start">
+              <Link to={user ? '/dashboard' : '/signup'} className="primary-gradient text-on-primary font-headline font-bold px-6 sm:px-8 py-3.5 sm:py-4 rounded-full text-base sm:text-lg whisper-shadow hover:scale-105 transition-transform text-center">
+                {user ? 'Go to Dashboard' : 'Get Started for Free'}
               </Link>
-              <button className="bg-surface-container-low text-on-surface font-headline font-bold px-8 py-4 rounded-full text-lg hover:bg-surface-container transition-colors">
-                View Demo
-              </button>
+              <Link to="/pricing" className="bg-surface-container-low text-on-surface font-headline font-bold px-6 sm:px-8 py-3.5 sm:py-4 rounded-full text-base sm:text-lg hover:bg-surface-container transition-colors text-center">
+                View Plans
+              </Link>
             </div>
           </motion.div>
-          
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.8, delay: 0.2 }}
-            className="lg:col-span-6 relative"
-          >
-            <div className="bg-surface-container-high rounded-[2rem] p-4 whisper-shadow transform lg:rotate-2">
+
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.8, delay: 0.2 }} className="lg:col-span-6 relative">
+            <div className="bg-surface-container-high rounded-[2rem] p-3 sm:p-4 whisper-shadow transform lg:rotate-2">
               <div className="bg-surface-container-lowest rounded-xl overflow-hidden aspect-video relative group">
-                <img 
-                  className="w-full h-full object-cover grayscale opacity-20" 
-                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuDvP-Y4L4_Ivh3NL_B9rVLzERpgA5dKN7agCr8KMVg_aVI8g6FxMCNMy3dg7rldeA78jXrhbBTVffOSsqv2M6YLoft-2BMqaW_JfHLIGNxCJrSf0UwgwnmmieYa1JPzUnc5ktpAVwQG9Byvn13YEut3s9dPjmnaYvK9JXTViEbZrEZywzmHnnJePi9hcuXlrFLD-YbHEhKVSu6LzLoOhKS1Jbk8nj9J1EsKQBZ02rJMoq8oZf4ELfv0PyPDIgTvNXNoMqx9eKcW8xs" 
+                <img
+                  className="w-full h-full object-cover grayscale opacity-20"
+                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuDvP-Y4L4_Ivh3NL_B9rVLzERpgA5dKN7agCr8KMVg_aVI8g6FxMCNMy3dg7rldeA78jXrhbBTVffOSsqv2M6YLoft-2BMqaW_JfHLIGNxCJrSf0UwgwnmmieYa1JPzUnc5ktpAVwQG9Byvn13YEut3s9dPjmnaYvK9JXTViEbZrEZywzmHnnJePi9hcuXlrFLD-YbHEhKVSu6LzLoOhKS1Jbk8nj9J1EsKQBZ02rJMoq8oZf4ELfv0PyPDIgTvNXNoMqx9eKcW8xs"
                   alt="Workspace"
                   referrerPolicy="no-referrer"
                 />
@@ -55,7 +47,7 @@ export default function LandingPage() {
                       <div className="w-3 h-3 rounded-full bg-primary"></div>
                     </div>
                     <p className="font-body text-lg text-on-surface-variant leading-relaxed italic">
-                      "The transition to digital ateliers allows for focused learning..."
+                      &quot;The transition to digital ateliers allows for focused learning...&quot;
                     </p>
                     <div className="mt-4 flex gap-1">
                       <div className="h-1 w-12 bg-primary rounded-full"></div>
@@ -70,42 +62,25 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Feature Bento Grid */}
-      <section className="py-24 px-8 bg-surface-container-low">
+      <section className="py-16 sm:py-20 lg:py-24 px-4 sm:px-6 lg:px-8 bg-surface-container-low">
         <div className="max-w-[1440px] mx-auto">
-          <div className="mb-16">
+          <div className="mb-10 sm:mb-12 lg:mb-16 text-center md:text-left">
             <span className="text-primary font-headline font-bold tracking-widest text-sm uppercase">Capabilities</span>
-            <h2 className="font-headline font-extrabold text-4xl text-on-surface mt-4">Precision Engineering for Fluency</h2>
+            <h2 className="font-headline font-extrabold text-3xl sm:text-4xl text-on-surface mt-4">Precision Engineering for Fluency</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <FeatureCard 
-              icon={<SpellCheck className="w-8 h-8" />}
-              title="Real-time Validation"
-              description="Instant feedback on every word you type. Never lose track of your progress with subtle success flashes and error highlighting."
-              color="primary"
-            />
-            <FeatureCard 
-              icon={<Activity className="w-8 h-8" />}
-              title="Dynamic Audio Engine"
-              description="Control speech rate and word gaps for a personalized pace. Tailor the listening experience to your current comprehension level."
-              color="tertiary"
-            />
-            <FeatureCard 
-              icon={<Beaker className="w-8 h-8" />}
-              title="AI-Powered Lab"
-              description="Generate high-quality practice texts tailored to your level. From medical journals to casual dialogue, focus on what you need."
-              color="secondary"
-            />
+            <FeatureCard icon={<SpellCheck className="w-8 h-8" />} title="Real-time Validation" description="Instant feedback on every word you type. Never lose track of your progress with subtle success flashes and error highlighting." color="primary" />
+            <FeatureCard icon={<Activity className="w-8 h-8" />} title="Dynamic Audio Engine" description="Control speech rate and word gaps for a personalized pace. Tailor the listening experience to your current comprehension level." color="tertiary" />
+            <FeatureCard icon={<Beaker className="w-8 h-8" />} title="AI-Powered Lab" description="Generate high-quality practice texts tailored to your level. From medical journals to casual dialogue, focus on what you need." color="secondary" />
           </div>
         </div>
       </section>
 
-      {/* Asymmetric Detail Section */}
-      <section className="py-32 px-8 overflow-hidden">
-        <div className="max-w-[1440px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-24 items-center">
+      <section className="py-20 sm:py-24 lg:py-32 px-4 sm:px-6 lg:px-8 overflow-hidden">
+        <div className="max-w-[1440px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-24 items-center">
           <div className="order-2 lg:order-1 relative">
             <div className="absolute inset-0 bg-primary/5 rounded-full filter blur-3xl"></div>
-            <div className="relative bg-surface-container rounded-full aspect-square flex items-center justify-center p-12">
+            <div className="relative bg-surface-container rounded-[2rem] sm:rounded-full aspect-square flex items-center justify-center p-6 sm:p-8 lg:p-12">
               <div className="bg-surface-container-lowest whisper-shadow rounded-xl w-full h-full overflow-hidden flex flex-col">
                 <div className="h-12 bg-surface-container flex items-center px-4 gap-2">
                   <div className="w-2 h-2 rounded-full bg-outline-variant"></div>
@@ -134,9 +109,9 @@ export default function LandingPage() {
               </div>
             </div>
           </div>
-          <div className="order-1 lg:order-2 space-y-8">
-            <h2 className="font-headline font-extrabold text-4xl md:text-5xl text-on-surface leading-tight">Focus. Practice. Perfect.</h2>
-            <p className="text-on-surface-variant text-xl leading-relaxed">
+          <div className="order-1 lg:order-2 space-y-6 sm:space-y-8 text-center lg:text-left">
+            <h2 className="font-headline font-extrabold text-3xl sm:text-4xl md:text-5xl text-on-surface leading-tight">Focus. Practice. Perfect.</h2>
+            <p className="text-on-surface-variant text-lg sm:text-xl leading-relaxed">
               Scholar Script is designed to remove the friction between listening and typing. Our interface stays out of your way so you can focus on the nuances of the language.
             </p>
             <ul className="space-y-4">
@@ -148,14 +123,18 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Final CTA */}
-      <section className="py-24 px-8">
+      <section className="py-16 sm:py-20 lg:py-24 px-4 sm:px-6 lg:px-8">
         <div className="max-w-[1440px] mx-auto">
-          <div className="primary-gradient p-12 md:p-24 rounded-[3rem] text-center text-on-primary whisper-shadow">
-            <h2 className="font-headline font-extrabold text-4xl md:text-6xl mb-8 leading-tight">Ready to elevate your <br/>language journey?</h2>
-            <p className="text-on-primary/80 text-xl md:text-2xl mb-12 max-w-2xl mx-auto">Join thousands of students who have mastered fluency through focused dictation.</p>
-            <Link to="/signup" className="bg-surface-container-lowest text-primary font-headline font-bold px-12 py-5 rounded-full text-xl hover:scale-105 transition-transform inline-block">
-              Get Started for Free
+          <div className="primary-gradient p-8 sm:p-10 md:p-16 lg:p-24 rounded-[2rem] sm:rounded-[3rem] text-center text-on-primary whisper-shadow">
+            <h2 className="font-headline font-extrabold text-3xl sm:text-4xl md:text-6xl mb-6 sm:mb-8 leading-tight">
+              Ready to elevate your <br />
+              language journey?
+            </h2>
+            <p className="text-on-primary/80 text-lg sm:text-xl md:text-2xl mb-8 sm:mb-12 max-w-2xl mx-auto">
+              Join thousands of students who have mastered fluency through focused dictation.
+            </p>
+            <Link to={user ? '/workspace' : '/signup'} className="bg-surface-container-lowest text-primary font-headline font-bold px-8 sm:px-12 py-4 sm:py-5 rounded-full text-lg sm:text-xl hover:scale-105 transition-transform inline-block">
+              {user ? 'Start Practicing' : 'Get Started for Free'}
             </Link>
           </div>
         </div>
@@ -174,13 +153,9 @@ function FeatureCard({ icon, title, description, color }: { icon: React.ReactNod
   return (
     <div className="bg-surface-container-lowest p-10 rounded-3xl flex flex-col justify-between whisper-shadow group">
       <div className="space-y-6">
-        <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform", bgColors[color])}>
-          {icon}
-        </div>
+        <div className={cn('w-14 h-14 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform', bgColors[color])}>{icon}</div>
         <h3 className="font-headline font-bold text-2xl text-on-surface leading-tight">{title}</h3>
-        <p className="text-on-surface-variant leading-relaxed text-lg">
-          {description}
-        </p>
+        <p className="text-on-surface-variant leading-relaxed text-lg">{description}</p>
       </div>
     </div>
   );

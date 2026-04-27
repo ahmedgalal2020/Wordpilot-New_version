@@ -2,19 +2,45 @@
 <img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
 </div>
 
-# Run and deploy your AI Studio app
+# WordPilot Setup
 
-This contains everything you need to run your app locally.
+This project is being upgraded from a UI prototype into a real application with authentication, user profiles, saved texts, AI history, and dictation session persistence.
 
-View your app in AI Studio: https://ai.studio/apps/2e0a213e-6b14-427b-be3f-0efec4058677
+## Stack
 
-## Run Locally
+- React + Vite
+- Tailwind CSS v4
+- Supabase Auth
+- Supabase Postgres
+- Supabase Storage (planned next)
 
-**Prerequisites:**  Node.js
+## Local Setup
 
+**Prerequisites:** Node.js
 
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
+2. Copy `.env.example` to `.env.local`
+3. Fill in:
+   `VITE_SUPABASE_URL`
+   `VITE_SUPABASE_ANON_KEY`
+   `VITE_GEMINI_API_KEY`
+4. Run the SQL in [schema.sql](/C:/Users/galal/Desktop/WORDPILOT%20New_version/supabase/schema.sql:1) inside your Supabase SQL editor
+5. Start the app:
    `npm run dev`
+
+## Implemented Foundation
+
+- Supabase client wiring
+- Auth provider and protected routes
+- Real login/signup flows
+- Account settings page
+- Session saving from the dictation workspace
+- Generated text saving from AI Lab
+
+## Next Phase
+
+- Replace dashboard mock data with live Supabase queries
+- Add password reset flow
+- Add billing and subscription tables
+- Move AI generation behind a secure server function

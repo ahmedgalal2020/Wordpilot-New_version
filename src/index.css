@@ -10,14 +10,14 @@
   --color-primary-container: #dbe1ff;
   --color-on-primary: #f8f7ff;
   --color-on-primary-container: #0048bf;
-  
+
   --color-secondary: #5f5f62;
   --color-secondary-container: #e4e2e6;
   --color-on-secondary: #faf8fc;
-  
+
   --color-tertiary: #625b77;
   --color-tertiary-container: #dfd5f7;
-  
+
   --color-surface: #f7f9fb;
   --color-surface-dim: #cfdce3;
   --color-surface-bright: #f7f9fb;
@@ -26,13 +26,13 @@
   --color-surface-container: #e8eff3;
   --color-surface-container-high: #e1e9ee;
   --color-surface-container-highest: #d9e4ea;
-  
+
   --color-on-surface: #2a3439;
   --color-on-surface-variant: #566166;
-  
+
   --color-outline: #717c82;
   --color-outline-variant: #a9b4b9;
-  
+
   --color-error: #9f403d;
   --color-error-container: #fe8983;
 
@@ -42,8 +42,16 @@
 }
 
 @layer base {
+  * {
+    box-sizing: border-box;
+  }
+
   body {
     @apply bg-surface text-on-surface font-sans antialiased;
+  }
+
+  #root {
+    min-height: 100vh;
   }
 }
 
@@ -51,12 +59,12 @@
   .whisper-shadow {
     box-shadow: 0px 12px 32px rgba(42, 52, 57, 0.06);
   }
-  
+
   .glass-panel {
     background: rgba(255, 255, 255, 0.7);
     backdrop-filter: blur(24px);
   }
-  
+
   .primary-gradient {
     background: linear-gradient(135deg, #0053db 0%, #0048c1 100%);
   }

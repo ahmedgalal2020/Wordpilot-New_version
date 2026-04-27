@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Confirm your Scholar Script account</title>
+  </head>
+  <body style="margin:0;padding:0;background:#f7f9fb;font-family:Inter,Arial,sans-serif;color:#2a3439;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f7f9fb;padding:32px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;background:#ffffff;border-radius:28px;overflow:hidden;box-shadow:0 12px 32px rgba(42,52,57,0.08);">
+            <tr>
+              <td style="padding:32px 36px;background:linear-gradient(135deg,#0053db 0%,#0048c1 100%);color:#f8f7ff;">
+                <div style="font-size:32px;font-weight:800;letter-spacing:-0.04em;">Scholar Script</div>
+                <div style="margin-top:12px;font-size:12px;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:#dbe1ff;">Confirm signup</div>
+                <h1 style="margin:18px 0 0;font-size:36px;line-height:1.1;font-weight:800;">Welcome to your learning workspace</h1>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:36px;">
+                <p style="margin:0 0 14px;font-size:16px;line-height:1.8;color:#566166;">Hi {{ .Email }},</p>
+                <p style="margin:0 0 22px;font-size:16px;line-height:1.8;color:#566166;">
+                  Your account is almost ready. Confirm your email to activate your Scholar Script dashboard, saved texts, certificates, and progress history.
+                </p>
+                <a
+                  href="{{ .ConfirmationURL }}"
+                  style="display:inline-block;background:#0053db;color:#f8f7ff;text-decoration:none;padding:15px 26px;border-radius:999px;font-weight:700;"
+                >
+                  Confirm my account
+                </a>
+                <div style="margin-top:26px;padding:20px;background:#f0f4f7;border-radius:20px;">
+                  <p style="margin:0 0 10px;font-size:12px;font-weight:800;letter-spacing:0.16em;text-transform:uppercase;color:#566166;">Need a backup link?</p>
+                  <p style="margin:0;font-size:14px;line-height:1.7;color:#566166;word-break:break-all;">{{ .ConfirmationURL }}</p>
+                </div>
+                <p style="margin:26px 0 0;font-size:14px;line-height:1.8;color:#566166;">
+                  If you did not create this account, you can safely ignore this email.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
