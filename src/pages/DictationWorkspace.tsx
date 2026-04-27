@@ -11,13 +11,20 @@ export default function DictationWorkspace() {
   const [inputText, setInputText] = useState("");
   const [speechRate, setSpeechRate] = useState(1);
   const [wordGap, setWordGap] = useState(0.5); // Base delay in seconds
+  const [typingAwareMode, setTypingAwareMode] = useState(true);
   const [currentWordIndex, setCurrentWordIndex] = useState(-1);
   
   const isPlayingRef = useRef(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const inputTextRef = useRef(inputText);
+  const lastInputAtRef = useRef(Date.now());
+  const currentTokenRef = useRef("");
 
   const sourceWords = sourceText.trim().split(/\s+/).filter(w => w.length > 0);
   const inputWords = inputText.trim().split(/\s+/).filter(w => w.length > 0);
+
+  const normalizeWord = (word: string = "") =>
+    word.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "");
 
   const stopSpeaking = () => {
     window.speechSynthesis.cancel();
@@ -27,6 +34,35 @@ export default function DictationWorkspace() {
     setCurrentWordIndex(-1);
   };
 
+  const waitForWordCompletion = (index: number) => {
+    const targetWord = normalizeWord(sourceWords[index]);
+    const checkProgress = () => {
+      if (!isPlayingRef.current) return;
+
+      const currentInputText = inputTextRef.current;
+      const currentInputWords = currentInputText.trim().split(/\s+/).filter(w => w.length > 0);
+      const typedWord = normalizeWord(currentInputWords[index] || "");
+      const isCorrect = !!typedWord && typedWord === targetWord;
+      const userMovedToNextWord = currentInputWords.length > index + 1;
+      const userAddedWhitespaceAfterWord = /\s$/.test(currentInputText) && !!currentInputWords[index];
+      const userStoppedTyping = !!typedWord && Date.now() - lastInputAtRef.current >= 1200;
+      const tokenChanged = currentTokenRef.current !== typedWord;
+
+      if (tokenChanged) {
+        currentTokenRef.current = typedWord;
+      }
+
+      if (isCorrect || userMovedToNextWord || userAddedWhitespaceAfterWord || userStoppedTyping) {
+        speakWord(index + 1);
+        return;
+      }
+
+      timeoutRef.current = setTimeout(checkProgress, 150);
+    };
+
+    timeoutRef.current = setTimeout(checkProgress, 150);
+  };
+
   const speakWord = (index: number) => {
     if (!isPlayingRef.current || index >= sourceWords.length) {
       stopSpeaking();
@@ -34,18 +70,21 @@ export default function DictationWorkspace() {
     }
 
     setCurrentWordIndex(index);
+    currentTokenRef.current = normalizeWord(inputTextRef.current.trim().split(/\s+/).filter(w => w.length > 0)[index] || "");
     const word = sourceWords[index];
     const utterance = new SpeechSynthesisUtterance(word);
     utterance.rate = speechRate;
 
     utterance.onend = () => {
+      if (typingAwareMode) {
+        waitForWordCompletion(index);
+        return;
+      }
+
       // Calculate delay: base gap + extra if word > 4 chars
       const extraDelay = word.length > 4 ? 0.3 : 0;
       const totalDelay = (wordGap + extraDelay) * 1000;
-
-      timeoutRef.current = setTimeout(() => {
-        speakWord(index + 1);
-      }, totalDelay);
+      timeoutRef.current = setTimeout(() => speakWord(index + 1), totalDelay);
     };
 
     window.speechSynthesis.speak(utterance);
@@ -66,6 +105,10 @@ export default function DictationWorkspace() {
   useEffect(() => {
     return () => stopSpeaking();
   }, []);
+
+  useEffect(() => {
+    inputTextRef.current = inputText;
+  }, [inputText]);
 
   return (
     <main className="max-w-[1440px] mx-auto px-8 py-12 pt-28">
@@ -168,6 +211,19 @@ export default function DictationWorkspace() {
                     <span className="text-primary font-bold">Smart Delay:</span> Words with more than 4 characters automatically trigger an additional 0.3s pause to give you more time to type.
                   </p>
                 </div>
+
+                <label className="flex items-center justify-between gap-4 bg-surface-container-highest/30 p-3 rounded-xl border border-primary/10">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface">Typing-Aware Advance</p>
+                    <p className="text-[9px] text-on-surface-variant">Speak next word when user finishes typing current word (correctly, or after a short pause if incorrect).</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={typingAwareMode}
+                    onChange={(e) => setTypingAwareMode(e.target.checked)}
+                    className="h-4 w-4 accent-primary"
+                  />
+                </label>
               </div>
 
               <button 
@@ -199,7 +255,10 @@ export default function DictationWorkspace() {
                 className="w-full h-full min-h-[300px] border-none focus:ring-0 text-xl md:text-2xl font-medium leading-[1.8] text-on-surface placeholder:text-on-surface-variant/30 resize-none" 
                 placeholder="Start typing what you hear..."
                 value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
+                onChange={(e) => {
+                  lastInputAtRef.current = Date.now();
+                  setInputText(e.target.value);
+                }}
               />
             </div>
             
