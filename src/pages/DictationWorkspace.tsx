@@ -1,18 +1,79 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle, FastForward, Languages, Pause, Play, Rewind, RotateCcw, Save, SkipBack, SkipForward, Volume2, X } from 'lucide-react';
+import { BookOpen, CheckCircle, Ear, Eye, EyeOff, FastForward, Keyboard, Languages, Pause, PenLine, Play, Rewind, RotateCcw, Save, SkipBack, SkipForward, Volume2, X } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useLocation } from 'react-router-dom';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { hasSupabaseEnv } from '../lib/env';
+import { formatUsage, isLimitReached } from '../lib/entitlements';
+import { useEntitlements } from '../hooks/useEntitlements';
+import { CEFR_LEVELS, LEARNING_LANGUAGES, LearningLanguage, normalizeCefrLevel, normalizeLearningLanguage } from '../lib/learning';
 
 const INITIAL_SOURCE =
   'Quantum mechanics describes the physical properties of nature at the scale of atoms and subatomic particles. It is the foundation of all quantum physics including quantum chemistry, quantum field theory, quantum technology, and quantum information science.';
 
 const WORKSPACE_DRAFT_KEY = 'wordpilot-workspace-draft-v4';
 
-type PracticeLanguage = 'en-US' | 'de-DE';
+type PracticeLanguage = 'en-US' | 'de-DE' | 'es-ES' | 'it-IT' | 'fr-FR';
+type SkillMode = 'Dictation' | 'Reading' | 'Listening' | 'Writing';
+
+const SKILL_MODES: Array<{
+  id: SkillMode;
+  title: string;
+  shortTitle: string;
+  sourceLabel: string;
+  inputLabel: string;
+  placeholder: string;
+  instruction: string;
+  finishLabel: string;
+  sourceHiddenByDefault: boolean;
+}> = [
+  {
+    id: 'Dictation',
+    title: 'Hear and type exactly',
+    shortTitle: 'Dictation',
+    sourceLabel: 'Dictation Script',
+    inputLabel: 'Your Dictation',
+    placeholder: 'Type exactly what you hear...',
+    instruction: 'Listen word by word, type the exact text, then check missing, wrong, and extra words.',
+    finishLabel: 'Grade Dictation',
+    sourceHiddenByDefault: true,
+  },
+  {
+    id: 'Reading',
+    title: 'Read, hide, rebuild',
+    shortTitle: 'Reading',
+    sourceLabel: 'Reading Text',
+    inputLabel: 'Rebuilt Text',
+    placeholder: 'Hide the source, then rewrite the main text from memory...',
+    instruction: 'Read the source first, hide it, then rebuild the text. The comparison shows what you missed.',
+    finishLabel: 'Check Reading',
+    sourceHiddenByDefault: false,
+  },
+  {
+    id: 'Listening',
+    title: 'Listen for phrases',
+    shortTitle: 'Listening',
+    sourceLabel: 'Listening Script',
+    inputLabel: 'What You Heard',
+    placeholder: 'Listen twice, then write what you heard...',
+    instruction: 'Focus on phrase endings, connectors, and rhythm. Replay difficult parts before grading.',
+    finishLabel: 'Check Listening',
+    sourceHiddenByDefault: true,
+  },
+  {
+    id: 'Writing',
+    title: 'Rebuild the idea',
+    shortTitle: 'Writing',
+    sourceLabel: 'Writing Prompt',
+    inputLabel: 'Your Version',
+    placeholder: 'Write your own version of the idea...',
+    instruction: 'Use the source as a prompt. Rewrite the idea clearly, then compare structure and key words.',
+    finishLabel: 'Check Writing',
+    sourceHiddenByDefault: false,
+  },
+];
 
 type WordRange = {
   text: string;
@@ -43,6 +104,8 @@ type MistakeRow = {
   statusLabel: string;
 };
 
+type MistakeStatus = 'wrong' | 'missing' | 'extra';
+
 type DictationAnalysis = {
   comparisonItems: ComparisonItem[];
   mistakes: MistakeRow[];
@@ -56,6 +119,7 @@ type WorkspaceDraft = {
   speechRate?: number;
   wordPause?: number;
   sentencePause?: number;
+  advanceOnSpace?: boolean;
 };
 
 export default function DictationWorkspace() {
@@ -69,8 +133,13 @@ export default function DictationWorkspace() {
   const playbackTimeoutRef = useRef<number | null>(null);
   const highlightTimeoutRef = useRef<number | null>(null);
   const sourceLoadedRef = useRef<string | null>(null);
+  const playbackActiveRef = useRef(false);
+  const awaitingSpaceAdvanceRef = useRef(false);
+  const spaceAdvanceRequestedRef = useRef(false);
+  const pendingSpaceAdvanceIndexRef = useRef<number | null>(null);
   const playbackCursorRef = useRef(0);
   const playbackRunIdRef = useRef(0);
+  const advanceOnSpaceRef = useRef(initialDraft?.advanceOnSpace ?? true);
   const speechRateRef = useRef(0.95);
   const wordPauseRef = useRef(0.6);
   const sentencePauseRef = useRef(0.4);
@@ -78,16 +147,22 @@ export default function DictationWorkspace() {
   const availableVoicesRef = useRef<SpeechSynthesisVoice[]>([]);
   const languageLockedByIncomingTextRef = useRef(false);
   const manualLanguageOverrideRef = useRef(false);
+  const manualVoiceOverrideRef = useRef(false);
+  const inputTextRef = useRef(initialDraft?.inputText ?? '');
 
   const [isPlaying, setIsPlaying] = useState(false);
-<<<<<<< ours
   const [isPaused, setIsPaused] = useState(false);
   const [sourceText, setSourceText] = useState(initialDraft?.sourceText ?? INITIAL_SOURCE);
   const [inputText, setInputText] = useState(initialDraft?.inputText ?? '');
-  const [selectedLanguage, setSelectedLanguage] = useState<PracticeLanguage>(initialDraft?.selectedLanguage ?? 'en-US');
+  const [selectedLanguage, setSelectedLanguage] = useState<PracticeLanguage>(initialDraft?.selectedLanguage ?? getPracticeLanguageCode(profile?.target_language));
+  const [sessionLanguageLabel, setSessionLanguageLabel] = useState<LearningLanguage>(normalizeLearningLanguage(profile?.target_language));
+  const [sessionLevel, setSessionLevel] = useState(normalizeCefrLevel(profile?.cefr_level));
+  const [practiceCategory, setPracticeCategory] = useState<SkillMode>('Dictation');
+  const [sourceHidden, setSourceHidden] = useState(true);
   const [speechRate, setSpeechRate] = useState(initialDraft?.speechRate ?? 0.95);
   const [wordPause, setWordPause] = useState(initialDraft?.wordPause ?? 0.6);
   const [sentencePause, setSentencePause] = useState(initialDraft?.sentencePause ?? 0.4);
+  const [advanceOnSpace, setAdvanceOnSpace] = useState(initialDraft?.advanceOnSpace ?? true);
   const [currentWordIndex, setCurrentWordIndex] = useState(-1);
   const [selectedVoiceURI, setSelectedVoiceURI] = useState('');
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
@@ -97,13 +172,25 @@ export default function DictationWorkspace() {
   const [activeInputRange, setActiveInputRange] = useState<{ start: number; end: number } | null>(null);
   const [activeSourceRange, setActiveSourceRange] = useState<{ start: number; end: number } | null>(null);
   const [showResultModal, setShowResultModal] = useState(false);
+  const { entitlements, refreshEntitlements } = useEntitlements(user);
+  const savedSessionLimitReached = isLimitReached(entitlements.usage.savedSessions, entitlements.limits.savedSessions);
 
-  const sourceWordRanges = useMemo(() => getWordRanges(sourceText), [sourceText]);
-  const inputWordRanges = useMemo(() => getWordRanges(inputText), [inputText]);
+  const sourceWordRanges = useMemo(() => getWordRanges(sourceText, selectedLanguage), [sourceText, selectedLanguage]);
+  const inputWordRanges = useMemo(() => getWordRanges(inputText, selectedLanguage), [inputText, selectedLanguage]);
   const analysis = useMemo(() => analyzeDictation(sourceWordRanges, inputWordRanges), [sourceWordRanges, inputWordRanges]);
   const comparisonItems = analysis.comparisonItems;
   const mistakeRows = analysis.mistakes;
   const accuracy = analysis.accuracy;
+  const resultBreakdown = useMemo(
+    () => ({
+      wrong: mistakeRows.filter((row) => row.statusLabel === 'Wrong word').length,
+      missing: mistakeRows.filter((row) => row.statusLabel === 'Missing word').length,
+      extra: mistakeRows.filter((row) => row.statusLabel === 'Extra word').length,
+    }),
+    [mistakeRows],
+  );
+  const resultLevel = accuracy >= 90 ? 'Excellent' : accuracy >= 80 ? 'Strong' : accuracy >= 60 ? 'Developing' : 'Needs review';
+  const skillMode = useMemo(() => getSkillMode(practiceCategory), [practiceCategory]);
 
   const availableVoices = useMemo(
     () => voices.filter((voice) => voice.lang.toLowerCase().startsWith(selectedLanguage.slice(0, 2).toLowerCase())),
@@ -119,7 +206,8 @@ export default function DictationWorkspace() {
       return;
     }
 
-    const preferredLanguage = profile?.target_language?.toLowerCase() === 'german' ? 'de-DE' : 'en-US';
+    const preferredLanguage = getPracticeLanguageCode(profile?.target_language);
+    setSessionLanguageLabel(normalizeLearningLanguage(profile?.target_language));
     setSelectedLanguage(preferredLanguage);
   }, [initialDraft?.selectedLanguage, profile?.target_language]);
 
@@ -144,16 +232,18 @@ export default function DictationWorkspace() {
     }
 
     const stillValid = availableVoices.some((voice) => voice.voiceURI === selectedVoiceURI);
-    if (stillValid) {
+    if (manualVoiceOverrideRef.current && stillValid) {
       return;
     }
 
-    const preferredVoice =
-      availableVoices.find((voice) => voice.localService && /natural|neural|premium|microsoft|google/i.test(voice.name)) ??
-      availableVoices[0];
+    const preferredVoice = getPreferredVoice(availableVoices, selectedLanguage);
+
+    if (preferredVoice.voiceURI === selectedVoiceURI) {
+      return;
+    }
 
     setSelectedVoiceURI(preferredVoice.voiceURI);
-  }, [availableVoices, selectedVoiceURI]);
+  }, [availableVoices, selectedLanguage, selectedVoiceURI]);
 
   useEffect(() => {
     speechRateRef.current = speechRate;
@@ -162,21 +252,10 @@ export default function DictationWorkspace() {
   useEffect(() => {
     wordPauseRef.current = wordPause;
   }, [wordPause]);
-=======
-  const [sourceText, setSourceText] = useState(INITIAL_SOURCE);
-  const [inputText, setInputText] = useState("");
-  const [speechRate, setSpeechRate] = useState(1);
-  const [wordGap, setWordGap] = useState(0.5); // Base delay in seconds
-  const [typingAwareMode, setTypingAwareMode] = useState(true);
-  const [currentWordIndex, setCurrentWordIndex] = useState(-1);
-  
-  const isPlayingRef = useRef(false);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const inputTextRef = useRef(inputText);
-  const lastInputAtRef = useRef(Date.now());
-<<<<<<< ours
-<<<<<<< ours
->>>>>>> theirs
+
+  useEffect(() => {
+    advanceOnSpaceRef.current = advanceOnSpace;
+  }, [advanceOnSpace]);
 
   useEffect(() => {
     sentencePauseRef.current = sentencePause;
@@ -186,7 +265,6 @@ export default function DictationWorkspace() {
     selectedVoiceURIRef.current = selectedVoiceURI;
   }, [selectedVoiceURI]);
 
-<<<<<<< ours
   useEffect(() => {
     availableVoicesRef.current = availableVoices;
   }, [availableVoices]);
@@ -198,6 +276,7 @@ export default function DictationWorkspace() {
         inputText?: string;
         language?: string;
         cefrLevel?: string;
+        practiceCategory?: string;
         reviewMode?: boolean;
       }
       | null;
@@ -207,29 +286,29 @@ export default function DictationWorkspace() {
       setInputText(state.inputText ?? '');
       if (state.language) {
         languageLockedByIncomingTextRef.current = true;
-        setSelectedLanguage(state.language.toLowerCase().includes('german') ? 'de-DE' : 'en-US');
+        setSessionLanguageLabel(normalizeLearningLanguage(state.language));
+        setSelectedLanguage(getPracticeLanguageCode(state.language));
         manualLanguageOverrideRef.current = false;
       }
+      setSessionLevel(normalizeCefrLevel(state.cefrLevel ?? profile?.cefr_level));
+      const nextSkill = getSkillMode(state.practiceCategory).id;
+      setPracticeCategory(nextSkill);
+      setSourceHidden(getSkillMode(nextSkill).sourceHiddenByDefault);
       setSaveStatus(state.reviewMode ? 'Review mode loaded from your history.' : null);
       setSaveState('idle');
       return;
     }
 
-  }, [location.state]);
-=======
-  const currentTokenRef = useRef("");
->>>>>>> theirs
+  }, [location.state, profile?.cefr_level]);
 
   useEffect(() => {
     if (!sourceText.trim() || manualLanguageOverrideRef.current) {
       return;
     }
-=======
-  const currentTokenRef = useRef("");
->>>>>>> theirs
 
     const detectedLanguage = detectPracticeLanguage(sourceText);
     if (detectedLanguage && detectedLanguage !== selectedLanguage) {
+      setSessionLanguageLabel(getLearningLanguageFromCode(detectedLanguage));
       setSelectedLanguage(detectedLanguage);
     }
   }, [selectedLanguage, sourceText]);
@@ -242,8 +321,9 @@ export default function DictationWorkspace() {
       speechRate,
       wordPause,
       sentencePause,
+      advanceOnSpace,
     });
-  }, [sourceText, inputText, selectedLanguage, speechRate, wordPause, sentencePause]);
+  }, [sourceText, inputText, selectedLanguage, speechRate, wordPause, sentencePause, advanceOnSpace]);
 
   useEffect(() => {
     return () => {
@@ -256,18 +336,9 @@ export default function DictationWorkspace() {
 
   function cancelPlayback(resetCursor: boolean) {
     playbackRunIdRef.current += 1;
-=======
-  const normalizeWord = (word: string = "") =>
-    word.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "");
-
-  const normalizeWord = (word: string = "") =>
-    word.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "");
-
-  const normalizeWord = (word: string = "") =>
-    word.toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "");
-
-  const stopSpeaking = () => {
->>>>>>> theirs
+    awaitingSpaceAdvanceRef.current = false;
+    spaceAdvanceRequestedRef.current = false;
+    pendingSpaceAdvanceIndexRef.current = null;
     window.speechSynthesis.cancel();
     if (playbackTimeoutRef.current) {
       window.clearTimeout(playbackTimeoutRef.current);
@@ -282,6 +353,7 @@ export default function DictationWorkspace() {
 
   function stopSpeaking() {
     cancelPlayback(true);
+    playbackActiveRef.current = false;
     setIsPlaying(false);
     setIsPaused(false);
   }
@@ -308,8 +380,8 @@ export default function DictationWorkspace() {
     cancelPlayback(false);
     const runId = playbackRunIdRef.current;
 
-<<<<<<< ours
     setSaveStatus(null);
+    playbackActiveRef.current = true;
     setIsPlaying(true);
     setIsPaused(false);
     playWordSequence(safeIndex, runId);
@@ -320,99 +392,16 @@ export default function DictationWorkspace() {
       return;
     }
 
+    awaitingSpaceAdvanceRef.current = false;
+    spaceAdvanceRequestedRef.current = false;
+    pendingSpaceAdvanceIndexRef.current = null;
     if (wordIndex >= sourceWordRanges.length) {
-=======
-  const waitForWordCompletion = (index: number) => {
-    const targetWord = normalizeWord(sourceWords[index]);
-    const waitStartedAt = Date.now();
-    const checkProgress = () => {
-      if (!isPlayingRef.current) return;
-
-      const currentInputWords = inputTextRef.current.trim().split(/\s+/).filter(w => w.length > 0);
-      const typedWord = normalizeWord(currentInputWords[index] || "");
-      const isCorrect = !!typedWord && typedWord === targetWord;
-      const userStoppedTyping = !!typedWord && Date.now() - lastInputAtRef.current >= 1000;
-      const exceededMaxWait = Date.now() - waitStartedAt >= 4500;
-
-      if (isCorrect || userStoppedTyping || exceededMaxWait) {
-        speakWord(index + 1);
-        return;
-      }
-
-      timeoutRef.current = setTimeout(checkProgress, 150);
-    };
-
-    timeoutRef.current = setTimeout(checkProgress, 150);
-  };
-
-  const waitForWordCompletion = (index: number) => {
-    const targetWord = normalizeWord(sourceWords[index]);
-    const checkProgress = () => {
-      if (!isPlayingRef.current) return;
-
-      const currentInputText = inputTextRef.current;
-      const currentInputWords = currentInputText.trim().split(/\s+/).filter(w => w.length > 0);
-      const typedWord = normalizeWord(currentInputWords[index] || "");
-      const isCorrect = !!typedWord && typedWord === targetWord;
-      const userMovedToNextWord = currentInputWords.length > index + 1;
-      const userAddedWhitespaceAfterWord = /\s$/.test(currentInputText) && !!currentInputWords[index];
-      const userStoppedTyping = !!typedWord && Date.now() - lastInputAtRef.current >= 1200;
-      const tokenChanged = currentTokenRef.current !== typedWord;
-
-      if (tokenChanged) {
-        currentTokenRef.current = typedWord;
-      }
-
-      if (isCorrect || userMovedToNextWord || userAddedWhitespaceAfterWord || userStoppedTyping) {
-        speakWord(index + 1);
-        return;
-      }
-
-      timeoutRef.current = setTimeout(checkProgress, 150);
-    };
-
-    timeoutRef.current = setTimeout(checkProgress, 150);
-  };
-
-  const waitForWordCompletion = (index: number) => {
-    const targetWord = normalizeWord(sourceWords[index]);
-    const checkProgress = () => {
-      if (!isPlayingRef.current) return;
-
-      const currentInputText = inputTextRef.current;
-      const currentInputWords = currentInputText.trim().split(/\s+/).filter(w => w.length > 0);
-      const typedWord = normalizeWord(currentInputWords[index] || "");
-      const isCorrect = !!typedWord && typedWord === targetWord;
-      const userMovedToNextWord = currentInputWords.length > index + 1;
-      const userAddedWhitespaceAfterWord = /\s$/.test(currentInputText) && !!currentInputWords[index];
-      const userStoppedTyping = !!typedWord && Date.now() - lastInputAtRef.current >= 1200;
-      const tokenChanged = currentTokenRef.current !== typedWord;
-
-      if (tokenChanged) {
-        currentTokenRef.current = typedWord;
-      }
-
-      if (isCorrect || userMovedToNextWord || userAddedWhitespaceAfterWord || userStoppedTyping) {
-        speakWord(index + 1);
-        return;
-      }
-
-      timeoutRef.current = setTimeout(checkProgress, 150);
-    };
-
-    timeoutRef.current = setTimeout(checkProgress, 150);
-  };
-
-  const speakWord = (index: number) => {
-    if (!isPlayingRef.current || index >= sourceWords.length) {
->>>>>>> theirs
       stopSpeaking();
       return;
     }
 
-<<<<<<< ours
     const currentWord = sourceWordRanges[wordIndex];
-    const spokenWord = cleanWordForSpeech(currentWord.text);
+    const spokenWord = getSpokenToken(currentWord.text, selectedLanguage);
     const selectedVoice = availableVoicesRef.current.find((voice) => voice.voiceURI === selectedVoiceURIRef.current);
 
     playbackCursorRef.current = wordIndex;
@@ -420,6 +409,19 @@ export default function DictationWorkspace() {
 
     if (!spokenWord) {
       const nextIndex = wordIndex + 1;
+      if (advanceOnSpaceRef.current) {
+        if (spaceAdvanceRequestedRef.current) {
+          const requestedIndex = pendingSpaceAdvanceIndexRef.current ?? nextIndex;
+          spaceAdvanceRequestedRef.current = false;
+          pendingSpaceAdvanceIndexRef.current = null;
+          playWordSequence(requestedIndex, runId);
+          return;
+        }
+
+        awaitingSpaceAdvanceRef.current = true;
+        return;
+      }
+
       playbackCursorRef.current = nextIndex;
       playbackTimeoutRef.current = window.setTimeout(() => {
         playWordSequence(nextIndex, runId);
@@ -437,12 +439,24 @@ export default function DictationWorkspace() {
     }
 
     utterance.onend = () => {
-<<<<<<< ours
       if (runId !== playbackRunIdRef.current) {
         return;
       }
 
       const nextIndex = wordIndex + 1;
+      if (advanceOnSpaceRef.current) {
+        if (spaceAdvanceRequestedRef.current) {
+          const requestedIndex = pendingSpaceAdvanceIndexRef.current ?? nextIndex;
+          spaceAdvanceRequestedRef.current = false;
+          pendingSpaceAdvanceIndexRef.current = null;
+          playWordSequence(requestedIndex, runId);
+          return;
+        }
+
+        awaitingSpaceAdvanceRef.current = true;
+        return;
+      }
+
       playbackCursorRef.current = nextIndex;
       const delayInSeconds = calculateWordDelay(currentWord.text, wordPauseRef.current, sentencePauseRef.current);
       playbackTimeoutRef.current = window.setTimeout(() => {
@@ -456,45 +470,45 @@ export default function DictationWorkspace() {
       }
 
       cancelPlayback(false);
+      playbackActiveRef.current = false;
       setIsPlaying(false);
       setIsPaused(true);
       setSaveStatus('Playback stopped unexpectedly. Try another voice or browser.');
-=======
-=======
-    setCurrentWordIndex(index);
-    currentTokenRef.current = normalizeWord(inputTextRef.current.trim().split(/\s+/).filter(w => w.length > 0)[index] || "");
-    const word = sourceWords[index];
-    const utterance = new SpeechSynthesisUtterance(word);
-    utterance.rate = speechRate;
-
-    utterance.onend = () => {
-<<<<<<< ours
->>>>>>> theirs
-=======
->>>>>>> theirs
-      if (typingAwareMode) {
-        waitForWordCompletion(index);
-        return;
-      }
-
-      // Calculate delay: base gap + extra if word > 4 chars
-      const extraDelay = word.length > 4 ? 0.3 : 0;
-      const totalDelay = (wordGap + extraDelay) * 1000;
-      timeoutRef.current = setTimeout(() => speakWord(index + 1), totalDelay);
-<<<<<<< ours
-<<<<<<< ours
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
     };
 
     window.speechSynthesis.speak(utterance);
   }
 
+  function advancePlaybackImmediately(nextIndex: number) {
+    if (!advanceOnSpaceRef.current || !playbackActiveRef.current) {
+      return;
+    }
+
+    if (!awaitingSpaceAdvanceRef.current) {
+      spaceAdvanceRequestedRef.current = true;
+      pendingSpaceAdvanceIndexRef.current = nextIndex;
+      return;
+    }
+
+    awaitingSpaceAdvanceRef.current = false;
+    spaceAdvanceRequestedRef.current = false;
+    pendingSpaceAdvanceIndexRef.current = null;
+    if (nextIndex >= sourceWordRanges.length) {
+      stopSpeaking();
+      return;
+    }
+
+    cancelPlayback(false);
+    const runId = playbackRunIdRef.current;
+    playbackActiveRef.current = true;
+    setIsPlaying(true);
+    setIsPaused(false);
+    playWordSequence(nextIndex, runId);
+  }
+
   function pauseSpeaking() {
     cancelPlayback(false);
+    playbackActiveRef.current = false;
     setIsPlaying(false);
     setIsPaused(true);
   }
@@ -533,6 +547,52 @@ export default function DictationWorkspace() {
 
   function handleSourceTextareaScroll(event: React.UIEvent<HTMLTextAreaElement>) {
     syncOverlayScroll(event.currentTarget, sourceOverlayRef.current);
+  }
+
+  function handleInputKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === ' ' && advanceOnSpaceRef.current && !event.repeat) {
+      advancePlaybackImmediately(getNextSourceIndexFromCaret(event.currentTarget.value, event.currentTarget.selectionStart));
+    }
+  }
+
+  function handleAdvanceOnSpaceChange(enabled: boolean) {
+    setAdvanceOnSpace(enabled);
+    advanceOnSpaceRef.current = enabled;
+
+    if (!enabled && playbackActiveRef.current && awaitingSpaceAdvanceRef.current && currentWordIndex >= 0) {
+      awaitingSpaceAdvanceRef.current = false;
+      const nextIndex = currentWordIndex + 1;
+      playbackCursorRef.current = nextIndex;
+      playbackTimeoutRef.current = window.setTimeout(() => {
+        playWordSequence(nextIndex, playbackRunIdRef.current);
+      }, calculateWordDelay(sourceWordRanges[currentWordIndex]?.text ?? '', wordPauseRef.current, sentencePauseRef.current) * 1000);
+      return;
+    }
+
+    if (!enabled || !playbackTimeoutRef.current) {
+      return;
+    }
+
+    window.clearTimeout(playbackTimeoutRef.current);
+    playbackTimeoutRef.current = null;
+    if (currentWordIndex >= 0) {
+      playbackCursorRef.current = currentWordIndex;
+    }
+  }
+
+  function handleExerciseLanguageChange(language: LearningLanguage) {
+    manualLanguageOverrideRef.current = true;
+    manualVoiceOverrideRef.current = false;
+    setSessionLanguageLabel(language);
+    setSelectedLanguage(getPracticeLanguageCode(language));
+    setSaveStatus(`${language} is selected for this exercise.`);
+  }
+
+  function handleSkillModeChange(skill: SkillMode) {
+    const nextMode = getSkillMode(skill);
+    setPracticeCategory(nextMode.id);
+    setSourceHidden(nextMode.sourceHiddenByDefault);
+    setSaveStatus(`${nextMode.shortTitle} mode selected. ${nextMode.instruction}`);
   }
 
   function focusComparison(inputIndex: number | null, sourceIndex: number | null) {
@@ -603,6 +663,7 @@ export default function DictationWorkspace() {
 
     cancelPlayback(false);
     const runId = playbackRunIdRef.current;
+    playbackActiveRef.current = true;
     setIsPlaying(true);
     playWordSequence(playbackCursorRef.current, runId);
   }, [speechRate, selectedVoiceURI, selectedLanguage, sourceWordRanges.length]);
@@ -632,33 +693,70 @@ export default function DictationWorkspace() {
       return;
     }
 
+    if (savedSessionLimitReached) {
+      setSaveStatus('Your free saved-session limit is full. Upgrade to WordPilot Pro for unlimited saved practice history.');
+      setSaveState('error');
+      return;
+    }
+
     setSaving(true);
     setSaveStatus(null);
     setSaveState('saving');
 
     const title = sourceText.split('.').at(0)?.slice(0, 60) || 'Dictation session';
-    const languageLabel = selectedLanguage === 'de-DE' ? 'German' : 'English';
+    const languageLabel = sessionLanguageLabel || (selectedLanguage === 'de-DE' ? 'German' : 'English');
 
-    const { error } = await supabase.from('dictation_sessions').insert({
-      user_id: user.id,
-      title,
-      source_text: sourceText,
-      input_text: inputText,
-      accuracy,
-      language: languageLabel,
-      cefr_level: profile?.cefr_level ?? 'B1',
-      status: 'completed',
-    });
+    const cefrLevel = sessionLevel || profile?.cefr_level || 'B1';
+    const { data: savedSession, error } = await supabase
+      .from('dictation_sessions')
+      .insert({
+        user_id: user.id,
+        title,
+        source_text: sourceText,
+        input_text: inputText,
+        accuracy,
+        language: languageLabel,
+        cefr_level: cefrLevel,
+        status: 'completed',
+      })
+      .select('id, created_at')
+      .single();
 
-    setSaving(false);
     if (error) {
+      setSaving(false);
       setSaveStatus(error.message);
       setSaveState('error');
       return;
     }
 
-    setSaveStatus('Session saved to Supabase.');
+    if (savedSession && mistakeRows.length > 0) {
+      const mistakePayload = mistakeRows.map((row) => ({
+        user_id: user.id,
+        session_id: savedSession.id,
+        written_word: row.statusLabel === 'Missing word' ? null : row.writtenWord,
+        correct_word: row.correctWord,
+        status: getMistakeStatus(row),
+        source_index: row.sourceIndex,
+        input_index: row.inputIndex,
+        language: languageLabel,
+        cefr_level: cefrLevel,
+        created_at: savedSession.created_at,
+      }));
+
+      const { error: mistakesError } = await supabase.from('dictation_mistakes').insert(mistakePayload);
+      if (mistakesError) {
+        setSaving(false);
+        setSaveStatus(`Session saved, but mistake insights could not sync yet: ${mistakesError.message}`);
+        setSaveState('saved');
+        void refreshEntitlements();
+        return;
+      }
+    }
+
+    setSaving(false);
+    setSaveStatus(mistakeRows.length > 0 ? 'Session and mistake insights saved to your account.' : 'Session saved to your account.');
     setSaveState('saved');
+    void refreshEntitlements();
   }
 
   function finishAndGrade() {
@@ -687,29 +785,24 @@ export default function DictationWorkspace() {
     inputTextRef.current = inputText;
   }, [inputText]);
 
-  useEffect(() => {
-    inputTextRef.current = inputText;
-  }, [inputText]);
-
-  useEffect(() => {
-    inputTextRef.current = inputText;
-  }, [inputText]);
-
   return (
     <main className="max-w-[1440px] mx-auto px-8 py-12 pt-28">
       <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-6">
         <div className="space-y-2">
           <div className="flex items-center gap-3 flex-wrap">
             <span className="bg-tertiary-container text-on-tertiary-container px-3 py-1 rounded-full text-xs font-bold tracking-widest uppercase">
-              {selectedLanguage === 'de-DE' ? 'German' : 'English'}
+              {sessionLanguageLabel || (selectedLanguage === 'de-DE' ? 'German' : 'English')}
             </span>
             <span className="bg-secondary-container text-on-secondary-container px-3 py-1 rounded-full text-xs font-bold tracking-widest uppercase">
-              Level {profile?.cefr_level ?? 'C1'}
+              Level {sessionLevel || profile?.cefr_level || 'B1'}
+            </span>
+            <span className="bg-primary-container text-on-primary-container px-3 py-1 rounded-full text-xs font-bold tracking-widest uppercase">
+              {practiceCategory}
             </span>
           </div>
-          <h1 className="text-5xl font-extrabold tracking-tighter text-on-surface font-headline">Advanced Dictation Lab</h1>
+          <h1 className="text-5xl font-extrabold tracking-tighter text-on-surface font-headline">{skillMode.shortTitle} Exercise</h1>
           <p className="text-on-surface-variant max-w-2xl font-medium">
-            Word-by-word dictation with real pauses, smart timing based on word length, and a more stable writing surface for long exercises.
+            {skillMode.instruction}
           </p>
         </div>
         <div className="flex flex-col items-end gap-2">
@@ -727,36 +820,64 @@ export default function DictationWorkspace() {
         <div className="lg:col-span-4 space-y-6">
           <div className="bg-surface-container-low rounded-3xl p-8 whisper-shadow border border-outline-variant/10">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-sm font-bold text-on-surface uppercase tracking-widest">1. Source Script</h3>
-              <button onClick={() => setSourceText('')} className="text-on-surface-variant hover:text-error transition-colors" title="Clear Script">
-                <RotateCcw className="w-4 h-4" />
-              </button>
+              <h3 className="text-sm font-bold text-on-surface uppercase tracking-widest">1. {skillMode.sourceLabel}</h3>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setSourceHidden((current) => !current)}
+                  className="text-on-surface-variant hover:text-primary transition-colors"
+                  title={sourceHidden ? 'Show source' : 'Hide source'}
+                >
+                  {sourceHidden ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                </button>
+                <button onClick={() => setSourceText('')} className="text-on-surface-variant hover:text-error transition-colors" title="Clear Script">
+                  <RotateCcw className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             <div className="relative h-[200px] rounded-2xl bg-surface-container-lowest overflow-hidden">
-              <div
-                ref={sourceOverlayRef}
-                className="pointer-events-none absolute inset-0 overflow-auto p-4 text-base font-medium leading-[1.8] whitespace-pre-wrap break-words text-on-surface"
-                aria-hidden="true"
-              >
-                {sourceText.length === 0 ? (
-                  <span className="text-on-surface-variant/40">Paste the text you want to practice here...</span>
-                ) : (
-                  <MirroredText text={sourceText} activeRange={activeSourceRange} />
-                )}
-              </div>
-              <textarea
-                ref={sourceTextareaRef}
-                className="relative z-10 w-full h-[200px] overflow-auto bg-transparent border-none rounded-2xl p-4 text-base font-medium leading-[1.8] text-transparent caret-on-surface placeholder:text-transparent resize-none outline-none focus:outline-none focus:ring-2 focus:ring-primary/15"
-                placeholder="Paste the text you want to practice here..."
-                value={sourceText}
-                onChange={(event) => {
-                  manualLanguageOverrideRef.current = false;
-                  setSourceText(event.target.value);
-                }}
-                onScroll={handleSourceTextareaScroll}
-                wrap="soft"
-              />
+              {sourceHidden ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center p-5 text-center">
+                  <EyeOff className="h-7 w-7 text-primary" />
+                  <p className="mt-3 font-headline font-bold text-on-surface">Source is hidden</p>
+                  <p className="mt-2 text-sm text-on-surface-variant">
+                    {practiceCategory === 'Reading' ? 'Try rebuilding it from memory.' : practiceCategory === 'Writing' ? 'Write your own version without copying.' : 'Listen first, then type what you hear.'}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setSourceHidden(false)}
+                    className="mt-4 rounded-full bg-primary px-4 py-2 text-xs font-bold text-on-primary"
+                  >
+                    Show source
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div
+                    ref={sourceOverlayRef}
+                    className="pointer-events-none absolute inset-0 overflow-auto p-4 text-base font-medium leading-[1.8] whitespace-pre-wrap break-words text-on-surface"
+                    aria-hidden="true"
+                  >
+                    {sourceText.length === 0 ? (
+                      <span className="text-on-surface-variant/40">Paste the text you want to practice here...</span>
+                    ) : (
+                      <MirroredText text={sourceText} activeRange={activeSourceRange} />
+                    )}
+                  </div>
+                  <textarea
+                    ref={sourceTextareaRef}
+                    className="relative z-10 w-full h-[200px] overflow-auto bg-transparent border-none rounded-2xl p-4 text-base font-medium leading-[1.8] text-transparent caret-on-surface placeholder:text-transparent resize-none outline-none focus:outline-none focus:ring-2 focus:ring-primary/15"
+                    placeholder="Paste the text you want to practice here..."
+                    value={sourceText}
+                    onChange={(event) => {
+                      manualLanguageOverrideRef.current = false;
+                      setSourceText(event.target.value);
+                    }}
+                    onScroll={handleSourceTextareaScroll}
+                    wrap="soft"
+                  />
+                </>
+              )}
             </div>
 
             <div className="mt-8 space-y-6">
@@ -765,44 +886,93 @@ export default function DictationWorkspace() {
                 <h4 className="text-xs font-bold text-on-surface uppercase tracking-widest">Voice & Language</h4>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    manualLanguageOverrideRef.current = true;
-                    setSelectedLanguage('en-US');
-                  }}
-                  className={cn(
-                    'rounded-2xl px-4 py-3 font-bold text-sm transition',
-                    selectedLanguage === 'en-US' ? 'bg-primary text-on-primary' : 'bg-surface-container-highest text-on-surface',
-                  )}
-                >
-                  English
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    manualLanguageOverrideRef.current = true;
-                    setSelectedLanguage('de-DE');
-                  }}
-                  className={cn(
-                    'rounded-2xl px-4 py-3 font-bold text-sm transition',
-                    selectedLanguage === 'de-DE' ? 'bg-primary text-on-primary' : 'bg-surface-container-highest text-on-surface',
-                  )}
-                >
-                  German
-                </button>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {LEARNING_LANGUAGES.map((item) => {
+                  const active = item.language === sessionLanguageLabel;
+                  return (
+                    <button
+                      key={item.language}
+                      type="button"
+                      onClick={() => handleExerciseLanguageChange(item.language)}
+                      className={cn(
+                        'rounded-2xl px-4 py-3 text-left transition border',
+                        active
+                          ? 'bg-primary text-on-primary border-primary'
+                          : 'bg-surface-container-highest text-on-surface border-transparent hover:border-outline-variant',
+                      )}
+                    >
+                      <span className="block font-bold text-sm">{item.language}</span>
+                      <span className={cn('mt-1 block text-[10px] font-semibold', active ? 'text-on-primary/75' : 'text-on-surface-variant')}>
+                        {getPracticeLanguageCode(item.language)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="grid grid-cols-1 gap-3">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">CEFR Level</label>
+                  <select
+                    value={sessionLevel}
+                    onChange={(event) => {
+                      const nextLevel = normalizeCefrLevel(event.target.value);
+                      setSessionLevel(nextLevel);
+                      setSaveStatus(`${sessionLanguageLabel} ${nextLevel} selected for this exercise.`);
+                    }}
+                    className="w-full bg-surface-container-lowest border border-surface-container rounded-2xl px-4 py-3 text-sm text-on-surface outline-none focus:border-primary"
+                  >
+                    {CEFR_LEVELS.map((item) => (
+                      <option key={item.level} value={item.level}>
+                        {item.level} - {item.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Training Mode</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {SKILL_MODES.map((mode) => {
+                    const active = mode.id === practiceCategory;
+                    return (
+                      <button
+                        key={mode.id}
+                        type="button"
+                        onClick={() => handleSkillModeChange(mode.id)}
+                        className={cn(
+                          'rounded-2xl border p-4 text-left transition',
+                          active
+                            ? 'border-primary bg-primary text-on-primary'
+                            : 'border-transparent bg-surface-container-highest text-on-surface hover:border-outline-variant',
+                        )}
+                      >
+                        <div className="flex items-center gap-2">
+                          <SkillModeIcon skill={mode.id} active={active} />
+                          <span className="font-headline font-bold text-sm">{mode.shortTitle}</span>
+                        </div>
+                        <p className={cn('mt-2 text-xs leading-5', active ? 'text-on-primary/80' : 'text-on-surface-variant')}>
+                          {mode.title}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               <div className="space-y-2">
                 <label className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Voice</label>
                 <select
                   value={selectedVoiceURI}
-                  onChange={(event) => setSelectedVoiceURI(event.target.value)}
+                  onChange={(event) => {
+                    manualVoiceOverrideRef.current = true;
+                    setSelectedVoiceURI(event.target.value);
+                  }}
                   className="w-full bg-surface-container-lowest border border-surface-container rounded-2xl px-4 py-3 text-sm text-on-surface outline-none focus:border-primary"
                 >
                   {availableVoices.length === 0 ? (
-                    <option value="">No matching voice found</option>
+                    <option value="">No {sessionLanguageLabel} voice found</option>
                   ) : (
                     availableVoices.map((voice) => (
                       <option key={voice.voiceURI} value={voice.voiceURI}>
@@ -826,28 +996,34 @@ export default function DictationWorkspace() {
 
                 <RangeField
                   label="Pause Between Words"
-                  valueLabel={`${wordPause.toFixed(2)}s`}
+                  valueLabel={advanceOnSpace ? 'Off' : `${wordPause.toFixed(2)}s`}
                   min={0}
                   max={2}
                   step={0.05}
                   value={wordPause}
                   onChange={(value) => setWordPause(value)}
+                  disabled={advanceOnSpace}
                 />
 
                 <RangeField
                   label="Extra Pause At Sentence End"
-                  valueLabel={`${sentencePause.toFixed(2)}s`}
+                  valueLabel={advanceOnSpace ? 'Off' : `${sentencePause.toFixed(2)}s`}
                   min={0}
                   max={1.5}
                   step={0.05}
                   value={sentencePause}
                   onChange={(value) => setSentencePause(value)}
+                  disabled={advanceOnSpace}
                 />
               </div>
 
               <div className="bg-surface-container-highest/40 p-3 rounded-xl border border-primary/10">
                 <p className="text-[11px] text-on-surface-variant font-medium leading-relaxed">
-                  The system now waits after every word. If a word has more than 5 letters, each extra letter adds 0.1s automatically, with more pause after commas and sentence endings.
+                  {availableVoices.length === 0
+                    ? `${sessionLanguageLabel} is selected for tracking and saving. Add a browser/system voice for spoken playback.`
+                    : advanceOnSpace
+                    ? `${sessionLanguageLabel} ${sessionLevel} is active. Space starts the next word immediately.`
+                    : `${sessionLanguageLabel} ${sessionLevel} timed mode uses pauses, word length, punctuation, and sentence endings.`}
                 </p>
               </div>
 
@@ -893,9 +1069,6 @@ export default function DictationWorkspace() {
                     Cursor {currentWordIndex >= 0 ? currentWordIndex + 1 : 1} / {Math.max(sourceWordRanges.length, 1)}
                   </p>
                 </div>
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
                 <p className="mt-2 text-center text-[11px] font-medium text-on-surface-variant">
                   {isPlaying
                     ? `Playing from word ${currentWordIndex + 1}`
@@ -903,39 +1076,19 @@ export default function DictationWorkspace() {
                       ? `Paused at word ${currentWordIndex + 1}`
                       : 'Ready to start dictation'}
                 </p>
-=======
-=======
-=======
->>>>>>> theirs
 
                 <label className="flex items-center justify-between gap-4 bg-surface-container-highest/30 p-3 rounded-xl border border-primary/10">
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface">Typing-Aware Advance</p>
-                    <p className="text-[9px] text-on-surface-variant">Speak next word when user finishes typing current word (correctly, or after a short pause if incorrect).</p>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface">Advance On Space</p>
+                    <p className="text-[9px] text-on-surface-variant">Space immediately starts the next word and turns off timed pauses.</p>
                   </div>
                   <input
                     type="checkbox"
-                    checked={typingAwareMode}
-                    onChange={(e) => setTypingAwareMode(e.target.checked)}
+                    checked={advanceOnSpace}
+                    onChange={(e) => handleAdvanceOnSpaceChange(e.target.checked)}
                     className="h-4 w-4 accent-primary"
                   />
                 </label>
-              </div>
->>>>>>> theirs
-
-                <label className="flex items-center justify-between gap-4 bg-surface-container-highest/30 p-3 rounded-xl border border-primary/10">
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface">Typing-Aware Advance</p>
-                    <p className="text-[9px] text-on-surface-variant">Speak next word when user finishes typing current word (correctly, or after a short pause if incorrect).</p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={typingAwareMode}
-                    onChange={(e) => setTypingAwareMode(e.target.checked)}
-                    className="h-4 w-4 accent-primary"
-                  />
-                </label>
->>>>>>> theirs
               </div>
             </div>
           </div>
@@ -944,7 +1097,7 @@ export default function DictationWorkspace() {
         <div className="lg:col-span-8 space-y-6">
           <div className="bg-surface-container-lowest rounded-3xl min-h-[500px] p-10 flex flex-col gap-8 whisper-shadow border border-outline-variant/10">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-on-surface uppercase tracking-widest">2. Your Dictation</h3>
+              <h3 className="text-sm font-bold text-on-surface uppercase tracking-widest">2. {skillMode.inputLabel}</h3>
               <div className="flex items-center gap-2 text-xs font-bold text-on-surface-variant">
                 <span className={cn('w-2 h-2 rounded-full', isPlaying ? 'bg-primary animate-pulse' : 'bg-outline-variant')}></span>
                 {isPlaying ? 'PLAYING' : 'READY'}
@@ -958,7 +1111,7 @@ export default function DictationWorkspace() {
                 aria-hidden="true"
               >
                 {inputText.length === 0 ? (
-                  <span className="text-on-surface-variant/35">Start typing what you hear...</span>
+                  <span className="text-on-surface-variant/35">{skillMode.placeholder}</span>
                 ) : (
                   <MirroredText text={inputText} activeRange={activeInputRange} />
                 )}
@@ -966,33 +1119,15 @@ export default function DictationWorkspace() {
               <textarea
                 ref={textareaRef}
                 value={inputText}
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
                 onChange={(event) => setInputText(event.target.value)}
+                onKeyDown={handleInputKeyDown}
                 onScroll={handleTextareaScroll}
                 className="relative z-10 w-full min-h-[320px] overflow-auto bg-transparent border-none px-6 py-5 text-xl md:text-2xl font-medium leading-[1.8] text-transparent caret-on-surface placeholder:text-transparent resize-y outline-none focus:outline-none focus:ring-2 focus:ring-primary/15"
-                placeholder="Start typing what you hear..."
+                placeholder={skillMode.placeholder}
                 spellCheck={false}
                 autoCorrect="off"
-                autoCapitalize="off"
+                autoCapitalize={selectedLanguage === 'en-US' ? 'off' : 'sentences'}
                 wrap="soft"
-=======
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
-                onChange={(e) => {
-                  lastInputAtRef.current = Date.now();
-                  setInputText(e.target.value);
-                }}
-<<<<<<< ours
-<<<<<<< ours
->>>>>>> theirs
-=======
->>>>>>> theirs
-=======
->>>>>>> theirs
               />
             </div>
 
@@ -1139,12 +1274,12 @@ export default function DictationWorkspace() {
               onClick={finishAndGrade}
               className="bg-primary text-on-primary px-12 py-4 rounded-2xl font-bold font-headline text-lg transition-all hover:bg-primary-dim hover:shadow-lg active:scale-95 flex items-center gap-3 whisper-shadow"
             >
-              Finish &amp; Grade
+              {skillMode.finishLabel}
               <CheckCircle className="w-6 h-6" />
             </button>
             <button
               onClick={() => void saveSession()}
-              disabled={saving}
+              disabled={saving || savedSessionLimitReached}
               className={cn(
                 'px-8 py-4 rounded-2xl font-bold text-lg transition-all flex items-center justify-center gap-3 disabled:opacity-70',
                 saveState === 'saved' && !saving && 'bg-primary/10 text-primary border border-primary/20',
@@ -1156,20 +1291,106 @@ export default function DictationWorkspace() {
               {saving ? 'Saving...' : saveState === 'saved' ? 'Saved' : saveState === 'error' ? 'Save Failed' : 'Save Session'}
             </button>
           </div>
+          <p className="text-center text-xs font-semibold text-on-surface-variant">
+            Saved sessions: {formatUsage(entitlements.usage.savedSessions, entitlements.limits.savedSessions)}
+            {!entitlements.isPro && ' - WordPilot Pro unlocks unlimited practice history.'}
+          </p>
           {saveStatus && <p className="text-center text-sm text-on-surface-variant">{saveStatus}</p>}
         </div>
       </div>
 
       {showResultModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-surface-container-lowest border border-outline-variant/10 shadow-2xl rounded-3xl p-8 max-w-sm w-full relative animate-in zoom-in-95 duration-200">
+          <div className="bg-surface-container-lowest border border-outline-variant/10 shadow-2xl rounded-3xl p-6 sm:p-8 max-w-2xl w-full relative animate-in zoom-in-95 duration-200">
             <button
               onClick={() => setShowResultModal(false)}
               className="absolute top-4 right-4 text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded-full p-1 transition"
             >
               <X className="w-5 h-5" />
             </button>
-            <div className="text-center space-y-4">
+            <div className="space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5">
+                <div>
+                  <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary mb-2">Session Report</p>
+                  <h3 className="text-2xl sm:text-3xl font-extrabold font-headline text-on-surface">{resultLevel} finish</h3>
+                  <p className="mt-2 text-sm text-on-surface-variant">
+                    {sessionLanguageLabel} {sessionLevel} - {practiceCategory}
+                  </p>
+                </div>
+                <div className="w-24 h-24 bg-primary/10 text-primary rounded-3xl flex flex-col items-center justify-center font-headline shadow-[inset_0_0_20px_rgba(29,78,216,0.12)]">
+                  <span className="text-3xl font-black">{accuracy}%</span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest">accuracy</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <ResultMetric label="Words" value={String(sourceWordRanges.length)} />
+                <ResultMetric label="Issues" value={String(mistakeRows.length)} />
+                <ResultMetric label="Missing" value={String(resultBreakdown.missing)} />
+                <ResultMetric label="Extra" value={String(resultBreakdown.extra)} />
+              </div>
+
+              <div className="rounded-2xl bg-surface-container-low p-5">
+                <p className="font-headline font-bold text-on-surface">Next step</p>
+                <p className="mt-2 text-sm leading-6 text-on-surface-variant">
+                  {mistakeRows.length === 0
+                    ? 'Clean run. Move to the next card in your path or try a harder text.'
+                    : resultBreakdown.missing > 0
+                    ? 'Replay the sentence endings first. Missing words usually come from weak phrase boundaries.'
+                    : resultBreakdown.extra > 0
+                    ? 'Slow down and type only confirmed words. Extra words usually appear when guessing ahead.'
+                    : 'Review the highlighted wrong words, then retry the same text once.'}
+                </p>
+              </div>
+
+              {mistakeRows.length > 0 && (
+                <div className="space-y-3">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">First issues</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {mistakeRows.slice(0, 4).map((row) => (
+                      <button
+                        key={row.id}
+                        type="button"
+                        onClick={() => {
+                          setShowResultModal(false);
+                          reviewMistake(row);
+                        }}
+                        className="text-left rounded-2xl border border-outline-variant/10 bg-surface-container-low px-4 py-3 hover:border-primary/30 transition"
+                      >
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">{row.statusLabel}</p>
+                        <p className="mt-1 text-sm font-semibold text-on-surface">{row.writtenWord} {'->'} {row.correctWord}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <button
+                  onClick={() => {
+                    setShowResultModal(false);
+                    handleResetInput();
+                  }}
+                  className="rounded-2xl bg-surface-container px-5 py-3 font-bold text-on-surface hover:bg-surface-container-high transition"
+                >
+                  Retry
+                </button>
+                <button
+                  onClick={() => void saveSession()}
+                  disabled={saving || savedSessionLimitReached}
+                  className="rounded-2xl bg-surface-container px-5 py-3 font-bold text-on-surface hover:bg-surface-container-high transition disabled:opacity-60"
+                >
+                  {saving ? 'Saving...' : 'Save'}
+                </button>
+                <button
+                  onClick={() => setShowResultModal(false)}
+                  className="rounded-2xl bg-primary text-on-primary px-5 py-3 font-bold font-headline transition hover:bg-primary-dim"
+                >
+                  Continue
+                </button>
+              </div>
+            </div>
+            <div className="hidden">
               <div className="mx-auto w-20 h-20 bg-primary/10 text-primary rounded-full flex items-center justify-center text-3xl font-bold font-headline shadow-[inset_0_0_20px_rgba(29,78,216,0.15)]">
                 {accuracy}%
               </div>
@@ -1209,6 +1430,7 @@ function RangeField({
   step,
   value,
   onChange,
+  disabled = false,
 }: {
   label: string;
   valueLabel: string;
@@ -1217,9 +1439,10 @@ function RangeField({
   step: number;
   value: number;
   onChange: (value: number) => void;
+  disabled?: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-2">
+    <div className={cn('flex flex-col gap-2', disabled && 'opacity-55')}>
       <div className="flex justify-between items-center text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">
         <span>{label}</span>
         <span className="text-primary font-mono">{valueLabel}</span>
@@ -1231,10 +1454,32 @@ function RangeField({
         step={step}
         value={value}
         onChange={(event) => onChange(parseFloat(event.target.value))}
-        className="w-full h-1.5 bg-surface-container-highest rounded-lg appearance-none cursor-pointer accent-primary"
+        disabled={disabled}
+        className="w-full h-1.5 bg-surface-container-highest rounded-lg appearance-none cursor-pointer accent-primary disabled:cursor-not-allowed"
       />
     </div>
   );
+}
+
+function ResultMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl bg-surface-container-low p-4">
+      <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">{label}</p>
+      <p className="mt-2 text-2xl font-black font-headline text-on-surface">{value}</p>
+    </div>
+  );
+}
+
+function SkillModeIcon({ skill, active }: { skill: SkillMode; active: boolean }) {
+  const className = cn('h-4 w-4', active ? 'text-on-primary' : 'text-primary');
+  if (skill === 'Reading') return <BookOpen className={className} />;
+  if (skill === 'Listening') return <Ear className={className} />;
+  if (skill === 'Writing') return <PenLine className={className} />;
+  return <Keyboard className={className} />;
+}
+
+function getSkillMode(value?: string | null) {
+  return SKILL_MODES.find((mode) => mode.id === value) ?? SKILL_MODES[0];
 }
 
 function PlayerButton({
@@ -1306,13 +1551,13 @@ function buildMirrorSegments(text: string, activeRange: { start: number; end: nu
   return segments;
 }
 
-function getWordRanges(text: string): TokenRange[] {
+function getWordRanges(text: string, language: PracticeLanguage = 'en-US'): TokenRange[] {
   const ranges: TokenRange[] = [];
   const regex = /\S+/g;
   let match: RegExpExecArray | null;
 
   while ((match = regex.exec(text)) !== null) {
-    const normalized = normalizeComparableWord(match[0]);
+    const normalized = normalizeComparableWord(match[0], language);
     if (!normalized) {
       continue;
     }
@@ -1326,6 +1571,17 @@ function getWordRanges(text: string): TokenRange[] {
   }
 
   return ranges;
+}
+
+function getNextSourceIndexFromCaret(inputText: string, caretIndex: number) {
+  const safeCaretIndex = Math.min(Math.max(caretIndex, 0), inputText.length);
+  const wordsBeforeCaret = getWordRanges(inputText.slice(0, safeCaretIndex));
+
+  if (wordsBeforeCaret.length === 0) {
+    return 0;
+  }
+
+  return wordsBeforeCaret.length;
 }
 
 function normalizeWord(value: string) {
@@ -1353,15 +1609,27 @@ function buildComparisonItems(sourceWords: WordRange[], inputWords: WordRange[])
   });
 }
 
-function normalizeComparableWord(value: string) {
-  return value
+function normalizeComparableWord(value: string, language: PracticeLanguage = 'en-US') {
+  const normalized = value
     .normalize('NFKC')
-    .toLowerCase()
     .replace(/[\u2018\u2019\u02BC\u0060\u00B4]/g, "'")
     .replace(/[\u201C\u201D]/g, '"')
-    .replace(/(^[^a-z0-9]+)|([^a-z0-9]+$)/g, '')
-    .replace(/["']/g, '')
     .replace(/\s+/g, '');
+
+  if (language === 'de-DE') {
+    if (/^[.,!?;:]+$/.test(normalized)) {
+      return normalized;
+    }
+
+    return normalized
+      .replace(/^[^\p{L}\p{N}]+/u, '')
+      .replace(/[^\p{L}\p{N}.,!?;:]+$/u, '');
+  }
+
+  return normalized
+    .toLowerCase()
+    .replace(/(^[^\p{L}\p{N}]+)|([^\p{L}\p{N}]+$)/gu, '')
+    .replace(/["']/g, '');
 }
 
 function analyzeDictation(sourceWords: TokenRange[], inputWords: TokenRange[]): DictationAnalysis {
@@ -1478,6 +1746,18 @@ function analyzeDictation(sourceWords: TokenRange[], inputWords: TokenRange[]): 
   return { comparisonItems, mistakes, accuracy: Math.min(100, accuracy) };
 }
 
+function getMistakeStatus(row: MistakeRow): MistakeStatus {
+  if (row.statusLabel === 'Missing word') {
+    return 'missing';
+  }
+
+  if (row.statusLabel === 'Extra word') {
+    return 'extra';
+  }
+
+  return 'wrong';
+}
+
 function alignWordSequences(sourceWords: TokenRange[], inputWords: TokenRange[]) {
   const matrix = Array.from({ length: sourceWords.length + 1 }, () => Array.from({ length: inputWords.length + 1 }, () => 0));
 
@@ -1514,6 +1794,75 @@ function alignWordSequences(sourceWords: TokenRange[], inputWords: TokenRange[])
 
 function cleanWordForSpeech(word: string) {
   return word.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '') || word;
+}
+
+function getPracticeLanguageCode(language?: string | null): PracticeLanguage {
+  const normalized = normalizeLearningLanguage(language);
+  const codes: Record<LearningLanguage, PracticeLanguage> = {
+    English: 'en-US',
+    German: 'de-DE',
+    Spanish: 'es-ES',
+    Italian: 'it-IT',
+    French: 'fr-FR',
+  };
+
+  return codes[normalized];
+}
+
+function getLearningLanguageFromCode(language: PracticeLanguage): LearningLanguage {
+  const labels: Record<PracticeLanguage, LearningLanguage> = {
+    'en-US': 'English',
+    'de-DE': 'German',
+    'es-ES': 'Spanish',
+    'it-IT': 'Italian',
+    'fr-FR': 'French',
+  };
+
+  return labels[language];
+}
+
+function getSpokenToken(token: string, language: PracticeLanguage) {
+  if (language !== 'de-DE') {
+    return cleanWordForSpeech(token);
+  }
+
+  const punctuationNames: Record<string, string> = {
+    ',': 'Komma',
+    '.': 'Punkt',
+    '?': 'Fragezeichen',
+    '!': 'Ausrufezeichen',
+    ';': 'Semikolon',
+    ':': 'Doppelpunkt',
+  };
+  const trimmedToken = token.trim();
+  const punctuationOnly = /^[.,!?;:]+$/.test(trimmedToken);
+  const punctuationMarks = punctuationOnly
+    ? trimmedToken
+    : `${trimmedToken.match(/^[.,!?;:]+/)?.[0] ?? ''}${trimmedToken.match(/[.,!?;:]+$/)?.[0] ?? ''}`;
+  const word = cleanWordForSpeech(trimmedToken);
+  const spokenParts = [
+    punctuationOnly ? '' : word,
+    ...[...punctuationMarks].map((mark) => punctuationNames[mark]).filter(Boolean),
+  ].filter(Boolean);
+
+  return spokenParts.join(' ') || cleanWordForSpeech(token);
+}
+
+function getPreferredVoice(voices: SpeechSynthesisVoice[], language: PracticeLanguage) {
+  const languageName = getLearningLanguageFromCode(language);
+  const exactGoogleVoice =
+    language === 'de-DE'
+      ? voices.find((voice) => /google/i.test(voice.name) && /(deutsch|german)/i.test(voice.name) && !voice.localService)
+      : language === 'en-US'
+        ? voices.find((voice) => /google us english/i.test(voice.name) && !voice.localService)
+        : voices.find((voice) => /google/i.test(voice.name) && voice.lang.toLowerCase().startsWith(language.slice(0, 2).toLowerCase()) && !voice.localService);
+
+  return (
+    exactGoogleVoice ??
+    voices.find((voice) => new RegExp(languageName, 'i').test(voice.name)) ??
+    voices.find((voice) => voice.localService && /natural|neural|premium|microsoft|google/i.test(voice.name)) ??
+    voices[0]
+  );
 }
 
 function calculateWordDelay(word: string, basePause: number, sentencePause: number) {
@@ -1643,14 +1992,22 @@ function detectPracticeLanguage(text: string): PracticeLanguage | null {
     return null;
   }
 
-  const germanMarkers = [
-    ' der ', ' die ', ' das ', ' und ', ' ist ', ' nicht ', ' mit ', ' auf ', ' ein ', ' eine ', ' ich ', ' wir ',
-    ' sie ', ' zu ', ' von ', ' fuer ', ' zum ', ' zur ', ' ueber ', 'sch', 'ei', 'ie',
-  ];
-  const englishMarkers = [
-    ' the ', ' and ', ' is ', ' are ', ' with ', ' for ', ' this ', ' that ', ' our ', ' you ', ' we ', ' they ',
-    ' have ', ' has ', ' will ', ' about ', ' from ', ' to ',
-  ];
+  const scores: Array<{ language: PracticeLanguage; score: number }> = [
+    { language: 'de-DE' as PracticeLanguage, score: scoreLanguage(normalized, [' der ', ' die ', ' das ', ' und ', ' ist ', ' nicht ', ' mit ', ' ein ', ' ich ', ' wir ', ' zu ', ' von ', ' fuer ', ' ueber ']) },
+    { language: 'es-ES' as PracticeLanguage, score: scoreLanguage(normalized, [' el ', ' la ', ' los ', ' las ', ' que ', ' con ', ' para ', ' una ', ' este ', ' esta ', ' como ', ' porque '], /[áéíóúñ¿¡]/g) },
+    { language: 'it-IT' as PracticeLanguage, score: scoreLanguage(normalized, [' il ', ' la ', ' gli ', ' le ', ' che ', ' con ', ' per ', ' una ', ' questo ', ' questa ', ' come ', ' perche '], /[àèéìòù]/g) },
+    { language: 'fr-FR' as PracticeLanguage, score: scoreLanguage(normalized, [' le ', ' la ', ' les ', ' des ', ' que ', ' avec ', ' pour ', ' une ', ' cette ', ' comme ', ' parce ', ' dans '], /[àâçéèêëîïôûùüÿœ]/g) },
+    { language: 'en-US' as PracticeLanguage, score: scoreLanguage(normalized, [' the ', ' and ', ' is ', ' are ', ' with ', ' for ', ' this ', ' that ', ' our ', ' you ', ' we ', ' they ', ' have ', ' will ', ' about ']) },
+  ].sort((left, right) => right.score - left.score);
+
+  if (scores[0].score === 0 || scores[0].score === scores[1].score) {
+    return null;
+  }
+
+  return scores[0].language;
+
+  const germanMarkers: string[] = [];
+  const englishMarkers: string[] = [];
 
   const germanDiacritics = (normalized.match(/[äöüß]/g) ?? []).length;
   const germanScore = germanMarkers.reduce((score, marker) => score + (normalized.includes(marker) ? 1 : 0), germanDiacritics * 2);
@@ -1661,4 +2018,9 @@ function detectPracticeLanguage(text: string): PracticeLanguage | null {
   }
 
   return germanScore > englishScore ? 'de-DE' : 'en-US';
+}
+
+function scoreLanguage(text: string, markers: string[], diacriticPattern?: RegExp) {
+  const diacriticScore = diacriticPattern ? (text.match(diacriticPattern) ?? []).length * 2 : 0;
+  return markers.reduce((score, marker) => score + (text.includes(marker) ? 1 : 0), diacriticScore);
 }

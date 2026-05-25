@@ -63,7 +63,7 @@ export default function CertificatesPage() {
       profile?.full_name?.trim() ||
       user?.user_metadata.full_name?.trim() ||
       user?.email?.split('@')[0] ||
-      'Scholar Script Learner';
+      'WordPilot Learner';
     const issuedOn = new Date(certificate.issuedAt).toLocaleDateString('en-US', {
       month: 'long',
       day: 'numeric',
@@ -109,7 +109,7 @@ export default function CertificatesPage() {
     doc.setTextColor(...primary);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(24);
-    doc.text('Scholar Script', outerX + 30, outerY + 44);
+    doc.text('WordPilot', outerX + 30, outerY + 44);
 
     doc.setFontSize(10);
     doc.text('VERIFIED CERTIFICATE', outerX + 30, outerY + 72);
@@ -122,7 +122,7 @@ export default function CertificatesPage() {
     doc.setFontSize(15);
     doc.setTextColor(...textMuted);
     const introText = doc.splitTextToSize(
-      'This document certifies the learner below for an outstanding dictation performance recorded inside Scholar Script.',
+      'This document certifies the learner below for an outstanding dictation performance recorded inside WordPilot.',
       470,
     );
     doc.text(introText, outerX + 30, outerY + 154, { lineHeightFactor: 1.45 });
@@ -188,14 +188,14 @@ export default function CertificatesPage() {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(12);
     doc.setTextColor(...textDark);
-    doc.text('Scholar Script Verification', signatureX, signatureY + 18);
+    doc.text('WordPilot Verification', signatureX, signatureY + 18);
 
     const fileSafeTitle = `${certificate.level}-${certificate.language}-${certificate.sessionTitle}`
       .toLowerCase()
       .replaceAll(/[^a-z0-9]+/g, '-')
       .replaceAll(/^-|-$/g, '');
 
-    doc.save(`scholar-script-certificate-${fileSafeTitle || certificateCode}.pdf`);
+    doc.save(`wordpilot-certificate-${fileSafeTitle || certificateCode}.pdf`);
   }
 
   return (

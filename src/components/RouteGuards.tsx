@@ -1,5 +1,6 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useAdminAccess } from '../hooks/useAdminAccess';
 
 function FullScreenState({ message, subtle = false }: { message: string; subtle?: boolean }) {
   return (
@@ -25,7 +26,7 @@ function FullScreenState({ message, subtle = false }: { message: string; subtle?
 }
 
 export function ProtectedRoute() {
-  const { user, loading, authReady, authMessage } = useAuth();
+  const { user, profile, loading, authReady, authMessage } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -40,6 +41,19 @@ export function ProtectedRoute() {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
 
+  const metadataBlocked = user.app_metadata?.blocked === true;
+  if (profile?.is_blocked || metadataBlocked) {
+    return (
+      <FullScreenState
+        message={
+          profile?.blocked_reason || user.app_metadata?.blocked_reason
+            ? `This account is blocked. Reason: ${profile?.blocked_reason ?? user.app_metadata?.blocked_reason}`
+            : 'This account is blocked. Contact support if you think this is a mistake.'
+        }
+      />
+    );
+  }
+
   return <Outlet />;
 }
 
@@ -51,6 +65,30 @@ export function PublicOnlyRoute() {
   }
 
   if (user) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <Outlet />;
+}
+
+export function AdminRoute() {
+  const { user, loading, authReady, authMessage } = useAuth();
+  const { isAdmin, loading: adminLoading } = useAdminAccess(user);
+  const location = useLocation();
+
+  if (loading || adminLoading) {
+    return <FullScreenState message="Checking admin access..." subtle />;
+  }
+
+  if (!authReady) {
+    return <FullScreenState message={authMessage ?? 'Authentication is not configured yet.'} />;
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
+
+  if (!isAdmin) {
     return <Navigate to="/dashboard" replace />;
   }
 

@@ -14,10 +14,9 @@ export function hasSupabaseEnv() {
 }
 
 export function hasGeminiEnv() {
-  return Boolean((import.meta.env.VITE_GEMINI_API_KEY ?? '').trim());
+  return import.meta.env.VITE_AI_GENERATION_ENABLED !== 'false';
 }
 
 export const clientEnv = {
   ...requiredClientEnv,
-  geminiApiKey: import.meta.env.VITE_GEMINI_API_KEY ?? '',
 };

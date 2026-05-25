@@ -36,6 +36,8 @@ export interface BillingInvoice {
   amount: string;
   status: 'paid' | 'upcoming';
   issuedAt: string;
+  hostedInvoiceUrl?: string | null;
+  invoicePdfUrl?: string | null;
 }
 
 export interface ChatMessage {

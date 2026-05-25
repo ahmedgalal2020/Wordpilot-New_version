@@ -5,6 +5,7 @@ import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { hasSupabaseEnv } from '../lib/env';
+import { useAdminAccess } from '../hooks/useAdminAccess';
 
 type NavActivityItem = {
   id: string;
@@ -34,6 +35,7 @@ export function Navbar() {
   const notificationsRef = useRef<HTMLDivElement | null>(null);
   const historyRef = useRef<HTMLDivElement | null>(null);
   const supabaseReady = hasSupabaseEnv();
+  const { isAdmin } = useAdminAccess(user);
   const isAuthPage =
     location.pathname === '/login' ||
     location.pathname === '/signup' ||
@@ -149,7 +151,7 @@ export function Navbar() {
           id: `session-${session.id}`,
           title: session.title,
           meta: `Session - ${formatNavDate(session.created_at)}`,
-          to: '/dashboard',
+          to: '/history',
         })) ?? [];
 
       const savedTextItems: NavActivityItem[] =
@@ -181,7 +183,7 @@ export function Navbar() {
     return (
       <header className="w-full px-4 sm:px-6 lg:px-8 py-8 sm:py-10 flex justify-center">
         <Link to="/" className="flex items-center gap-2">
-          <div className="text-xl sm:text-2xl font-black tracking-tighter text-primary font-headline">Scholar Script</div>
+          <div className="text-xl sm:text-2xl font-black tracking-tighter text-primary font-headline">WordPilot</div>
         </Link>
       </header>
     );
@@ -191,14 +193,16 @@ export function Navbar() {
     <nav className="bg-surface fixed top-0 w-full z-50 border-b border-surface-container">
       <div className="flex justify-between items-center h-16 px-4 sm:px-6 lg:px-8 max-w-[1440px] mx-auto gap-3">
         <Link to="/" className="text-lg sm:text-2xl font-black tracking-tighter text-primary font-headline shrink-0">
-          Scholar Script
+          WordPilot
         </Link>
 
         <div className="hidden lg:flex items-center gap-6 xl:gap-8 font-headline font-semibold tracking-tight">
           {user && <NavLink to="/dashboard">Dashboard</NavLink>}
+          {user && <NavLink to="/practice-path">Practice Path</NavLink>}
           {user && <NavLink to="/workspace">Exercises</NavLink>}
           {user && <NavLink to="/ai-lab">AI Lab</NavLink>}
           <NavLink to="/pricing">Pricing</NavLink>
+          {user && isAdmin && <NavLink to="/admin">Admin</NavLink>}
           {user && <NavLink to="/account">Account</NavLink>}
         </div>
 
@@ -348,9 +352,11 @@ export function Navbar() {
         <div className="lg:hidden border-t border-surface-container bg-surface">
           <div className="px-4 sm:px-6 py-4 max-w-[1440px] mx-auto flex flex-col gap-2">
             {user && <MobileNavLink to="/dashboard">Dashboard</MobileNavLink>}
+            {user && <MobileNavLink to="/practice-path">Practice Path</MobileNavLink>}
             {user && <MobileNavLink to="/workspace">Exercises</MobileNavLink>}
             {user && <MobileNavLink to="/ai-lab">AI Lab</MobileNavLink>}
             <MobileNavLink to="/pricing">Pricing</MobileNavLink>
+            {user && isAdmin && <MobileNavLink to="/admin">Admin</MobileNavLink>}
             {user && <MobileNavLink to="/account">Account</MobileNavLink>}
             {user ? (
               <Link to="/workspace" className="mt-2 inline-flex items-center justify-center rounded-2xl primary-gradient text-on-primary font-headline font-semibold px-5 py-3">
@@ -461,16 +467,16 @@ export function Footer() {
     <footer className="bg-surface w-full py-10 sm:py-12 px-4 sm:px-6 lg:px-8 border-t border-surface-container">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center max-w-[1440px] mx-auto">
         <div className="space-y-4">
-          <div className="font-headline font-bold text-on-surface text-xl">Scholar Script</div>
+          <div className="font-headline font-bold text-on-surface text-xl">WordPilot</div>
           <p className="text-xs tracking-wide leading-relaxed text-on-surface-variant max-w-xs">
-            Copyright 2026 Scholar Script. The digital atelier for focused learning.
+            Copyright 2026 WordPilot. Built by Eng.Ahmed Hassan.
           </p>
         </div>
         <div className="flex flex-wrap justify-start md:justify-end gap-x-8 gap-y-4 text-xs tracking-wide leading-relaxed text-on-surface-variant">
-          <a href="#" className="hover:text-primary transition-colors">Privacy Policy</a>
-          <a href="#" className="hover:text-primary transition-colors">Terms of Service</a>
-          <a href="#" className="hover:text-primary transition-colors">Help Center</a>
-          <a href="#" className="hover:text-primary transition-colors">Contact Support</a>
+          <Link to="/privacy" className="hover:text-primary transition-colors">Privacy Policy</Link>
+          <Link to="/terms" className="hover:text-primary transition-colors">Terms of Service</Link>
+          <Link to="/help" className="hover:text-primary transition-colors">Help Center</Link>
+          <Link to="/contact" className="hover:text-primary transition-colors">Contact Support</Link>
         </div>
       </div>
     </footer>

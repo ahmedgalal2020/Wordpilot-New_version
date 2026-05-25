@@ -6,6 +6,10 @@ import { Certificate, SavedText, Session } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { hasSupabaseEnv } from '../lib/env';
+import { useEntitlements } from '../hooks/useEntitlements';
+import { useWeeklyReport } from '../hooks/useWeeklyReport';
+import { CurrentLevelCard, PracticeExerciseCard, PracticeRecommendationCard, WeeklyProgressReport } from '../components/LearningComponents';
+import { buildPracticeRecommendation, getPracticeExercises, normalizeCefrLevel, normalizeLearningLanguage, PracticeExercise } from '../lib/learning';
 
 type SessionMetricRow = {
   accuracy: number | null;
@@ -21,10 +25,12 @@ type DashboardMetrics = {
 export default function Dashboard() {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
-  const displayName = profile?.full_name || user?.user_metadata.full_name || user?.email?.split('@')[0] || 'Scholar';
-  const targetLanguage = profile?.target_language || 'English';
-  const cefrLevel = profile?.cefr_level || 'B1';
+  const displayName = profile?.full_name || user?.user_metadata.full_name || user?.email?.split('@')[0] || 'Pilot';
+  const targetLanguage = normalizeLearningLanguage(profile?.target_language);
+  const cefrLevel = normalizeCefrLevel(profile?.cefr_level);
   const supabaseReady = hasSupabaseEnv();
+  const { entitlements } = useEntitlements(user);
+  const { report: weeklyReport, loading: weeklyReportLoading } = useWeeklyReport(user, targetLanguage);
   const [savedTexts, setSavedTexts] = useState<SavedText[]>([]);
   const [recentSessions, setRecentSessions] = useState<Session[]>([]);
   const [certificates, setCertificates] = useState<Certificate[]>([]);
@@ -132,6 +138,12 @@ export default function Dashboard() {
     () => recentSessions.reduce<Session | null>((best, session) => (!best || session.score > best.score ? session : best), null),
     [recentSessions],
   );
+  const practiceExercises = useMemo(
+    () => getPracticeExercises(cefrLevel, weeklyReport.currentWeek.averageAccuracy, targetLanguage),
+    [cefrLevel, targetLanguage, weeklyReport.currentWeek.averageAccuracy],
+  );
+  const completedPathCount = practiceExercises.filter((exercise) => exercise.status === 'completed').length;
+  const nextPracticeRecommendation = buildPracticeRecommendation(cefrLevel, weeklyReport, targetLanguage);
 
   function startPractice(text: SavedText) {
     const sourceText = stripTitleFromPracticeText(text.body || text.source || text.title);
@@ -141,6 +153,18 @@ export default function Dashboard() {
         title: text.title,
         language: inferLanguageLabel(sourceText),
         cefrLevel: text.level || cefrLevel,
+      },
+    });
+  }
+
+  function startPathExercise(exercise: PracticeExercise) {
+    navigate('/workspace', {
+      state: {
+        sourceText: exercise.sourceText,
+        title: exercise.title,
+        language: exercise.language,
+        cefrLevel: exercise.level,
+        practiceCategory: exercise.skill,
       },
     });
   }
@@ -214,17 +238,50 @@ export default function Dashboard() {
 
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 mb-12 sm:mb-16">
         <div className="lg:col-span-8">
+          <CurrentLevelCard language={targetLanguage} level={cefrLevel} completedCount={completedPathCount} recommendation={nextPracticeRecommendation} />
+        </div>
+        <div className="lg:col-span-4">
+          <PracticeRecommendationCard level={cefrLevel} report={weeklyReport} language={targetLanguage} isPro={entitlements.isPro} />
+        </div>
+      </section>
+
+      <section className="mb-12 sm:mb-16">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
+          <div>
+            <h2 className="font-headline font-bold text-xl text-on-surface">Practice Path Preview</h2>
+            <p className="mt-1 text-sm text-on-surface-variant">Start with the next cards for your current {cefrLevel} plan.</p>
+          </div>
+          <Link to="/practice-path" className="text-primary text-sm font-bold hover:underline">
+            Open full path
+          </Link>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
+          {practiceExercises.map((exercise) => (
+            <PracticeExerciseCard key={exercise.id} exercise={exercise} onStart={startPathExercise} />
+          ))}
+        </div>
+      </section>
+
+      <WeeklyProgressReport report={weeklyReport} loading={weeklyReportLoading} isPro={entitlements.isPro} />
+
+      <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 mb-12 sm:mb-16">
+        <div className="lg:col-span-8">
           <div className="flex items-center justify-between mb-6 gap-3">
             <h2 className="font-headline font-bold text-xl text-on-surface">Recent Sessions</h2>
-            {recentSessions.length > 5 && (
-              <button
-                type="button"
-                onClick={() => setShowAllSessions((current) => !current)}
-                className="text-primary text-sm font-bold hover:underline"
-              >
-                {showAllSessions ? 'Show less' : 'View all history'}
-              </button>
-            )}
+            <div className="flex items-center gap-4">
+              {recentSessions.length > 5 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllSessions((current) => !current)}
+                  className="text-primary text-sm font-bold hover:underline"
+                >
+                  {showAllSessions ? 'Show less' : 'View all history'}
+                </button>
+              )}
+              <Link to="/history" className="text-primary text-sm font-bold hover:underline">
+                Filters
+              </Link>
+            </div>
           </div>
 
           {isLoading ? (
@@ -566,3 +623,4 @@ function inferLanguageLabel(text: string) {
   const hasGermanChars = /[äöüß]/i.test(text);
   return germanHits > 1 || hasGermanChars ? 'German' : 'English';
 }
+

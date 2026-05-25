@@ -3,6 +3,7 @@ import { CheckCircle, ChevronDown, Beaker, Sparkles, XCircle } from 'lucide-reac
 import { Link } from 'react-router-dom';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
+import { useEntitlements } from '../hooks/useEntitlements';
 
 type FeatureItem = {
   text: string;
@@ -26,7 +27,7 @@ const FAQ_ITEMS: FaqItem[] = [
     id: 'cefr',
     question: 'Which CEFR levels are supported?',
     answer:
-      'Scholar Script supports A1 through C2. The writing style, sentence length, and vocabulary density are adjusted to the level you select before generation or practice.',
+      'WordPilot supports A1 through C2. The writing style, sentence length, and vocabulary density are adjusted to the level you select before generation or practice.',
   },
   {
     id: 'languages',
@@ -58,13 +59,48 @@ const PRO_FEATURES: FeatureItem[] = [
 ];
 
 export default function PricingPage() {
-  const { user } = useAuth();
+  const { session, user } = useAuth();
+  const { entitlements, loadingEntitlements } = useEntitlements(user);
   const [openFaqId, setOpenFaqId] = useState('cefr');
+  const [checkoutState, setCheckoutState] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [checkoutMessage, setCheckoutMessage] = useState<string | null>(null);
   const primaryCtaHref = user ? '/ai-lab' : '/signup';
   const primaryCtaLabel = user ? 'Open AI Lab' : 'Start Free';
   const secondaryCtaHref = user ? '/workspace' : '/login';
   const secondaryCtaLabel = user ? 'Start Practising' : 'Sign In';
   const highlightedFaq = useMemo(() => FAQ_ITEMS.find((item) => item.id === openFaqId) ?? FAQ_ITEMS[1], [openFaqId]);
+  const proIsCurrentPlan = Boolean(user && entitlements.isPro);
+
+  async function startProCheckout() {
+    if (!user) {
+      window.location.href = '/signup';
+      return;
+    }
+
+    setCheckoutState('loading');
+    setCheckoutMessage(null);
+
+    try {
+      const response = await fetch('/api/stripe/create-checkout-session', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session?.access_token ?? ''}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      });
+      const payload = await response.json();
+
+      if (!response.ok || !payload.url) {
+        throw new Error(payload.error ?? 'Unable to start checkout.');
+      }
+
+      window.location.href = payload.url;
+    } catch (error) {
+      setCheckoutState('error');
+      setCheckoutMessage(error instanceof Error ? error.message : 'Unable to start checkout.');
+    }
+  }
 
   return (
     <main className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 pt-24 sm:pt-28 lg:pt-32 pb-20 sm:pb-24 lg:pb-32">
@@ -88,17 +124,34 @@ export default function PricingPage() {
           buttonVariant="secondary"
         />
         <PricingCard
-          tier="Scholar Pro"
+          tier="WordPilot Pro"
           title="$12"
           subtitle="/ month"
           description="The full practice workflow with AI generation, saved drafts, and cleaner progress tracking."
           features={PRO_FEATURES}
-          buttonLabel={user ? 'Go Pro Workflow' : 'Upgrade to Pro'}
-          buttonHref={primaryCtaHref}
+          buttonLabel={
+            proIsCurrentPlan
+              ? 'Current Plan'
+              : loadingEntitlements
+              ? 'Checking Plan...'
+              : checkoutState === 'loading'
+                  ? 'Opening Checkout...'
+                  : 'Upgrade to Pro'
+          }
+          buttonHref={user ? undefined : '/signup'}
           buttonVariant="primary"
+          disabled={checkoutState === 'loading' || (loadingEntitlements && !proIsCurrentPlan) || proIsCurrentPlan}
+          onButtonClick={user && !proIsCurrentPlan ? startProCheckout : undefined}
           recommended
+          current={proIsCurrentPlan}
         />
       </section>
+
+      {checkoutMessage && (
+        <div className="mx-auto -mt-12 mb-20 max-w-2xl rounded-2xl border border-error/20 bg-error-container/25 px-5 py-4 text-center text-sm font-semibold text-error">
+          {checkoutMessage}
+        </div>
+      )}
 
       <section className="grid grid-cols-1 md:grid-cols-12 gap-8 lg:gap-12 items-stretch mb-20 sm:mb-24 lg:mb-32 bg-surface-container rounded-[2rem] overflow-hidden">
         <div className="md:col-span-5 p-6 sm:p-8 lg:p-14 xl:p-16 flex flex-col justify-center">
@@ -210,7 +263,10 @@ function PricingCard({
   buttonLabel,
   buttonHref,
   buttonVariant,
+  disabled = false,
+  onButtonClick,
   recommended,
+  current,
 }: {
   tier: string;
   title: string;
@@ -218,10 +274,23 @@ function PricingCard({
   description: string;
   features: FeatureItem[];
   buttonLabel: string;
-  buttonHref: string;
+  buttonHref?: string;
   buttonVariant: 'primary' | 'secondary';
+  disabled?: boolean;
+  onButtonClick?: () => void;
   recommended?: boolean;
+  current?: boolean;
 }) {
+  const buttonClassName = cn(
+    'w-full inline-flex items-center justify-center py-4 px-6 rounded-full font-bold transition-all',
+    current
+      ? 'bg-primary/10 text-primary border border-primary/20 cursor-default'
+      : buttonVariant === 'primary'
+      ? 'primary-gradient text-on-primary hover:shadow-lg active:scale-95'
+      : 'bg-surface-container-highest text-on-surface hover:bg-surface-container-high',
+    disabled && 'pointer-events-none opacity-65',
+  );
+
   return (
     <div
       className={cn(
@@ -231,7 +300,7 @@ function PricingCard({
     >
       {recommended && (
         <div className="absolute top-0 right-6 sm:right-10 -translate-y-1/2 bg-primary text-on-primary px-4 py-1 rounded-full text-xs font-bold tracking-widest uppercase">
-          Recommended
+          {current ? 'Current' : 'Recommended'}
         </div>
       )}
 
@@ -255,17 +324,15 @@ function PricingCard({
       </div>
 
       <div className="mt-10">
-        <Link
-          to={buttonHref}
-          className={cn(
-            'w-full inline-flex items-center justify-center py-4 px-6 rounded-full font-bold transition-all',
-            buttonVariant === 'primary'
-              ? 'primary-gradient text-on-primary hover:shadow-lg active:scale-95'
-              : 'bg-surface-container-highest text-on-surface hover:bg-surface-container-high',
-          )}
-        >
-          {buttonLabel}
-        </Link>
+        {onButtonClick ? (
+          <button type="button" onClick={onButtonClick} disabled={disabled} className={buttonClassName}>
+            {buttonLabel}
+          </button>
+        ) : (
+          <Link to={buttonHref ?? '#'} className={buttonClassName}>
+            {buttonLabel}
+          </Link>
+        )}
       </div>
     </div>
   );

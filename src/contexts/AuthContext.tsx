@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { getMissingClientEnv, hasSupabaseEnv } from '../lib/env';
 import { supabase } from '../lib/supabase';
@@ -10,6 +10,9 @@ type UserProfile = {
   avatar_url: string | null;
   target_language: string | null;
   cefr_level: string | null;
+  is_blocked: boolean;
+  blocked_reason: string | null;
+  blocked_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -21,6 +24,12 @@ type AuthContextValue = {
   loading: boolean;
   authReady: boolean;
   authMessage: string | null;
+  sessionSecurity: {
+    idleWarningVisible: boolean;
+    secondsUntilSignOut: number;
+    continueSession: () => Promise<void>;
+    signOutNow: () => Promise<void>;
+  };
   signIn: (email: string, password: string) => Promise<{ error: string | null; success: boolean }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: string | null; needsEmailVerification: boolean }>;
   resendConfirmation: (email: string) => Promise<{ error: string | null; message: string | null }>;
@@ -34,6 +43,28 @@ type AuthContextValue = {
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+
+const DEFAULT_IDLE_TIMEOUT_MINUTES = 30;
+const DEFAULT_IDLE_WARNING_SECONDS = 120;
+const SESSION_HEALTH_CHECK_MS = 5 * 60 * 1000;
+
+function getSessionSecurityConfig() {
+  const configuredTimeout = Number(import.meta.env.VITE_IDLE_TIMEOUT_MINUTES ?? DEFAULT_IDLE_TIMEOUT_MINUTES);
+  const configuredWarning = Number(import.meta.env.VITE_IDLE_WARNING_SECONDS ?? DEFAULT_IDLE_WARNING_SECONDS);
+  const idleTimeoutMs =
+    Number.isFinite(configuredTimeout) && configuredTimeout >= 5
+      ? configuredTimeout * 60 * 1000
+      : DEFAULT_IDLE_TIMEOUT_MINUTES * 60 * 1000;
+  const warningMs =
+    Number.isFinite(configuredWarning) && configuredWarning >= 30
+      ? configuredWarning * 1000
+      : DEFAULT_IDLE_WARNING_SECONDS * 1000;
+
+  return {
+    idleTimeoutMs,
+    warningMs: Math.min(warningMs, idleTimeoutMs - 30_000),
+  };
+}
 
 function buildAuthMessage() {
   if (hasSupabaseEnv()) {
@@ -52,6 +83,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [idleWarningVisible, setIdleWarningVisible] = useState(false);
+  const [secondsUntilSignOut, setSecondsUntilSignOut] = useState(0);
+  const lastActivityRef = useRef(Date.now());
 
   const authReady = hasSupabaseEnv();
   const authMessage = buildAuthMessage();
@@ -136,6 +170,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         avatar_url: currentUser.user_metadata.avatar_url ?? null,
         target_language: null,
         cefr_level: null,
+        is_blocked: false,
+        blocked_reason: null,
+        blocked_at: null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       });
@@ -165,6 +202,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         setSession(data.session);
         setUser(data.session?.user ?? null);
+        lastActivityRef.current = Date.now();
         await fetchProfile(data.session?.user ?? null);
         clearAuthHashFromUrl();
       } catch (error) {
@@ -188,6 +226,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
       setUser(nextSession?.user ?? null);
+      lastActivityRef.current = Date.now();
+      setIdleWarningVisible(false);
+      setSecondsUntilSignOut(0);
       clearAuthHashFromUrl();
       setLoading(false);
 
@@ -205,6 +246,102 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       subscription.unsubscribe();
     };
   }, [authReady]);
+
+  useEffect(() => {
+    if (!authReady || !session) {
+      setIdleWarningVisible(false);
+      setSecondsUntilSignOut(0);
+      lastActivityRef.current = Date.now();
+      return;
+    }
+
+    const { idleTimeoutMs, warningMs } = getSessionSecurityConfig();
+    const warningStartsAtMs = idleTimeoutMs - warningMs;
+    const activityEvents = ['mousedown', 'keydown', 'touchstart', 'scroll', 'visibilitychange'];
+
+    function markActivity() {
+      if (document.visibilityState === 'hidden' || idleWarningVisible) {
+        return;
+      }
+
+      lastActivityRef.current = Date.now();
+    }
+
+    const idleInterval = window.setInterval(() => {
+      const idleMs = Date.now() - lastActivityRef.current;
+      const remainingMs = Math.max(0, idleTimeoutMs - idleMs);
+
+      if (idleMs >= idleTimeoutMs) {
+        void signOut();
+        setIdleWarningVisible(false);
+        setSecondsUntilSignOut(0);
+        return;
+      }
+
+      if (idleMs >= warningStartsAtMs) {
+        setIdleWarningVisible(true);
+        setSecondsUntilSignOut(Math.ceil(remainingMs / 1000));
+        return;
+      }
+
+      setIdleWarningVisible(false);
+      setSecondsUntilSignOut(0);
+    }, 1000);
+
+    const healthInterval = window.setInterval(() => {
+      void verifySessionHealth();
+    }, SESSION_HEALTH_CHECK_MS);
+
+    activityEvents.forEach((eventName) => {
+      window.addEventListener(eventName, markActivity, { passive: true });
+    });
+
+    return () => {
+      window.clearInterval(idleInterval);
+      window.clearInterval(healthInterval);
+      activityEvents.forEach((eventName) => {
+        window.removeEventListener(eventName, markActivity);
+      });
+    };
+  }, [authReady, idleWarningVisible, session]);
+
+  async function verifySessionHealth() {
+    if (!authReady || !session) {
+      return;
+    }
+
+    const { data, error } = await supabase.auth.getUser();
+    const errorText = error?.message?.toLowerCase() ?? '';
+    const sessionInvalid =
+      errorText.includes('jwt') ||
+      errorText.includes('expired') ||
+      errorText.includes('invalid') ||
+      errorText.includes('session') ||
+      (!error && !data.user);
+
+    if (sessionInvalid) {
+      await signOut();
+    }
+  }
+
+  async function continueSession() {
+    if (!authReady) {
+      return;
+    }
+
+    const { data, error } = await supabase.auth.refreshSession();
+    if (error || !data.session) {
+      await signOut();
+      return;
+    }
+
+    lastActivityRef.current = Date.now();
+    setIdleWarningVisible(false);
+    setSecondsUntilSignOut(0);
+    setSession(data.session);
+    setUser(data.session.user);
+    await fetchProfile(data.session.user);
+  }
 
   async function signIn(email: string, password: string) {
     if (!authReady) {
@@ -381,6 +518,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSession(null);
     setUser(null);
     setProfile(null);
+    setIdleWarningVisible(false);
+    setSecondsUntilSignOut(0);
     clearAuthHashFromUrl();
     clearStoredAuthSession();
 
@@ -428,6 +567,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       loading,
       authReady,
       authMessage,
+      sessionSecurity: {
+        idleWarningVisible,
+        secondsUntilSignOut,
+        continueSession,
+        signOutNow: signOut,
+      },
       signIn,
       signUp,
       resendConfirmation,
@@ -439,7 +584,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       refreshProfile,
       updateProfile,
     }),
-    [session, user, profile, loading, authReady, authMessage],
+    [session, user, profile, loading, authReady, authMessage, idleWarningVisible, secondsUntilSignOut],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

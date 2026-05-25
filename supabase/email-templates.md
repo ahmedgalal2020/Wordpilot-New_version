@@ -11,9 +11,9 @@ Use these templates inside the Supabase dashboard:
 
 Recommended subjects:
 
-- Confirm signup: `Confirm your Scholar Script account`
-- Reset password: `Reset your Scholar Script password`
-- Reauthentication: `Confirm your Scholar Script password change`
+- Confirm signup: `Confirm your WordPilot account`
+- Reset password: `Reset your WordPilot password`
+- Reauthentication: `Confirm your WordPilot password change`
 
 Template files:
 

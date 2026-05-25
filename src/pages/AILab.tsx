@@ -1,5 +1,4 @@
 import React, { startTransition, useEffect, useMemo, useState } from 'react';
-import { GoogleGenAI } from '@google/genai';
 import {
   Bookmark,
   Bot,
@@ -7,7 +6,6 @@ import {
   Edit3,
   Keyboard,
   LoaderCircle,
-  MoreVertical,
   Plus,
   RefreshCw,
   Send,
@@ -15,12 +13,14 @@ import {
   Sparkles,
   User,
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '../lib/utils';
 import { ChatMessage } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { clientEnv, hasGeminiEnv, hasSupabaseEnv } from '../lib/env';
+import { hasGeminiEnv, hasSupabaseEnv } from '../lib/env';
+import { formatMonthlyResetDate, formatUsage, getMonthStartIso, getNextMonthStartIso, isLimitReached } from '../lib/entitlements';
+import { useEntitlements } from '../hooks/useEntitlements';
 
 type GenerationRecord = {
   id: string;
@@ -37,6 +37,7 @@ type GenerationRecord = {
 type LabSettings = {
   level: string;
   language: string;
+  skillType: string;
   category: string;
   tone: string;
   length: string;
@@ -44,15 +45,22 @@ type LabSettings = {
 
 type GenerationMode = 'generate' | 'refine' | 'regenerate';
 
-const LEVEL_OPTIONS = ['A2', 'B1', 'B2', 'C1', 'C2'];
-const LANGUAGE_OPTIONS = ['English', 'German'];
+const LEVEL_OPTIONS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+const LANGUAGE_OPTIONS = ['English', 'German', 'Spanish', 'Italian', 'French'];
+const SKILL_OPTIONS = ['Dictation', 'Reading', 'Listening', 'Writing'];
 const CATEGORY_OPTIONS = ['Academic', 'Business', 'History', 'Literature', 'Science', 'Technology'];
 const TONE_OPTIONS = ['Academic', 'Professional', 'Neutral', 'Journalistic'];
 const LENGTH_OPTIONS = ['Short', 'Medium', 'Long'];
+const WORD_RANGE_BY_LENGTH: Record<string, { min: number; max: number }> = {
+  Short: { min: 10, max: 15 },
+  Medium: { min: 20, max: 25 },
+  Long: { min: 30, max: 35 },
+};
 
 const FALLBACK_SETTINGS: LabSettings = {
   level: 'B2',
   language: 'English',
+  skillType: 'Dictation',
   category: 'Academic',
   tone: 'Academic',
   length: 'Medium',
@@ -87,11 +95,14 @@ Although the transition to sustainable energy still faces economic and political
 
 export default function AILab() {
   const navigate = useNavigate();
-  const { user, profile } = useAuth();
+  const location = useLocation();
+  const { session, user, profile } = useAuth();
+  const incomingState = location.state as { language?: string; level?: string; skillType?: string; fromPracticePath?: boolean } | null;
   const [settings, setSettings] = useState<LabSettings>({
     ...FALLBACK_SETTINGS,
-    language: profile?.target_language === 'German' ? 'German' : FALLBACK_SETTINGS.language,
-    level: profile?.cefr_level ?? FALLBACK_SETTINGS.level,
+    language: incomingState?.language ?? normalizeLabLanguage(profile?.target_language),
+    level: incomingState?.level ?? profile?.cefr_level ?? FALLBACK_SETTINGS.level,
+    skillType: incomingState?.skillType ?? FALLBACK_SETTINGS.skillType,
   });
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES);
   const [draftPrompt, setDraftPrompt] = useState('');
@@ -107,7 +118,12 @@ export default function AILab() {
 
   const geminiReady = hasGeminiEnv();
   const supabaseReady = hasSupabaseEnv();
-  const canGenerate = draftPrompt.trim().length > 0 && !generating;
+  const { entitlements, loadingEntitlements, refreshEntitlements } = useEntitlements(user);
+  const entitlementsReady = entitlements.resolved && !loadingEntitlements;
+  const generationLimitReached = entitlementsReady && isLimitReached(entitlements.usage.aiGenerationsThisMonth, entitlements.limits.aiGenerationsMonthly);
+  const savedTextLimitReached = entitlementsReady && isLimitReached(entitlements.usage.savedTexts, entitlements.limits.savedTexts);
+  const canGenerate = draftPrompt.trim().length > 0 && !generating && !generationLimitReached;
+  const monthlyResetLabel = formatMonthlyResetDate(entitlements.currentPeriodEnd);
   const activeGeneration = useMemo(
     () => history.find((item) => item.id === activeGenerationId) ?? history[0] ?? FALLBACK_GENERATION,
     [activeGenerationId, history],
@@ -117,11 +133,12 @@ export default function AILab() {
     startTransition(() => {
       setSettings((current) => ({
         ...current,
-        language: profile?.target_language === 'German' ? 'German' : current.language,
-        level: profile?.cefr_level ?? current.level,
+        language: incomingState?.language ?? normalizeLabLanguage(profile?.target_language),
+        level: incomingState?.level ?? profile?.cefr_level ?? current.level,
+        skillType: incomingState?.skillType ?? current.skillType,
       }));
     });
-  }, [profile?.cefr_level, profile?.target_language]);
+  }, [incomingState?.language, incomingState?.level, incomingState?.skillType, profile?.cefr_level, profile?.target_language]);
 
   useEffect(() => {
     if (!user || !supabaseReady) {
@@ -173,6 +190,7 @@ export default function AILab() {
       level: generation.level || current.level,
       category: generation.category || current.category,
       language: generation.language || current.language,
+      skillType: inferSkillFromPrompt(generation.prompt || generation.category),
     }));
     setMessages([
       INITIAL_MESSAGES[0],
@@ -196,6 +214,11 @@ export default function AILab() {
       return;
     }
 
+    if (generationLimitReached) {
+      setStatus(`You used all ${entitlements.limits.aiGenerationsMonthly} free AI generations for this month. Upgrade to WordPilot Pro or wait until ${monthlyResetLabel}.`);
+      return;
+    }
+
     const prompt = buildPromptFromSettings(settings);
     setDraftPrompt(prompt);
     setMessages(INITIAL_MESSAGES);
@@ -215,6 +238,11 @@ export default function AILab() {
 
     if (!basePrompt) {
       setStatus('Describe the text you want to generate first.');
+      return;
+    }
+
+    if (generationLimitReached) {
+      setStatus(`You used all ${entitlements.limits.aiGenerationsMonthly} free AI generations for this month. Upgrade to WordPilot Pro or wait until ${monthlyResetLabel}.`);
       return;
     }
 
@@ -252,14 +280,14 @@ export default function AILab() {
       });
 
       const generation = geminiReady
-        ? await generateWithGemini(prompt)
+        ? await generateWithGemini(prompt, session?.access_token)
         : {
             content: createLocalPracticeText({ mode, settings, userPrompt: basePrompt, currentText: generatedText }),
             usedFallback: true,
             fallbackReason: 'Gemini API key is missing.',
           };
 
-      const content = sanitizeGeneratedText(generation.content);
+      const content = sanitizeGeneratedText(generation.content, settings);
       if (!content) {
         throw new Error('The generator returned an empty response.');
       }
@@ -297,6 +325,7 @@ export default function AILab() {
       if (record) {
         setHistory((current) => [record, ...current.filter((item) => item.id !== record.id)]);
         setActiveGenerationId(record.id);
+        void refreshEntitlements();
       }
     } catch (error) {
       const message = formatGeneratorError(error);
@@ -355,6 +384,16 @@ export default function AILab() {
       return fallbackRecord;
     }
 
+    await recordUsageEvent('ai_generation', {
+      generated_text_id: data.id,
+      mode: 'ai_lab',
+      title: input.title,
+      level: input.level,
+      language: input.language,
+      skill_type: settings.skillType,
+      category: input.category,
+    });
+
     return {
       id: data.id,
       title: data.title,
@@ -368,6 +407,22 @@ export default function AILab() {
     };
   }
 
+  async function recordUsageEvent(featureKey: string, metadata: Record<string, string>) {
+    if (!user || !supabaseReady) {
+      return;
+    }
+
+    await supabase.from('usage_events').insert({
+      user_id: user.id,
+      feature_key: featureKey,
+      event_type: 'used',
+      quantity: 1,
+      period_start: getMonthStartIso(),
+      period_end: getNextMonthStartIso(),
+      metadata,
+    });
+  }
+
   async function saveToLibrary() {
     if (!user) {
       setStatus('You need to sign in before saving texts to your library.');
@@ -379,24 +434,37 @@ export default function AILab() {
       return;
     }
 
+    if (savedTextLimitReached) {
+      setStatus('Your free library limit is full. Upgrade to WordPilot Pro for unlimited saved texts.');
+      return;
+    }
+
     setSavingToLibrary(true);
 
     const { error } = await supabase.from('saved_texts').insert({
       user_id: user.id,
       title: generatedTitle,
       level: settings.level,
-      category: settings.category,
+      category: `${settings.skillType} - ${settings.category}`,
       source: 'AI Lab',
       body: generatedText,
     });
 
     setSavingToLibrary(false);
     setStatus(error ? error.message : `"${generatedTitle}" was saved to your library.`);
+    if (!error) {
+      void refreshEntitlements();
+    }
   }
 
   async function saveGeneratedSnapshot() {
     if (!draftPrompt.trim()) {
       setStatus('Generate or load a text first.');
+      return;
+    }
+
+    if (generationLimitReached) {
+      setStatus(`You used all ${entitlements.limits.aiGenerationsMonthly} free AI generation saves for this month. Upgrade to WordPilot Pro or wait until ${monthlyResetLabel}.`);
       return;
     }
 
@@ -407,7 +475,7 @@ export default function AILab() {
       content: generatedText,
       level: settings.level,
       language: settings.language,
-      category: settings.category,
+      category: `${settings.skillType} - ${settings.category}`,
     });
     setSaving(false);
 
@@ -415,6 +483,7 @@ export default function AILab() {
       setHistory((current) => [result, ...current.filter((item) => item.id !== result.id)]);
       setActiveGenerationId(result.id);
       setStatus('Current AI draft snapshot saved.');
+      void refreshEntitlements();
     }
   }
 
@@ -445,14 +514,35 @@ export default function AILab() {
         title: generatedTitle,
         language: settings.language,
         cefrLevel: settings.level,
+        practiceCategory: settings.skillType,
       },
     });
   }
 
   return (
     <main className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 lg:py-12 pt-24 sm:pt-28">
-      <div className="grid grid-cols-1 xl:grid-cols-[280px_minmax(0,1fr)] gap-6 lg:gap-8">
-        <aside className="bg-surface-container-low rounded-[2rem] border border-outline-variant/10 whisper-shadow flex flex-col overflow-hidden">
+      {entitlementsReady && generationLimitReached && !entitlements.isPro && (
+        <section className="mb-6 rounded-[1.5rem] border border-error/20 bg-error-container/25 p-5 sm:p-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-[0.6875rem] font-bold uppercase tracking-widest text-error">Monthly limit reached</p>
+              <h1 className="mt-2 font-headline text-2xl font-black text-on-surface">Your free AI Lab generations are used up.</h1>
+              <p className="mt-2 max-w-3xl text-sm font-medium leading-6 text-on-surface-variant">
+                You have used {formatUsage(entitlements.usage.aiGenerationsThisMonth, entitlements.limits.aiGenerationsMonthly)} AI generations for this month.
+                Your free allowance resets on {monthlyResetLabel}. WordPilot Pro unlocks unlimited generation immediately.
+              </p>
+            </div>
+            <Link
+              to="/pricing"
+              className="inline-flex shrink-0 items-center justify-center rounded-full bg-primary px-6 py-3 text-sm font-bold text-on-primary transition hover:bg-primary-dim"
+            >
+              Upgrade to WordPilot Pro
+            </Link>
+          </div>
+        </section>
+      )}
+      <div className="grid grid-cols-1 items-start xl:grid-cols-[280px_minmax(0,1fr)] gap-6 lg:gap-8">
+        <aside className="bg-surface-container-low rounded-[2rem] border border-outline-variant/10 whisper-shadow flex flex-col overflow-hidden self-start xl:sticky xl:top-24">
           <div className="p-5 sm:p-6 border-b border-surface-container">
             <div className="flex items-center justify-between gap-4 mb-5">
               <div>
@@ -460,24 +550,51 @@ export default function AILab() {
                 <p className="text-xs text-on-surface-variant mt-1">Custom generation workspace</p>
               </div>
               <span className="bg-primary-container text-on-primary-container text-[10px] font-bold px-2.5 py-1 rounded-full tracking-wider uppercase">
-                Pro
+                {loadingEntitlements ? 'Checking' : entitlements.isPro ? 'Pro' : 'Free'}
               </span>
             </div>
 
             <button
               type="button"
               onClick={() => void startNewTextGeneration()}
-              disabled={generating}
+              disabled={generating || generationLimitReached}
               className="w-full py-3 px-4 rounded-2xl bg-surface-container-lowest text-on-surface font-semibold flex items-center justify-center gap-2 border border-surface-container hover:bg-surface-container transition-colors text-sm whisper-shadow disabled:opacity-60"
             >
               {generating ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
               {generating ? 'Generating...' : 'New Text Generation'}
             </button>
+            <div className="mt-4 rounded-2xl bg-surface-container-lowest border border-surface-container p-4 text-xs">
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-bold text-on-surface">AI generations</span>
+                <span className="font-mono text-primary">
+                  {loadingEntitlements
+                    ? 'checking'
+                    : formatUsage(entitlements.usage.aiGenerationsThisMonth, entitlements.limits.aiGenerationsMonthly)}
+                </span>
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-3">
+                <span className="font-bold text-on-surface">Saved texts</span>
+                <span className="font-mono text-primary">
+                  {loadingEntitlements ? 'checking' : formatUsage(entitlements.usage.savedTexts, entitlements.limits.savedTexts)}
+                </span>
+              </div>
+              {!entitlements.isPro && (
+                <div className="mt-3 space-y-2">
+                  <p className="text-[11px] font-medium leading-5 text-on-surface-variant">
+                    Monthly reset: {monthlyResetLabel}
+                  </p>
+                  <Link to="/pricing" className="inline-flex text-primary font-bold hover:underline">
+                    Upgrade for unlimited access
+                  </Link>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="p-5 sm:p-6 space-y-4 border-b border-surface-container">
             <SidebarSelect label="Level" value={settings.level} options={LEVEL_OPTIONS} onChange={(value) => updateSetting('level', value)} />
             <SidebarSelect label="Language" value={settings.language} options={LANGUAGE_OPTIONS} onChange={(value) => updateSetting('language', value)} />
+            <SidebarSelect label="Skill Type" value={settings.skillType} options={SKILL_OPTIONS} onChange={(value) => updateSetting('skillType', value)} />
             <SidebarSelect label="Category" value={settings.category} options={CATEGORY_OPTIONS} onChange={(value) => updateSetting('category', value)} />
             <SidebarSelect label="Tone" value={settings.tone} options={TONE_OPTIONS} onChange={(value) => updateSetting('tone', value)} />
             <SidebarSelect label="Length" value={settings.length} options={LENGTH_OPTIONS} onChange={(value) => updateSetting('length', value)} />
@@ -491,12 +608,12 @@ export default function AILab() {
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-4 sm:px-5 pb-6 pt-5">
+          <div className="mx-4 mb-5 mt-5 rounded-2xl border border-surface-container bg-surface-container-lowest px-3 py-4 sm:mx-5">
             <div className="flex items-center justify-between gap-3 mb-4 px-2">
               <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Past Generations</p>
               {loadingHistory && <LoaderCircle className="w-4 h-4 animate-spin text-primary" />}
             </div>
-            <div className="space-y-2">
+            <div className="max-h-[300px] space-y-2 overflow-y-auto pr-1">
               {history.map((item) => (
                 <div key={item.id}>
                   <HistoryItem
@@ -518,9 +635,6 @@ export default function AILab() {
                 <h1 className="font-headline font-bold text-xl text-on-surface">AI Workspace</h1>
                 <p className="text-sm text-on-surface-variant mt-1">Talk to the generator, refine prompts, and keep your history attached to your account.</p>
               </div>
-              <button type="button" className="p-2 text-on-surface-variant hover:bg-surface-container rounded-xl transition-colors">
-                <MoreVertical className="w-5 h-5" />
-              </button>
             </div>
 
             <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5">
@@ -575,7 +689,7 @@ export default function AILab() {
                   <button
                     type="button"
                     onClick={() => void generateText('refine')}
-                    disabled={!draftPrompt.trim() || !generatedText.trim() || generating}
+                    disabled={!draftPrompt.trim() || !generatedText.trim() || generating || generationLimitReached}
                     className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl border border-surface-container bg-surface-container-lowest text-on-surface font-semibold hover:bg-surface-container transition-all disabled:opacity-60"
                   >
                     <Edit3 className="w-4 h-4" />
@@ -609,6 +723,7 @@ export default function AILab() {
               <div className="flex flex-wrap gap-2">
                 <InfoPill icon={<Sparkles className="w-3.5 h-3.5" />} label={`${settings.level} level`} />
                 <InfoPill icon={<Bot className="w-3.5 h-3.5" />} label={settings.language} />
+                <InfoPill icon={<Keyboard className="w-3.5 h-3.5" />} label={settings.skillType} />
                 <InfoPill icon={<Edit3 className="w-3.5 h-3.5" />} label={settings.tone} />
                 <InfoPill icon={<Bookmark className="w-3.5 h-3.5" />} label={settings.category} />
               </div>
@@ -624,29 +739,29 @@ export default function AILab() {
             </div>
 
             <div className="p-5 sm:p-6 border-t border-surface-container bg-surface-container-low/30">
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                 <ControlButton
                   icon={<Edit3 className="w-4 h-4" />}
                   label="Refine via Chat"
                   onClick={() => void generateText('refine')}
-                  disabled={!draftPrompt.trim() || !generatedText.trim() || generating}
+                  disabled={!draftPrompt.trim() || !generatedText.trim() || generating || generationLimitReached}
                 />
                 <ControlButton
                   icon={generating ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                   label="Regenerate"
                   onClick={() => void generateText('regenerate')}
-                  disabled={!(activeGeneration?.prompt || draftPrompt.trim()) || generating}
+                  disabled={!(activeGeneration?.prompt || draftPrompt.trim()) || generating || generationLimitReached}
                 />
                 <ControlButton
                   icon={<Bookmark className="w-4 h-4" />}
                   label={savingToLibrary ? 'Saving...' : 'Save to My Texts'}
                   onClick={() => void saveToLibrary()}
-                  disabled={savingToLibrary || !supabaseReady || !user}
+                  disabled={savingToLibrary || !supabaseReady || !user || savedTextLimitReached}
                 />
                 <button
                   type="button"
                   onClick={startPracticeNow}
-                  className="flex items-center justify-center gap-2 py-3 px-4 rounded-2xl bg-primary text-on-primary font-bold hover:bg-primary-dim transition-all active:scale-95 shadow-md shadow-primary/10 text-sm"
+                  className="inline-flex h-11 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-primary px-4 text-sm font-bold text-on-primary shadow-sm shadow-primary/10 transition-all hover:bg-primary-dim active:scale-95"
                 >
                   <Keyboard className="w-4 h-4" />
                   Start Practice Now
@@ -657,7 +772,7 @@ export default function AILab() {
                 <button
                   type="button"
                   onClick={() => void saveGeneratedSnapshot()}
-                  disabled={saving || !draftPrompt.trim()}
+                  disabled={saving || !draftPrompt.trim() || generationLimitReached}
                   className="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline disabled:opacity-60"
                 >
                   {saving ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <Bookmark className="w-4 h-4" />}
@@ -751,7 +866,7 @@ function ControlButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="flex items-center justify-center gap-2 py-3 px-4 rounded-2xl border border-surface-container text-on-surface-variant font-semibold hover:bg-surface-container transition-all active:scale-95 text-sm disabled:opacity-60"
+      className="inline-flex h-11 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-surface-container bg-surface-container-lowest px-4 text-sm font-semibold text-on-surface-variant transition-all hover:border-outline-variant hover:bg-surface-container active:scale-95 disabled:opacity-60"
     >
       {icon}
       {label}
@@ -769,7 +884,9 @@ function InfoPill({ icon, label }: { icon: React.ReactNode; label: string }) {
 }
 
 function buildPromptFromSettings(settings: LabSettings) {
-  return `Generate a ${settings.level} ${settings.language} dictation text about ${settings.category.toLowerCase()} with a ${settings.tone.toLowerCase()} tone and ${settings.length.toLowerCase()} length. Include useful vocabulary, clear paragraphs, and natural sentence rhythm for listening practice.`;
+  const categoryTopic = getDefaultTopic(settings.category, settings.language);
+  const wordRange = getWordRangeForLength(settings.length);
+  return `Create a ${settings.length.toLowerCase()} ${settings.level} ${settings.language} ${settings.skillType.toLowerCase()} practice text about ${categoryTopic}. Use a ${settings.tone.toLowerCase()} tone with precise vocabulary and natural sentence rhythm. The main text must be between ${wordRange.min} and ${wordRange.max} words.`;
 }
 
 function buildGeminiPrompt({
@@ -783,19 +900,23 @@ function buildGeminiPrompt({
   userPrompt: string;
   currentText: string;
 }) {
-  const sharedInstruction = `You are Scholar Script's AI writing assistant.
+  const sharedInstruction = `You are WordPilot's AI writing assistant.
 Generate clean dictation practice text only.
 Keep the output polished, grammatically correct, and aligned to the requested CEFR level.
 Language: ${settings.language}
 CEFR level: ${settings.level}
+Skill type: ${settings.skillType}
 Category: ${settings.category}
 Tone: ${settings.tone}
 Length: ${settings.length}
+Main text word range, excluding the title: ${formatWordRange(settings.length)}
 
 Return the result in this structure:
 Title: <short title>
 
-<main text in polished paragraphs>`;
+<main text in polished paragraphs>
+
+The main text must stay inside the requested word range.`;
 
   if (mode === 'refine') {
     return `${sharedInstruction}
@@ -814,23 +935,39 @@ Update the text accordingly and return a fresh final version.`;
 User request:
 ${userPrompt}
 
-Create a new practice text for Scholar Script.`;
+Create a new practice text for WordPilot.`;
 }
 
-async function generateWithGemini(prompt: string) {
-  const ai = new GoogleGenAI({ apiKey: clientEnv.geminiApiKey.trim() });
+async function generateWithGemini(prompt: string, accessToken?: string) {
+  if (!accessToken) {
+    return {
+      content: createLocalPracticeTextFromPrompt(prompt),
+      usedFallback: true,
+      fallbackReason: 'Sign in again before using cloud AI generation.',
+    };
+  }
+
   const maxAttempts = 3;
   let lastError: unknown;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: prompt,
+      const response = await fetch('/api/ai/generate', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ prompt }),
       });
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(payload.error ?? 'Unable to generate text.');
+      }
 
       return {
-        content: response.text ?? '',
+        content: payload.text ?? '',
         usedFallback: false,
         fallbackReason: '',
       };
@@ -861,37 +998,17 @@ function createLocalPracticeText({
   userPrompt: string;
   currentText: string;
 }) {
-  const topic = cleanTopic(userPrompt);
-  const title = `${settings.category} Dictation: ${topic}`;
-  const paragraphCount = settings.length === 'Short' ? 2 : settings.length === 'Long' ? 5 : 3;
-  const sentenceSet =
+  const topic = cleanTopic(userPrompt, settings);
+  const title =
     settings.language === 'German'
-      ? [
-          `Dieses Diktat behandelt ${topic} in einem ${settings.tone.toLowerCase()}en Stil.`,
-          `Lernende auf dem Niveau ${settings.level} koennen zentrale Begriffe, genaue Formulierungen und klare Satzstrukturen ueben.`,
-          `Der Text verbindet alltagsnahe Beispiele mit fachlichem Wortschatz aus dem Bereich ${settings.category.toLowerCase()}.`,
-          `Beim Hoeren sollte man besonders auf Verben, Satzenden und wichtige Nomen achten.`,
-          `So entsteht eine ruhige Uebung, die Konzentration, Rechtschreibung und Sprachgefuehl staerkt.`,
-        ]
-      : [
-          `This dictation text explores ${topic} in a ${settings.tone.toLowerCase()} tone.`,
-          `Learners at ${settings.level} level can practise precise vocabulary, clear sentence rhythm, and accurate spelling.`,
-          `The text connects practical examples with useful language from the field of ${settings.category.toLowerCase()}.`,
-          `While listening, students should pay close attention to verbs, endings, and key nouns.`,
-          `The result is a focused practice task that supports fluency, concentration, and confident writing.`,
-        ];
+      ? `${settings.level} ${settings.skillType}: ${toTitleCase(topic)}`
+      : `${settings.level} ${settings.skillType}: ${toTitleCase(topic)}`;
+  const sentenceSet = buildLocalParagraphs(settings, topic);
+  const draft = `Title: ${title}
 
-  if (mode === 'refine' && currentText.trim()) {
-    return `Title: ${title}
+${sentenceSet.join(' ')}`;
 
-${sentenceSet.slice(0, paragraphCount).join('\n\n')}
-
-Revision note: ${settings.language === 'German' ? 'Der vorhandene Entwurf wurde anhand deiner Anweisung neu ausgerichtet.' : 'The existing draft has been adjusted according to your instruction.'}`;
-  }
-
-  return `Title: ${title}
-
-${sentenceSet.slice(0, paragraphCount).join('\n\n')}`;
+  return limitPracticeTextWords(draft, settings);
 }
 
 function createLocalPracticeTextFromPrompt(prompt: string) {
@@ -899,6 +1016,7 @@ function createLocalPracticeTextFromPrompt(prompt: string) {
     level: prompt.match(/CEFR level:\s*(.+)/i)?.[1]?.trim() || FALLBACK_SETTINGS.level,
     language: prompt.match(/Language:\s*(.+)/i)?.[1]?.trim() || FALLBACK_SETTINGS.language,
     category: prompt.match(/Category:\s*(.+)/i)?.[1]?.trim() || FALLBACK_SETTINGS.category,
+    skillType: prompt.match(/Skill type:\s*(.+)/i)?.[1]?.trim() || FALLBACK_SETTINGS.skillType,
     tone: prompt.match(/Tone:\s*(.+)/i)?.[1]?.trim() || FALLBACK_SETTINGS.tone,
     length: prompt.match(/Length:\s*(.+)/i)?.[1]?.trim() || FALLBACK_SETTINGS.length,
   };
@@ -954,12 +1072,87 @@ function getErrorText(error: unknown) {
   }
 }
 
-function cleanTopic(value: string) {
-  return value
+function buildLocalParagraphs(settings: LabSettings, topic: string) {
+  if (settings.language === 'German') {
+    return [
+      `Digitale Transformation veraendert professionelle Arbeit, weil ${topic} Entscheidungen schneller, messbarer und transparenter macht.`,
+      `Fuehrungskraefte muessen Datenschutz, Verantwortung und menschliche Kontrolle konsequent sichern.`,
+      `So entsteht Innovation, die Vertrauen foerdert und Prozesse nachhaltig verbessert.`,
+    ];
+  }
+
+  return [
+    `Digital transformation changes professional work because ${topic} makes decisions faster, clearer, and easier to evaluate.`,
+    `Leaders must protect privacy, responsibility, and meaningful human control.`,
+    `This creates innovation that builds trust and improves daily processes.`,
+  ];
+}
+
+function getDefaultTopic(category: string, language: string) {
+  const topics: Record<string, { English: string; German: string }> = {
+    Academic: {
+      English: 'research methods and evidence-based learning',
+      German: 'Forschungsmethoden und evidenzbasiertes Lernen',
+    },
+    Business: {
+      English: 'responsible management and organisational change',
+      German: 'verantwortungsvolle Unternehmensfuehrung und organisatorischen Wandel',
+    },
+    History: {
+      English: 'social change in modern history',
+      German: 'gesellschaftlichen Wandel in der modernen Geschichte',
+    },
+    Literature: {
+      English: 'narrative perspective and character development',
+      German: 'Erzaehlperspektive und Figurenentwicklung',
+    },
+    Science: {
+      English: 'scientific evidence and climate research',
+      German: 'wissenschaftliche Evidenz und Klimaforschung',
+    },
+    Technology: {
+      English: 'digital transformation and responsible innovation',
+      German: 'digitale Transformation und verantwortungsvolle Innovation',
+    },
+  };
+
+  return topics[category]?.[language === 'German' ? 'German' : 'English'] ?? 'focused language practice';
+}
+
+function translateCategory(category: string) {
+  const categories: Record<string, string> = {
+    Academic: 'Akademisches',
+    Business: 'Business',
+    History: 'Geschichts',
+    Literature: 'Literatur',
+    Science: 'Wissenschafts',
+    Technology: 'Technologie',
+  };
+
+  return categories[category] ?? category;
+}
+
+function cleanTopic(value: string, settings: LabSettings) {
+  const normalizedValue = value
     .replace(/\s+/g, ' ')
     .replace(/^(generate|create|write|refine|improve)\s+/i, '')
-    .trim()
-    .slice(0, 72) || 'focused practice';
+    .replace(/^(a|an)\s+/i, '')
+    .replace(new RegExp(`^${settings.level}\\s+`, 'i'), '')
+    .replace(new RegExp(`^${settings.language}\\s+`, 'i'), '')
+    .replace(new RegExp(`^${settings.skillType}\\s+`, 'i'), '')
+    .replace(/^(dictation|practice)\s+text\s+about\s+/i, '')
+    .replace(/^text\s+about\s+/i, '')
+    .replace(/\bwith\s+(an?\s+)?(academic|professional|neutral|journalistic)\s+tone\b.*$/i, '')
+    .replace(/\buse\s+(an?\s+)?(academic|professional|neutral|journalistic)\s+tone\b.*$/i, '')
+    .replace(/\binclude useful vocabulary.*$/i, '')
+    .replace(/\.$/, '')
+    .trim();
+
+  const extractedTopic = normalizedValue.match(/\babout\s+(.+?)(?:\s+with\b|\s+in\b|\.|$)/i)?.[1]?.trim();
+  const topic = extractedTopic || normalizedValue;
+  const categoryOnly = topic.toLowerCase() === settings.category.toLowerCase();
+
+  return (categoryOnly ? getDefaultTopic(settings.category, settings.language) : topic).slice(0, 72) || getDefaultTopic(settings.category, settings.language);
 }
 
 function wait(milliseconds: number) {
@@ -977,12 +1170,73 @@ function extractTitle(content: string, fallbackCategory: string) {
   return titleMatch?.[1]?.trim() || `${fallbackCategory} Practice Text`;
 }
 
-function sanitizeGeneratedText(content: string) {
-  return content.replace(/\r\n/g, '\n').trim();
+function sanitizeGeneratedText(content: string, settings: LabSettings) {
+  return limitPracticeTextWords(content.replace(/\r\n/g, '\n').trim(), settings);
 }
 
 function stripTitleFromPracticeText(content: string) {
   return content.replace(/^title:\s*.+\n*/i, '').trim();
+}
+
+function limitPracticeTextWords(content: string, settings: LabSettings) {
+  const cleanContent = content.replace(/\r\n/g, '\n').trim();
+  const titleMatch = cleanContent.match(/^title:\s*(.+)$/im);
+  const title = titleMatch?.[0]?.trim();
+  const body = stripTitleFromPracticeText(cleanContent);
+  const rangedBody = fitWordsToRange(body, settings);
+
+  if (!title) {
+    return rangedBody;
+  }
+
+  return `Title: ${title.replace(/^title:\s*/i, '')}
+
+${rangedBody}`.trim();
+}
+
+function fitWordsToRange(value: string, settings: LabSettings) {
+  const range = getWordRangeForLength(settings.length);
+  const bodyWithMinimum = ensureMinimumWords(value, settings, range.min);
+  return limitWords(bodyWithMinimum, range.max);
+}
+
+function ensureMinimumWords(value: string, settings: LabSettings, minWords: number) {
+  const fillerWords = getMinimumWordFiller(settings).split(' ');
+  const words = value.replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+
+  for (let index = 0; words.length < minWords; index += 1) {
+    words.push(fillerWords[index % fillerWords.length]);
+  }
+
+  return words.join(' ');
+}
+
+function getMinimumWordFiller(settings: LabSettings) {
+  if (settings.language === 'German') {
+    return 'klare Regeln staerken Vertrauen Verantwortung und professionelle digitale Entscheidungen';
+  }
+
+  return 'clear rules strengthen trust responsibility and professional digital decisions';
+}
+
+function limitWords(value: string, maxWords: number) {
+  const words = value.replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+  const limited = words.slice(0, maxWords).join(' ');
+
+  if (!limited || /[.!?]$/.test(limited)) {
+    return limited;
+  }
+
+  return `${limited}.`;
+}
+
+function getWordRangeForLength(length: string) {
+  return WORD_RANGE_BY_LENGTH[length] ?? WORD_RANGE_BY_LENGTH.Medium;
+}
+
+function formatWordRange(length: string) {
+  const range = getWordRangeForLength(length);
+  return `${range.min}-${range.max} words`;
 }
 
 function formatRelativeTime(value: string) {
@@ -1015,10 +1269,23 @@ function inferLanguageFromPrompt(prompt: string, fallbackLanguage: string) {
   if (lowerPrompt.includes('german')) {
     return 'German';
   }
+  if (lowerPrompt.includes('spanish')) {
+    return 'Spanish';
+  }
+  if (lowerPrompt.includes('italian')) {
+    return 'Italian';
+  }
+  if (lowerPrompt.includes('french')) {
+    return 'French';
+  }
   if (lowerPrompt.includes('english')) {
     return 'English';
   }
-  return fallbackLanguage;
+  return normalizeLabLanguage(fallbackLanguage);
+}
+
+function normalizeLabLanguage(value?: string | null) {
+  return LANGUAGE_OPTIONS.includes(value ?? '') ? value as string : FALLBACK_SETTINGS.language;
 }
 
 function inferCategoryFromPrompt(prompt: string) {
@@ -1029,6 +1296,14 @@ function inferCategoryFromPrompt(prompt: string) {
   if (lowerPrompt.includes('literature') || lowerPrompt.includes('novel')) return 'Literature';
   if (lowerPrompt.includes('business')) return 'Business';
   return 'Academic';
+}
+
+function inferSkillFromPrompt(prompt: string) {
+  const lowerPrompt = prompt.toLowerCase();
+  if (lowerPrompt.includes('reading')) return 'Reading';
+  if (lowerPrompt.includes('listening')) return 'Listening';
+  if (lowerPrompt.includes('writing')) return 'Writing';
+  return 'Dictation';
 }
 
 function slugify(value: string) {

@@ -112,7 +112,7 @@ export default function LandingPage() {
           <div className="order-1 lg:order-2 space-y-6 sm:space-y-8 text-center lg:text-left">
             <h2 className="font-headline font-extrabold text-3xl sm:text-4xl md:text-5xl text-on-surface leading-tight">Focus. Practice. Perfect.</h2>
             <p className="text-on-surface-variant text-lg sm:text-xl leading-relaxed">
-              Scholar Script is designed to remove the friction between listening and typing. Our interface stays out of your way so you can focus on the nuances of the language.
+              WordPilot is designed to remove the friction between listening and typing. Our interface stays out of your way so you can focus on the nuances of the language.
             </p>
             <ul className="space-y-4">
               <ListItem text="Customizable vocabulary targets" />
