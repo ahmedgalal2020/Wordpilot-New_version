@@ -15,6 +15,7 @@ const routeTitles: Record<string, string> = {
   '/dashboard': 'Dashboard | WordPilot',
   '/ai-lab': 'AI Lab | WordPilot',
   '/workspace': 'Dictation Workspace | WordPilot',
+  '/shadowing': 'Shadowing Practice | WordPilot',
   '/account': 'My Account | WordPilot',
   '/admin': 'Admin Dashboard | WordPilot',
   '/certificates': 'Certificates | WordPilot',

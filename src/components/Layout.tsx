@@ -200,6 +200,7 @@ export function Navbar() {
           {user && <NavLink to="/dashboard">Dashboard</NavLink>}
           {user && <NavLink to="/practice-path">Practice Path</NavLink>}
           {user && <NavLink to="/workspace">Exercises</NavLink>}
+          {user && <NavLink to="/shadowing">Shadowing</NavLink>}
           {user && <NavLink to="/ai-lab">AI Lab</NavLink>}
           <NavLink to="/pricing">Pricing</NavLink>
           {user && isAdmin && <NavLink to="/admin">Admin</NavLink>}
@@ -354,6 +355,7 @@ export function Navbar() {
             {user && <MobileNavLink to="/dashboard">Dashboard</MobileNavLink>}
             {user && <MobileNavLink to="/practice-path">Practice Path</MobileNavLink>}
             {user && <MobileNavLink to="/workspace">Exercises</MobileNavLink>}
+            {user && <MobileNavLink to="/shadowing">Shadowing</MobileNavLink>}
             {user && <MobileNavLink to="/ai-lab">AI Lab</MobileNavLink>}
             <MobileNavLink to="/pricing">Pricing</MobileNavLink>
             {user && isAdmin && <MobileNavLink to="/admin">Admin</MobileNavLink>}

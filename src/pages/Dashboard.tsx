@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Award, BookOpen, History, LoaderCircle, TrendingUp } from 'lucide-react';
+import { Award, BookOpen, History, LoaderCircle, Mic, TrendingUp } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Certificate, SavedText, Session } from '../types';
 import { useAuth } from '../contexts/AuthContext';
@@ -22,6 +22,22 @@ type DashboardMetrics = {
   weeklyDelta: number | null;
 };
 
+type ShadowingDashboardSession = {
+  id: string;
+  title: string;
+  videoUrl: string;
+  completed: number;
+  total: number;
+  averageScore: number;
+  bestScore: number;
+  difficultSentences: string[];
+  missedWords: string[];
+  updatedAt: string;
+  status: 'in_progress' | 'completed';
+};
+
+const SHADOWING_STORAGE_KEY = 'wordpilot-shadowing-sessions-v1';
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
@@ -42,6 +58,7 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showAllSessions, setShowAllSessions] = useState(false);
+  const [shadowingSessions, setShadowingSessions] = useState<ShadowingDashboardSession[]>([]);
 
   useEffect(() => {
     if (!user) {
@@ -128,6 +145,10 @@ export default function Dashboard() {
     };
   }, [supabaseReady, user]);
 
+  useEffect(() => {
+    setShadowingSessions(readShadowingSessions());
+  }, []);
+
   const visibleSessions = useMemo(
     () => (showAllSessions ? recentSessions : recentSessions.slice(0, 5)),
     [recentSessions, showAllSessions],
@@ -144,6 +165,13 @@ export default function Dashboard() {
   );
   const completedPathCount = practiceExercises.filter((exercise) => exercise.status === 'completed').length;
   const nextPracticeRecommendation = buildPracticeRecommendation(cefrLevel, weeklyReport, targetLanguage);
+  const latestShadowingSession = shadowingSessions[0] ?? null;
+  const shadowingAverage =
+    shadowingSessions.length === 0
+      ? null
+      : Math.round(shadowingSessions.reduce((sum, session) => sum + session.averageScore, 0) / shadowingSessions.length);
+  const unfinishedShadowingSessions = shadowingSessions.filter((session) => session.status === 'in_progress').slice(0, 3);
+  const difficultShadowingSentences = shadowingSessions.flatMap((session) => session.difficultSentences).slice(0, 3);
 
   function startPractice(text: SavedText) {
     const sourceText = stripTitleFromPracticeText(text.body || text.source || text.title);
@@ -263,6 +291,79 @@ export default function Dashboard() {
       </section>
 
       <WeeklyProgressReport report={weeklyReport} loading={weeklyReportLoading} isPro={entitlements.isPro} />
+
+      <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 mb-12 sm:mb-16">
+        <div className="lg:col-span-8 bg-surface-container-lowest rounded-[2rem] p-6 sm:p-8 whisper-shadow">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-6">
+            <div>
+              <div className="flex items-center gap-2 text-primary text-[0.6875rem] font-bold tracking-widest uppercase">
+                <Mic className="h-4 w-4" />
+                Shadowing Practice
+              </div>
+              <h2 className="mt-2 font-headline font-black text-2xl text-on-surface">Speaking fluency tracker</h2>
+              <p className="mt-2 text-sm text-on-surface-variant max-w-2xl">
+                Continue YouTube-based sentence repetition sessions and watch your pronunciation scores improve over time.
+              </p>
+            </div>
+            <Link to="/shadowing" className="inline-flex shrink-0 items-center justify-center rounded-full bg-primary px-5 py-3 text-sm font-bold text-on-primary hover:bg-primary-dim transition">
+              Open Shadowing
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+            <MiniMetric label="Sessions" value={String(shadowingSessions.length)} />
+            <MiniMetric label="Average score" value={shadowingAverage === null ? '--' : `${shadowingAverage}%`} />
+            <MiniMetric label="Unfinished" value={String(unfinishedShadowingSessions.length)} />
+          </div>
+
+          {latestShadowingSession ? (
+            <div className="space-y-3">
+              {shadowingSessions.slice(0, 4).map((session) => (
+                <article key={session.id} className="rounded-2xl bg-surface-container-low p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="font-headline font-bold text-on-surface">{session.title}</p>
+                      <p className="mt-1 text-xs text-on-surface-variant">
+                        {formatSessionDate(session.updatedAt)} - {session.completed}/{session.total} sentences - best {session.bestScore}%
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="rounded-xl bg-primary-container px-3 py-2 text-sm font-black text-primary">{session.averageScore}%</span>
+                      <Link to="/shadowing" className="rounded-full bg-surface-container-lowest px-4 py-2 text-xs font-bold text-on-surface">
+                        {session.status === 'completed' ? 'Review' : 'Resume'}
+                      </Link>
+                    </div>
+                  </div>
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-surface-container-high">
+                    <div className="h-full rounded-full bg-primary" style={{ width: `${Math.round((session.completed / Math.max(session.total, 1)) * 100)}%` }} />
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl bg-surface-container-low px-6 py-8">
+              <h3 className="font-headline font-bold text-lg text-on-surface">No shadowing sessions yet</h3>
+              <p className="mt-2 text-sm text-on-surface-variant">Paste a YouTube lesson and transcript to start tracking speaking progress.</p>
+            </div>
+          )}
+        </div>
+
+        <div className="lg:col-span-4 bg-surface-container-lowest rounded-[2rem] p-6 sm:p-8 whisper-shadow">
+          <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary">Review queue</p>
+          <h2 className="mt-2 font-headline font-black text-2xl text-on-surface">Difficult sentences</h2>
+          <div className="mt-5 space-y-3">
+            {difficultShadowingSentences.length === 0 ? (
+              <p className="text-sm leading-6 text-on-surface-variant">Sentences below 60% will appear here for targeted review.</p>
+            ) : (
+              difficultShadowingSentences.map((sentence) => (
+                <p key={sentence} className="rounded-2xl bg-surface-container-low px-4 py-3 text-sm leading-6 text-on-surface">
+                  {sentence}
+                </p>
+              ))
+            )}
+          </div>
+        </div>
+      </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 mb-12 sm:mb-16">
         <div className="lg:col-span-8">
@@ -543,6 +644,15 @@ function EmptyPanel({
   );
 }
 
+function MiniMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl bg-surface-container-low p-4">
+      <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">{label}</p>
+      <p className="mt-2 font-headline font-black text-2xl text-on-surface">{value}</p>
+    </div>
+  );
+}
+
 function buildDashboardMetrics(rows: SessionMetricRow[]): DashboardMetrics {
   if (rows.length === 0) {
     return {
@@ -602,6 +712,18 @@ function buildTrendLabel(weeklyDelta: number | null) {
   }
 
   return `${weeklyDelta > 0 ? '+' : ''}${weeklyDelta}% from last week`;
+}
+
+function readShadowingSessions(): ShadowingDashboardSession[] {
+  if (typeof window === 'undefined') {
+    return [];
+  }
+
+  try {
+    return JSON.parse(window.localStorage.getItem(SHADOWING_STORAGE_KEY) ?? '[]') as ShadowingDashboardSession[];
+  } catch {
+    return [];
+  }
 }
 
 function formatSessionDate(value: string) {
