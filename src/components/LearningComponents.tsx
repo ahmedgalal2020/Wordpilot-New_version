@@ -129,17 +129,19 @@ export function CurrentLevelCard({
   language,
   level,
   completedCount,
+  totalCount,
   recommendation,
   showRecommendation = true,
 }: {
   language: LearningLanguage;
   level: CefrLevel;
   completedCount: number;
+  totalCount: number;
   recommendation: string;
   showRecommendation?: boolean;
 }) {
   const levelInfo = CEFR_LEVELS.find((item) => item.level === level);
-  const progress = getLevelProgress(level, completedCount);
+  const progress = getLevelProgress(level, completedCount, totalCount);
   const location = useLocation();
   const navigate = useNavigate();
   const isPracticePathPage = location.pathname === '/practice-path';

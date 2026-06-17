@@ -63,12 +63,15 @@ export function normalizeLearningLanguage(value?: string | null): LearningLangua
   return LEARNING_LANGUAGES.some((item) => item.language === value) ? (value as LearningLanguage) : 'English';
 }
 
-export function getLevelProgress(level: CefrLevel, completedCount: number) {
-  const base = LEVEL_ORDER.indexOf(level) * 8;
-  return Math.min(96, Math.max(8, base + completedCount * 9));
+export function getLevelProgress(_level: CefrLevel, completedCount: number, totalCount: number) {
+  if (totalCount <= 0 || completedCount <= 0) {
+    return 0;
+  }
+
+  return Math.min(100, Math.round((completedCount / totalCount) * 100));
 }
 
-export function getPracticeExercises(level: CefrLevel, recentAccuracy?: number | null, language: LearningLanguage = 'English'): PracticeExercise[] {
+export function getPracticeExercises(level: CefrLevel, language: LearningLanguage = 'English'): PracticeExercise[] {
   const templates: Record<PracticeSkill, Omit<PracticeExercise, 'id' | 'level' | 'status' | 'difficulty' | 'sourceText'>> = {
     Dictation: {
       title: getSkillTitle(level, 'Dictation'),
@@ -104,17 +107,17 @@ export function getPracticeExercises(level: CefrLevel, recentAccuracy?: number |
     },
   };
 
-  return PRACTICE_SKILLS.map((skill, index) => ({
+  return PRACTICE_SKILLS.map((skill) => ({
     ...templates[skill],
     id: `${language.toLowerCase()}-${level.toLowerCase()}-${skill.toLowerCase()}`,
     level,
     difficulty: getDifficulty(level),
-    status: getExerciseStatus(index, recentAccuracy),
+    status: 'not_started',
     sourceText: getPracticeSource(level, skill, language),
   }));
 }
 
-export function getCurriculumLessons(level: CefrLevel, language: LearningLanguage, recentAccuracy?: number | null): PracticeLesson[] {
+export function getCurriculumLessons(level: CefrLevel, language: LearningLanguage): PracticeLesson[] {
   return LESSON_THEMES[level].map((theme, index) => {
     const number = index + 1;
     const vocabulary = getLessonVocabulary(language, level, index);
@@ -136,7 +139,7 @@ export function getCurriculumLessons(level: CefrLevel, language: LearningLanguag
 
     return {
       ...lesson,
-      exercises: buildLessonExercises(lesson, vocabulary, recentAccuracy),
+      exercises: buildLessonExercises(lesson, vocabulary),
     };
   });
 }
@@ -215,26 +218,9 @@ export function getMistakeBreakdown(topMistakes: WeeklyReport['topMistakes']) {
   );
 }
 
-function getExerciseStatus(index: number, recentAccuracy?: number | null): PracticeStatus {
-  if (recentAccuracy === null || recentAccuracy === undefined) {
-    return index === 0 ? 'in_progress' : 'not_started';
-  }
-
-  if (recentAccuracy >= 88 && index < 2) {
-    return 'completed';
-  }
-
-  if (recentAccuracy >= 72 && index === 0) {
-    return 'completed';
-  }
-
-  return index === 0 ? 'in_progress' : 'not_started';
-}
-
 function buildLessonExercises(
   lesson: Omit<PracticeLesson, 'exercises'>,
   vocabulary: string[],
-  recentAccuracy?: number | null,
 ): PracticeExercise[] {
   const templates: Record<PracticeSkill, { title: string; duration: string; description: string }> = {
     Dictation: {
@@ -259,7 +245,7 @@ function buildLessonExercises(
     },
   };
 
-  return PRACTICE_SKILLS.map((skill, index) => ({
+  return PRACTICE_SKILLS.map((skill) => ({
     id: `${lesson.id}-${skill.toLowerCase()}`,
     lessonId: lesson.id,
     lessonTitle: lesson.title,
@@ -269,7 +255,7 @@ function buildLessonExercises(
     focus: `${lesson.theme.toLowerCase()} ${skill.toLowerCase()}`,
     duration: templates[skill].duration,
     difficulty: getDifficulty(lesson.level),
-    status: getExerciseStatus(index, recentAccuracy),
+    status: 'not_started',
     description: templates[skill].description,
     sourceText: buildLessonSourceText(lesson, skill, vocabulary),
     language: lesson.language,

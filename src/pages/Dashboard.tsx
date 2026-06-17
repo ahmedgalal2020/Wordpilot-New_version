@@ -7,6 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { hasSupabaseEnv } from '../lib/env';
 import { useEntitlements } from '../hooks/useEntitlements';
+import { usePracticeProgress } from '../hooks/usePracticeProgress';
 import { useWeeklyReport } from '../hooks/useWeeklyReport';
 import { CurrentLevelCard, PracticeExerciseCard, PracticeRecommendationCard, WeeklyProgressReport } from '../components/LearningComponents';
 import { buildPracticeRecommendation, getPracticeExercises, normalizeCefrLevel, normalizeLearningLanguage, PracticeExercise } from '../lib/learning';
@@ -47,6 +48,7 @@ export default function Dashboard() {
   const supabaseReady = hasSupabaseEnv();
   const { entitlements } = useEntitlements(user);
   const { report: weeklyReport, loading: weeklyReportLoading } = useWeeklyReport(user, targetLanguage);
+  const practiceProgress = usePracticeProgress(user, targetLanguage, cefrLevel);
   const [savedTexts, setSavedTexts] = useState<SavedText[]>([]);
   const [recentSessions, setRecentSessions] = useState<Session[]>([]);
   const [certificates, setCertificates] = useState<Certificate[]>([]);
@@ -160,8 +162,8 @@ export default function Dashboard() {
     [recentSessions],
   );
   const practiceExercises = useMemo(
-    () => getPracticeExercises(cefrLevel, weeklyReport.currentWeek.averageAccuracy, targetLanguage),
-    [cefrLevel, targetLanguage, weeklyReport.currentWeek.averageAccuracy],
+    () => practiceProgress.applyProgress(getPracticeExercises(cefrLevel, targetLanguage)),
+    [cefrLevel, practiceProgress.applyProgress, targetLanguage],
   );
   const completedPathCount = practiceExercises.filter((exercise) => exercise.status === 'completed').length;
   const nextPracticeRecommendation = buildPracticeRecommendation(cefrLevel, weeklyReport, targetLanguage);
@@ -185,7 +187,22 @@ export default function Dashboard() {
     });
   }
 
-  function startPathExercise(exercise: PracticeExercise) {
+  async function startPathExercise(exercise: PracticeExercise) {
+    if (exercise.status === 'not_started') {
+      const result = await practiceProgress.upsertProgress({
+        language: targetLanguage,
+        cefrLevel,
+        lessonId: exercise.lessonId,
+        exerciseId: exercise.id,
+        status: 'in_progress',
+      });
+
+      if (result.error) {
+        setLoadError(result.error);
+        return;
+      }
+    }
+
     navigate('/workspace', {
       state: {
         sourceText: exercise.sourceText,
@@ -193,6 +210,9 @@ export default function Dashboard() {
         language: exercise.language,
         cefrLevel: exercise.level,
         practiceCategory: exercise.skill,
+        practicePath: true,
+        practiceExerciseId: exercise.id,
+        practiceLessonId: exercise.lessonId,
       },
     });
   }
@@ -266,7 +286,7 @@ export default function Dashboard() {
 
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 mb-12 sm:mb-16">
         <div className="lg:col-span-8">
-          <CurrentLevelCard language={targetLanguage} level={cefrLevel} completedCount={completedPathCount} recommendation={nextPracticeRecommendation} />
+          <CurrentLevelCard language={targetLanguage} level={cefrLevel} completedCount={completedPathCount} totalCount={practiceExercises.length} recommendation={nextPracticeRecommendation} />
         </div>
         <div className="lg:col-span-4">
           <PracticeRecommendationCard level={cefrLevel} report={weeklyReport} language={targetLanguage} isPro={entitlements.isPro} />
@@ -285,7 +305,7 @@ export default function Dashboard() {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
           {practiceExercises.map((exercise) => (
-            <PracticeExerciseCard key={exercise.id} exercise={exercise} onStart={startPathExercise} />
+            <PracticeExerciseCard key={exercise.id} exercise={exercise} onStart={(nextExercise) => void startPathExercise(nextExercise)} />
           ))}
         </div>
       </section>

@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { CurrentLevelCard, LevelSelectionPanel, PracticeExerciseCard, PracticeRecommendationCard } from '../components/LearningComponents';
 import { useAuth } from '../contexts/AuthContext';
 import { useEntitlements } from '../hooks/useEntitlements';
+import { usePracticeProgress } from '../hooks/usePracticeProgress';
 import { useWeeklyReport } from '../hooks/useWeeklyReport';
 import {
   buildPracticeRecommendation,
@@ -25,6 +26,7 @@ export default function PracticePathPage() {
   const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null);
   const [savingLevel, setSavingLevel] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const practiceProgress = usePracticeProgress(user, selectedLanguage, selectedLevel);
 
   useEffect(() => {
     setSelectedLanguage(normalizeLearningLanguage(profile?.target_language));
@@ -32,12 +34,17 @@ export default function PracticePathPage() {
   }, [profile?.cefr_level, profile?.target_language]);
 
   const lessons = useMemo(
-    () => getCurriculumLessons(selectedLevel, selectedLanguage, report.currentWeek.averageAccuracy),
-    [report.currentWeek.averageAccuracy, selectedLanguage, selectedLevel],
+    () =>
+      getCurriculumLessons(selectedLevel, selectedLanguage).map((lesson) => ({
+        ...lesson,
+        exercises: practiceProgress.applyProgress(lesson.exercises),
+      })),
+    [practiceProgress.applyProgress, selectedLanguage, selectedLevel],
   );
   const selectedLesson = lessons.find((lesson) => lesson.id === selectedLessonId) ?? lessons[0];
   const exercises = selectedLesson?.exercises ?? [];
-  const completedCount = lessons.flatMap((lesson) => lesson.exercises).filter((exercise) => exercise.status === 'completed').length;
+  const allExercises = lessons.flatMap((lesson) => lesson.exercises);
+  const completedCount = allExercises.filter((exercise) => exercise.status === 'completed').length;
   const recommendation = buildPracticeRecommendation(selectedLevel, report, selectedLanguage);
   const savedLanguage = normalizeLearningLanguage(profile?.target_language);
   const savedLevel = normalizeCefrLevel(profile?.cefr_level);
@@ -65,7 +72,22 @@ export default function PracticePathPage() {
     setStatus(`Previewing ${selectedLanguage} ${level}. Save path to keep it in your profile.`);
   }
 
-  function startExercise(exercise: PracticeExercise) {
+  async function startExercise(exercise: PracticeExercise) {
+    if (exercise.status === 'not_started') {
+      const result = await practiceProgress.upsertProgress({
+        language: selectedLanguage,
+        cefrLevel: selectedLevel,
+        lessonId: exercise.lessonId,
+        exerciseId: exercise.id,
+        status: 'in_progress',
+      });
+
+      if (result.error) {
+        setStatus(result.error);
+        return;
+      }
+    }
+
     navigate('/workspace', {
       state: {
           sourceText: exercise.sourceText,
@@ -74,6 +96,9 @@ export default function PracticePathPage() {
           cefrLevel: exercise.level,
           practiceCategory: exercise.skill,
           lessonTitle: exercise.lessonTitle,
+          practicePath: true,
+          practiceExerciseId: exercise.id,
+          practiceLessonId: exercise.lessonId,
       },
     });
   }
@@ -104,6 +129,7 @@ export default function PracticePathPage() {
           language={selectedLanguage}
           level={selectedLevel}
           completedCount={completedCount}
+          totalCount={allExercises.length}
           recommendation={recommendation}
           showRecommendation={false}
         />
@@ -120,7 +146,18 @@ export default function PracticePathPage() {
                 Syncing progress
               </span>
             )}
+            {!reportLoading && practiceProgress.loading && (
+              <span className="inline-flex items-center gap-2 text-sm font-semibold text-on-surface-variant">
+                <LoaderCircle className="h-4 w-4 animate-spin" />
+                Syncing path status
+              </span>
+            )}
           </div>
+          {practiceProgress.error && (
+            <div className="mb-5 rounded-2xl border border-primary/10 bg-primary/5 px-5 py-4 text-sm text-on-surface">
+              Practice progress could not sync: {practiceProgress.error}
+            </div>
+          )}
           <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 xl:items-start">
             <div className="xl:col-span-5 bg-surface-container-lowest rounded-2xl p-5 sm:p-6 whisper-shadow">
               <div className="flex items-center justify-between gap-4 mb-4">

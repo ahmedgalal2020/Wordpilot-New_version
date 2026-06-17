@@ -122,6 +122,13 @@ type WorkspaceDraft = {
   advanceOnSpace?: boolean;
 };
 
+type PracticePathContext = {
+  exerciseId: string;
+  lessonId?: string | null;
+  language: LearningLanguage;
+  cefrLevel: string;
+};
+
 export default function DictationWorkspace() {
   const location = useLocation();
   const { user, profile } = useAuth();
@@ -172,6 +179,7 @@ export default function DictationWorkspace() {
   const [activeInputRange, setActiveInputRange] = useState<{ start: number; end: number } | null>(null);
   const [activeSourceRange, setActiveSourceRange] = useState<{ start: number; end: number } | null>(null);
   const [showResultModal, setShowResultModal] = useState(false);
+  const [practicePathContext, setPracticePathContext] = useState<PracticePathContext | null>(null);
   const { entitlements, refreshEntitlements } = useEntitlements(user);
   const savedSessionLimitReached = isLimitReached(entitlements.usage.savedSessions, entitlements.limits.savedSessions);
 
@@ -277,6 +285,9 @@ export default function DictationWorkspace() {
         language?: string;
         cefrLevel?: string;
         practiceCategory?: string;
+        practicePath?: boolean;
+        practiceExerciseId?: string;
+        practiceLessonId?: string | null;
         reviewMode?: boolean;
       }
       | null;
@@ -294,6 +305,16 @@ export default function DictationWorkspace() {
       const nextSkill = getSkillMode(state.practiceCategory).id;
       setPracticeCategory(nextSkill);
       setSourceHidden(getSkillMode(nextSkill).sourceHiddenByDefault);
+      setPracticePathContext(
+        state.practicePath && state.practiceExerciseId
+          ? {
+              exerciseId: state.practiceExerciseId,
+              lessonId: state.practiceLessonId ?? null,
+              language: normalizeLearningLanguage(state.language),
+              cefrLevel: normalizeCefrLevel(state.cefrLevel ?? profile?.cefr_level),
+            }
+          : null,
+      );
       setSaveStatus(state.reviewMode ? 'Review mode loaded from your history.' : null);
       setSaveState('idle');
       return;
@@ -729,6 +750,8 @@ export default function DictationWorkspace() {
       return;
     }
 
+    const progressError = await markPracticePathCompleted(languageLabel, cefrLevel);
+
     if (savedSession && mistakeRows.length > 0) {
       const mistakePayload = mistakeRows.map((row) => ({
         user_id: user.id,
@@ -746,7 +769,11 @@ export default function DictationWorkspace() {
       const { error: mistakesError } = await supabase.from('dictation_mistakes').insert(mistakePayload);
       if (mistakesError) {
         setSaving(false);
-        setSaveStatus(`Session saved, but mistake insights could not sync yet: ${mistakesError.message}`);
+        setSaveStatus(
+          progressError
+            ? `${progressError} Mistake insights also could not sync yet: ${mistakesError.message}`
+            : `Session saved, but mistake insights could not sync yet: ${mistakesError.message}`,
+        );
         setSaveState('saved');
         void refreshEntitlements();
         return;
@@ -754,9 +781,40 @@ export default function DictationWorkspace() {
     }
 
     setSaving(false);
-    setSaveStatus(mistakeRows.length > 0 ? 'Session and mistake insights saved to your account.' : 'Session saved to your account.');
+    setSaveStatus(
+      progressError ??
+        (mistakeRows.length > 0 ? 'Session and mistake insights saved to your account.' : 'Session saved to your account.'),
+    );
     setSaveState('saved');
     void refreshEntitlements();
+  }
+
+  async function markPracticePathCompleted(language: string, cefrLevel: string) {
+    if (!user || !practicePathContext || !hasSupabaseEnv()) {
+      return null;
+    }
+
+    const now = new Date().toISOString();
+    const { error } = await supabase.from('practice_progress').upsert(
+      {
+        user_id: user.id,
+        language,
+        cefr_level: cefrLevel,
+        lesson_id: practicePathContext.lessonId ?? null,
+        exercise_id: practicePathContext.exerciseId,
+        status: 'completed',
+        started_at: now,
+        completed_at: now,
+        updated_at: now,
+      },
+      { onConflict: 'user_id,exercise_id' },
+    );
+
+    if (error) {
+      return `Session saved, but practice path progress could not sync: ${error.message}`;
+    }
+
+    return null;
   }
 
   function finishAndGrade() {
