@@ -9,8 +9,7 @@ export function useAdminAccess(user: User | null) {
   const [databaseCheckLoading, setDatabaseCheckLoading] = useState(true);
   const supabaseReady = hasSupabaseEnv();
 
-  const metadataAdmin = user?.app_metadata?.role === 'admin' && user?.app_metadata?.admin_status !== 'revoked';
-  const needsDatabaseCheck = Boolean(user && supabaseReady && !metadataAdmin);
+  const needsDatabaseCheck = Boolean(user && supabaseReady);
 
   useEffect(() => {
     if (!needsDatabaseCheck) {
@@ -25,26 +24,35 @@ export function useAdminAccess(user: User | null) {
     async function loadAdminAccess() {
       if (!user) return;
 
-      const sessionResult = await supabase.auth.getSession();
-      const accessToken = sessionResult.data.session?.access_token;
+      try {
+        const sessionResult = await supabase.auth.getSession();
+        const accessToken = sessionResult.data.session?.access_token;
 
-      if (!accessToken) {
+        if (!accessToken) {
+          if (active) {
+            setDatabaseAdmin(false);
+            setDatabaseCheckLoading(false);
+          }
+          return;
+        }
+
+        const response = await fetchApi('/api/admin/access', {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        });
+        const contentType = response.headers.get('content-type') ?? '';
+        const payload = contentType.includes('application/json') ? await response.json().catch(() => null) : null;
+
+        if (active) {
+          setDatabaseAdmin(Boolean(response.ok && payload?.isAdmin === true));
+          setDatabaseCheckLoading(false);
+        }
+      } catch {
         if (active) {
           setDatabaseAdmin(false);
           setDatabaseCheckLoading(false);
         }
-        return;
-      }
-
-      const response = await fetchApi('/api/admin/access', {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
-
-      if (active) {
-        setDatabaseAdmin(response.ok);
-        setDatabaseCheckLoading(false);
       }
     }
 
@@ -56,7 +64,7 @@ export function useAdminAccess(user: User | null) {
   }, [needsDatabaseCheck, user]);
 
   return {
-    isAdmin: Boolean(metadataAdmin || databaseAdmin),
+    isAdmin: databaseAdmin,
     loading: needsDatabaseCheck && databaseCheckLoading,
   };
 }

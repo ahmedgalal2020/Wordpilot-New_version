@@ -122,7 +122,8 @@ export function getCurriculumLessons(level: CefrLevel, language: LearningLanguag
     const number = index + 1;
     const vocabulary = getLessonVocabulary(language, level, index);
     const lessonId = `${language.toLowerCase()}-${level.toLowerCase()}-lesson-${number}`;
-    const lessonTitle = `${number}. ${theme.title}`;
+    const localizedTheme = getLocalizedLessonTheme(language, level, number, theme);
+    const lessonTitle = `${number}. ${localizedTheme.title}`;
 
     const lesson: Omit<PracticeLesson, 'exercises'> = {
       id: lessonId,
@@ -130,10 +131,10 @@ export function getCurriculumLessons(level: CefrLevel, language: LearningLanguag
       title: lessonTitle,
       level,
       language,
-      theme: theme.title,
-      objective: theme.objective,
-      canDo: theme.canDo,
-      grammarFocus: theme.grammarFocus,
+      theme: localizedTheme.title,
+      objective: localizedTheme.objective,
+      canDo: localizedTheme.canDo,
+      grammarFocus: localizedTheme.grammarFocus,
       vocabulary,
     };
 
@@ -304,7 +305,55 @@ function getLanguageLessonLine(lesson: Omit<PracticeLesson, 'exercises'>, vocabu
       : `Dans cette lecon ${lesson.level} sur ${lesson.theme}, je travaille ${one}, ${two} et ${three}. J utilise des phrases courtes et je verifie chaque mot.`,
   };
 
-  return `${lines[lesson.language]} The lesson target is ${lesson.objective} Key outcome: ${lesson.canDo} Extra control word: ${four}.`;
+  const endings: Record<LearningLanguage, string> = {
+    English: `The lesson target is ${lesson.objective} Key outcome: ${lesson.canDo} Extra control word: ${four}.`,
+    German: `Das Lernziel ist: ${lesson.objective} Ergebnis: ${lesson.canDo} Zusatzwort: ${four}.`,
+    Spanish: `El objetivo es: ${lesson.objective} Resultado: ${lesson.canDo} Palabra extra: ${four}.`,
+    Italian: `L obiettivo e: ${lesson.objective} Risultato: ${lesson.canDo} Parola extra: ${four}.`,
+    French: `L objectif est: ${lesson.objective} Resultat: ${lesson.canDo} Mot supplementaire: ${four}.`,
+  };
+
+  return `${lines[lesson.language]} ${endings[lesson.language]}`;
+}
+
+function getLocalizedLessonTheme(
+  language: LearningLanguage,
+  level: CefrLevel,
+  lessonNumber: number,
+  fallback: { title: string; objective: string; canDo: string; grammarFocus: string },
+) {
+  if (language === 'English') {
+    return fallback;
+  }
+
+  const labels: Record<Exclude<LearningLanguage, 'English'>, { title: string; objective: string; canDo: string; grammarFocus: string }> = {
+    German: {
+      title: `${level} Training ${lessonNumber}`,
+      objective: 'zentrale Woerter, Satzbau und Hoerverstehen sicher trainieren.',
+      canDo: 'den Text verstehen, nachsprechen und korrekt wiedergeben.',
+      grammarFocus: 'Wortstellung, Artikel und klare Satzenden',
+    },
+    Spanish: {
+      title: `${level} Practica ${lessonNumber}`,
+      objective: 'practicar vocabulario, estructura y comprension auditiva.',
+      canDo: 'comprender el texto y reconstruirlo con precision.',
+      grammarFocus: 'orden de palabras, conectores y finales claros',
+    },
+    Italian: {
+      title: `${level} Pratica ${lessonNumber}`,
+      objective: 'allenare vocabolario, struttura e ascolto.',
+      canDo: 'capire il testo e ricostruirlo con precisione.',
+      grammarFocus: 'ordine delle parole, connettori e finali chiari',
+    },
+    French: {
+      title: `${level} Entrainement ${lessonNumber}`,
+      objective: 'travailler le vocabulaire, la structure et l ecoute.',
+      canDo: 'comprendre le texte et le reconstruire avec precision.',
+      grammarFocus: 'ordre des mots, connecteurs et fins de phrases',
+    },
+  };
+
+  return labels[language];
 }
 
 function getDifficulty(level: CefrLevel): PracticeExercise['difficulty'] {
@@ -537,7 +586,7 @@ function getPracticeSource(level: CefrLevel, skill: PracticeSkill, language: Lea
 }
 
 function getLanguageFallbackSource(language: LearningLanguage, level: CefrLevel, skill: PracticeSkill) {
-  const focus = getSkillFocus(level, skill);
+  const focus = getLocalizedSkillFocus(language, level, skill);
   const sources: Record<Exclude<LearningLanguage, 'English'>, string> = {
     German: `Diese ${level} Uebung trainiert ${focus}. Hoer genau zu, markiere schwierige Woerter und wiederhole den wichtigsten Satz.`,
     Spanish: `Este ejercicio ${level} entrena ${focus}. Escucha con atencion, marca las palabras dificiles y repite la frase principal.`,
@@ -546,6 +595,41 @@ function getLanguageFallbackSource(language: LearningLanguage, level: CefrLevel,
   };
 
   return sources[language];
+}
+
+function getLocalizedSkillFocus(language: LearningLanguage, level: CefrLevel, skill: PracticeSkill) {
+  if (language === 'English') {
+    return getSkillFocus(level, skill);
+  }
+
+  const skillLabels: Record<Exclude<LearningLanguage, 'English'>, Record<PracticeSkill, string>> = {
+    German: {
+      Dictation: 'Diktat und genaue Rechtschreibung',
+      Reading: 'Lesen und Verstehen',
+      Listening: 'Hoerverstehen und Satzrhythmus',
+      Writing: 'Schreiben und klare Formulierung',
+    },
+    Spanish: {
+      Dictation: 'dictado y ortografia precisa',
+      Reading: 'lectura y comprension',
+      Listening: 'escucha y ritmo de frases',
+      Writing: 'escritura y formulacion clara',
+    },
+    Italian: {
+      Dictation: 'dettato e ortografia precisa',
+      Reading: 'lettura e comprensione',
+      Listening: 'ascolto e ritmo della frase',
+      Writing: 'scrittura e formulazione chiara',
+    },
+    French: {
+      Dictation: 'dictee et orthographe precise',
+      Reading: 'lecture et comprehension',
+      Listening: 'ecoute et rythme des phrases',
+      Writing: 'ecriture et formulation claire',
+    },
+  };
+
+  return `${level} ${skillLabels[language][skill]}`;
 }
 
 const LOCALIZED_SOURCES: Partial<Record<LearningLanguage, Partial<Record<CefrLevel, Partial<Record<PracticeSkill, string>>>>>> = {

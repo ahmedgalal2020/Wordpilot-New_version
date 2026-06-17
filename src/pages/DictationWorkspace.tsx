@@ -323,7 +323,7 @@ export default function DictationWorkspace() {
   }, [location.state, profile?.cefr_level]);
 
   useEffect(() => {
-    if (!sourceText.trim() || manualLanguageOverrideRef.current) {
+    if (!sourceText.trim() || manualLanguageOverrideRef.current || languageLockedByIncomingTextRef.current) {
       return;
     }
 
@@ -790,7 +790,7 @@ export default function DictationWorkspace() {
   }
 
   async function markPracticePathCompleted(language: string, cefrLevel: string) {
-    if (!user || !practicePathContext || !hasSupabaseEnv()) {
+    if (!user || !practicePathContext || !hasSupabaseEnv() || !inputText.trim()) {
       return null;
     }
 
@@ -819,6 +819,7 @@ export default function DictationWorkspace() {
 
   function finishAndGrade() {
     setShowResultModal(true);
+    void markPracticePathCompleted(sessionLanguageLabel, sessionLevel);
 
     if (accuracy >= 80) {
       confetti({
