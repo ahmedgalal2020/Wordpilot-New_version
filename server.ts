@@ -23,6 +23,7 @@ type AuthenticatedUser = {
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
 app.use(securityHeaders);
+app.use(corsHeaders);
 app.use(rejectUntrustedOrigin);
 const standardLimiter = createRateLimiter({ windowMs: 60_000, max: 120 });
 const sensitiveLimiter = createRateLimiter({ windowMs: 60_000, max: 20 });
@@ -386,26 +387,31 @@ app.get('/api/admin/overview', async (req, res) => {
     fetchAuthAdminUsers(supabaseUrl, serviceRoleKey),
   ]);
 
-  const firstError = [
+  const firstCriticalError = [
     usersCount,
     sessionsCount,
     savedTextsCount,
-    certificatesCount,
-    subscriptionsCount,
-    activeSubscriptionsRows,
-    paidInvoicesCount,
     recentUsers,
-    recentInvoices,
-    invoiceRevenue,
     recentSessions,
     billingProfiles,
     authUsersResult,
   ].find((result) => !result.ok);
 
-  if (firstError && !firstError.ok) {
-    return res.status(firstError.status ?? 500).json({ error: firstError.error });
+  if (firstCriticalError && !firstCriticalError.ok) {
+    return res.status(firstCriticalError.status ?? 500).json({ error: firstCriticalError.error });
   }
 
+  const optionalWarnings = [
+    certificatesCount,
+    subscriptionsCount,
+    activeSubscriptionsRows,
+    paidInvoicesCount,
+    recentInvoices,
+    invoiceRevenue,
+  ]
+    .filter((result) => !result.ok)
+    .map((result) => result.error)
+    .filter(Boolean);
   const invoicesForRevenue = Array.isArray(invoiceRevenue.data) ? invoiceRevenue.data : [];
   const activeSubscriberIds = new Set(
     (Array.isArray(activeSubscriptionsRows.data) ? activeSubscriptionsRows.data : [])
@@ -498,6 +504,7 @@ app.get('/api/admin/overview', async (req, res) => {
     recentInvoices: recentInvoices.data ?? [],
     recentSessions: recentSessions.data ?? [],
     adminUsers,
+    warnings: optionalWarnings,
   });
 });
 
@@ -740,7 +747,8 @@ if (isProduction) {
 }
 
 app.listen(port, '0.0.0.0', () => {
-  console.log(`WordPilot running at http://localhost:${port}`);
+  const publicUrl = process.env.PUBLIC_APP_URL || process.env.APP_URL || `http://localhost:${port}`;
+  console.log(`WordPilot running at ${publicUrl}`);
 });
 
 function securityHeaders(_req: express.Request, res: express.Response, next: express.NextFunction) {
@@ -750,6 +758,25 @@ function securityHeaders(_req: express.Request, res: express.Response, next: exp
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(self), geolocation=(), payment=()');
   res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
   res.setHeader('Content-Security-Policy', buildContentSecurityPolicy());
+  next();
+}
+
+function corsHeaders(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const origin = req.headers.origin?.replace(/\/$/, '');
+
+  if (origin && getAllowedOrigins(req).includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Authorization,Content-Type');
+    res.setHeader('Access-Control-Max-Age', '86400');
+    res.setHeader('Vary', 'Origin');
+  }
+
+  if (req.method === 'OPTIONS') {
+    res.status(origin && !getAllowedOrigins(req).includes(origin) ? 403 : 204).end();
+    return;
+  }
+
   next();
 }
 

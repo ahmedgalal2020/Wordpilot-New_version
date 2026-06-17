@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { fetchApi } from '../lib/api';
 import { hasSupabaseEnv } from '../lib/env';
 import { isPaidBillingInvoice } from '../lib/entitlements';
 
@@ -275,7 +276,7 @@ export default function AdminDashboard() {
         params.set('userSearch', search.trim());
       }
 
-      const response = await fetch(`/api/admin/overview${params.size > 0 ? `?${params.toString()}` : ''}`, {
+      const response = await fetchApi(`/api/admin/overview${params.size > 0 ? `?${params.toString()}` : ''}`, {
         headers: {
           Authorization: `Bearer ${session.access_token}`,
         },
@@ -365,7 +366,7 @@ export default function AdminDashboard() {
     await runAdminAction(
       'add-admin',
       () =>
-        fetch('/api/admin/admin-users', {
+        fetchApi('/api/admin/admin-users', {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${session?.access_token}`,
@@ -382,7 +383,7 @@ export default function AdminDashboard() {
     void runAdminAction(
       `revoke-admin-${userId}`,
       () =>
-        fetch(`/api/admin/admin-users/${userId}/revoke`, {
+        fetchApi(`/api/admin/admin-users/${userId}/revoke`, {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${session?.access_token}`,
@@ -397,7 +398,7 @@ export default function AdminDashboard() {
     void runAdminAction(
       `block-user-${row.id}`,
       () =>
-        fetch(`/api/admin/users/${row.id}/block`, {
+        fetchApi(`/api/admin/users/${row.id}/block`, {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${session?.access_token}`,
@@ -416,7 +417,7 @@ export default function AdminDashboard() {
     void runAdminAction(
       `cancel-subscription-${userId}`,
       () =>
-        fetch(`/api/admin/users/${userId}/cancel-subscription`, {
+        fetchApi(`/api/admin/users/${userId}/cancel-subscription`, {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${session?.access_token}`,
@@ -430,7 +431,7 @@ export default function AdminDashboard() {
     void runAdminAction(
       `reset-password-${userId}`,
       () =>
-        fetch(`/api/admin/users/${userId}/reset-password`, {
+        fetchApi(`/api/admin/users/${userId}/reset-password`, {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${session?.access_token}`,
@@ -974,7 +975,7 @@ async function readJsonResponse(response: Response) {
       preview.length === 0
         ? `Admin API returned an empty ${response.status} response. Restart the local server and try again.`
         : preview.startsWith('<!doctype') || preview.startsWith('<html')
-          ? 'Admin API is returning the React app instead of JSON. Restart the local server with npm run dev so server.ts routes are active.'
+          ? 'Admin API is returning the React app instead of JSON. In production, deploy server.ts as a backend and set VITE_API_BASE_URL to that backend URL. Locally, start the app with npm run dev.'
           : `Admin API returned a non-JSON response: ${preview}`,
     );
   }

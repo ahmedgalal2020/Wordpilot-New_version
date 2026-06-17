@@ -1,5 +1,5 @@
 import type { FormEvent, ReactNode } from 'react';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { CheckCircle, LifeBuoy, LockKeyhole, Mail, ScrollText, Send } from 'lucide-react';
 
@@ -360,18 +360,45 @@ function ContactForm() {
   const [email, setEmail] = useState('');
   const [issueType, setIssueType] = useState(issueTypes[0]);
   const [message, setMessage] = useState('');
+  const [submitState, setSubmitState] = useState<'idle' | 'submitting' | 'sent' | 'error'>('idle');
+  const [submitMessage, setSubmitMessage] = useState<string | null>(null);
 
-  const mailto = useMemo(() => {
-    const subject = encodeURIComponent(`WordPilot support: ${issueType}`);
-    const body = encodeURIComponent(
-      `Name: ${name}\nAccount email: ${email}\nIssue type: ${issueType}\n\nMessage:\n${message}`,
-    );
-    return `mailto:${supportEmail}?subject=${subject}&body=${body}`;
-  }, [email, issueType, message, name]);
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    window.location.href = mailto;
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const body = new URLSearchParams();
+
+    formData.forEach((value, key) => {
+      if (typeof value === 'string') {
+        body.append(key, value);
+      }
+    });
+
+    setSubmitState('submitting');
+    setSubmitMessage(null);
+
+    try {
+      const response = await fetch('/__forms.html', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body.toString(),
+      });
+
+      if (!response.ok) {
+        throw new Error('Unable to send the support request.');
+      }
+
+      setSubmitState('sent');
+      setSubmitMessage('Support request sent. We will review it from the Netlify submissions inbox.');
+      setName('');
+      setEmail('');
+      setIssueType(issueTypes[0]);
+      setMessage('');
+    } catch (error) {
+      setSubmitState('error');
+      setSubmitMessage(error instanceof Error ? error.message : 'Unable to send the support request.');
+    }
   }
 
   return (
@@ -379,13 +406,20 @@ function ContactForm() {
       <div className="mb-6">
         <h2 className="font-headline font-bold text-2xl text-on-surface">Send a support request</h2>
         <p className="mt-2 text-sm leading-6 text-on-surface-variant">
-          This form prepares an email with the details support needs. It does not send passwords or payment card details.
+          This form sends the details support needs. It does not send passwords or payment card details.
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <form name="contact" method="POST" data-netlify="true" netlify-honeypot="bot-field" onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <input type="hidden" name="form-name" value="contact" />
+        <p className="hidden">
+          <label>
+            Do not fill this out: <input name="bot-field" tabIndex={-1} />
+          </label>
+        </p>
         <Field label="Your name">
           <input
+            name="name"
             value={name}
             onChange={(event) => setName(event.target.value)}
             className="w-full rounded-xl border border-surface-container bg-surface-container-low px-4 py-3 text-sm outline-none focus:border-primary"
@@ -394,15 +428,18 @@ function ContactForm() {
         </Field>
         <Field label="Account email">
           <input
+            name="email"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             type="email"
+            required
             className="w-full rounded-xl border border-surface-container bg-surface-container-low px-4 py-3 text-sm outline-none focus:border-primary"
             placeholder="you@example.com"
           />
         </Field>
         <Field label="Issue type">
           <select
+            name="issueType"
             value={issueType}
             onChange={(event) => setIssueType(event.target.value)}
             className="w-full rounded-xl border border-surface-container bg-surface-container-low px-4 py-3 text-sm outline-none focus:border-primary"
@@ -417,9 +454,11 @@ function ContactForm() {
         <div className="md:row-span-2">
           <Field label="Message">
             <textarea
+              name="message"
               value={message}
               onChange={(event) => setMessage(event.target.value)}
               rows={6}
+              required
               className="w-full resize-none rounded-xl border border-surface-container bg-surface-container-low px-4 py-3 text-sm outline-none focus:border-primary"
               placeholder="Tell us what happened, where it happened, and what you expected."
             />
@@ -428,14 +467,18 @@ function ContactForm() {
         <div className="md:col-span-2">
           <button
             type="submit"
+            disabled={submitState === 'submitting'}
             className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-bold text-on-primary transition hover:bg-primary-dim"
           >
             <Send className="h-4 w-4" />
-            Prepare Email
+            {submitState === 'submitting' ? 'Sending...' : 'Send Request'}
           </button>
           <a href={`mailto:${supportEmail}`} className="ml-4 text-sm font-bold text-primary hover:underline">
             {supportEmail}
           </a>
+          {submitMessage ? (
+            <p className={`mt-3 text-sm font-bold ${submitState === 'error' ? 'text-red-600' : 'text-primary'}`}>{submitMessage}</p>
+          ) : null}
         </div>
       </form>
     </section>

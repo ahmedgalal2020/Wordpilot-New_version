@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
 import { useEntitlements } from '../hooks/useEntitlements';
+import { fetchApi } from '../lib/api';
 
 type FeatureItem = {
   text: string;
@@ -81,7 +82,7 @@ export default function PricingPage() {
     setCheckoutMessage(null);
 
     try {
-      const response = await fetch('/api/stripe/create-checkout-session', {
+      const response = await fetchApi('/api/stripe/create-checkout-session', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${session?.access_token ?? ''}`,

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { hasSupabaseEnv } from '../lib/env';
+import { fetchApi } from '../lib/api';
 
 export function useAdminAccess(user: User | null) {
   const [databaseAdmin, setDatabaseAdmin] = useState(false);
@@ -35,7 +36,7 @@ export function useAdminAccess(user: User | null) {
         return;
       }
 
-      const response = await fetch('/api/admin/access', {
+      const response = await fetchApi('/api/admin/access', {
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },

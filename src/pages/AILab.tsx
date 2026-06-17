@@ -21,6 +21,7 @@ import { supabase } from '../lib/supabase';
 import { hasGeminiEnv, hasSupabaseEnv } from '../lib/env';
 import { formatMonthlyResetDate, formatUsage, getMonthStartIso, getNextMonthStartIso, isLimitReached } from '../lib/entitlements';
 import { useEntitlements } from '../hooks/useEntitlements';
+import { fetchApi } from '../lib/api';
 
 type GenerationRecord = {
   id: string;
@@ -952,7 +953,7 @@ async function generateWithGemini(prompt: string, accessToken?: string) {
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
-      const response = await fetch('/api/ai/generate', {
+      const response = await fetchApi('/api/ai/generate', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${accessToken}`,

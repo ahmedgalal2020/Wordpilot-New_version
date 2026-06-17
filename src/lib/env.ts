@@ -3,6 +3,21 @@ const requiredClientEnv = {
   supabaseAnonKey: import.meta.env.VITE_SUPABASE_ANON_KEY,
 };
 
+export const productionAppUrl = (import.meta.env.VITE_APP_URL ?? '').trim().replace(/\/$/, '');
+
+export function getAppUrl() {
+  if (productionAppUrl) {
+    return productionAppUrl;
+  }
+
+  return 'https://wordpilot.netlify.app';
+}
+
+export function getAppRedirectUrl(path = '/') {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  return `${getAppUrl()}${normalizedPath}`;
+}
+
 export function getMissingClientEnv() {
   return Object.entries(requiredClientEnv)
     .filter(([, value]) => !value)

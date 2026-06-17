@@ -7,6 +7,7 @@ import { hasSupabaseEnv } from '../lib/env';
 import { BillingInvoice, Certificate, SavedText } from '../types';
 import { formatUsage, isPaidBillingInvoice, PRO_LIMITS, writeCachedEntitlement } from '../lib/entitlements';
 import { useEntitlements } from '../hooks/useEntitlements';
+import { fetchApi } from '../lib/api';
 
 const LANGUAGE_OPTIONS = ['English', 'German', 'Spanish', 'Italian', 'French'];
 const CEFR_OPTIONS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
@@ -209,7 +210,7 @@ export default function AccountPage() {
     setCheckoutNotice('Confirming your Stripe payment and updating your subscription...');
 
     try {
-      const response = await fetch('/api/billing/sync-checkout', {
+      const response = await fetchApi('/api/billing/sync-checkout', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${session?.access_token ?? ''}`,
@@ -329,7 +330,7 @@ export default function AccountPage() {
     }
 
     try {
-      const response = await fetch('/api/billing/send-receipt', {
+      const response = await fetchApi('/api/billing/send-receipt', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${session?.access_token ?? ''}`,

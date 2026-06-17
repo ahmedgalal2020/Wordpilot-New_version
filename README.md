@@ -52,3 +52,13 @@ This project is being upgraded from a UI prototype into a real application with 
 - Set `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `GEMINI_API_KEY`, and `APP_URL` in `.env.local`.
 - Optional: tune `VITE_IDLE_TIMEOUT_MINUTES` and `VITE_IDLE_WARNING_SECONDS` for stricter or more relaxed browser session timeout behavior.
 - Restart `npm run dev` after changing environment variables.
+
+## Netlify Production
+
+- Production URL: `https://wordpilot.netlify.app/`
+- Netlify build command: `npm run build`
+- Netlify publish directory: `dist`
+- Client auth redirects use `VITE_APP_URL=https://wordpilot.netlify.app`.
+- SPA routing is handled by `netlify.toml` and `public/_redirects`.
+- The contact page uses Netlify Forms. Enable form detection in Netlify and configure notification recipients in the Netlify Forms UI.
+- API-backed features still require a deployed backend for the routes in `server.ts` (`/api/ai`, `/api/stripe`, `/api/billing`, and `/api/admin`). Set `VITE_API_BASE_URL` to that backend origin in Netlify, and set the backend environment variables: `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_EMAILS` or `ADMIN_USER_IDS`, `GEMINI_API_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY`, `BILLING_EMAIL_FROM`, `APP_URL=https://wordpilot.netlify.app`, `PUBLIC_APP_URL=https://wordpilot.netlify.app`, and `ALLOWED_ORIGINS=https://wordpilot.netlify.app`.

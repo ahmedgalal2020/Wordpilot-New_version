@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { AlertCircle, CheckCircle2, Eye, EyeOff, Github, LoaderCircle, RefreshCw } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Eye, EyeOff, LoaderCircle, RefreshCw } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 type Notice = {
@@ -20,7 +20,7 @@ export default function AuthPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const isLogin = location.pathname === '/login';
-  const { signIn, signUp, resendConfirmation, authMessage, authReady } = useAuth();
+  const { signIn, signInWithGoogle, signUp, resendConfirmation, authMessage, authReady } = useAuth();
 
   const [fullName, setFullName] = React.useState('');
   const [email, setEmail] = React.useState('');
@@ -31,6 +31,7 @@ export default function AuthPage() {
   const [showPassword, setShowPassword] = React.useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
+  const [googleSubmitting, setGoogleSubmitting] = React.useState(false);
   const [sendingConfirmation, setSendingConfirmation] = React.useState(false);
   const [notice, setNotice] = React.useState<Notice | null>(authMessage ? { kind: 'info', message: authMessage } : null);
   const [lastAuthError, setLastAuthError] = React.useState<string | null>(null);
@@ -135,6 +136,23 @@ export default function AuthPage() {
     setNotice({ kind: 'success', message: result.message ?? 'Confirmation email sent.' });
   }
 
+  async function handleGoogleSignIn() {
+    setNotice(null);
+    setLastAuthError(null);
+    setGoogleSubmitting(true);
+
+    const result = await signInWithGoogle();
+
+    if (result.error) {
+      setGoogleSubmitting(false);
+      setLastAuthError(result.error);
+      setNotice({ kind: 'error', message: result.error });
+      return;
+    }
+
+    setNotice({ kind: 'info', message: 'Opening Google authentication...' });
+  }
+
   const submitDisabled = submitting || !authReady || (!isLogin && !agreedToTerms);
   const showResendConfirmation = isLogin && isEmailNotConfirmedError(lastAuthError);
 
@@ -156,19 +174,14 @@ export default function AuthPage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+          <div className="grid grid-cols-1 gap-3 sm:gap-4">
             <SocialButton
               icon="https://lh3.googleusercontent.com/aida-public/AB6AXuAvBrBKSz12K2lwfFghaT6PP7LQw3uWMHIKtf3hfBPTCgDSMo-RtrnhYRmqnJuXJQ2KYNo6pyxqoY3hxGbxuySOQqApifAWoNVxH0FRNXrf6pEo2hm1jK9p8RShg82x_7rjSXvwVzpqOK_TLHifEYfzLZ4qFZ-0fc2eYTvKxqNdQzDKUOn8Du8I0zBrQgitVLfzNTVRKMIxmqRvuTYsnAmPm4H5RlSoxdmG-b4QL2oikVvSkVxeRRCXA__k_geaNXmko7I4GAn0kIk"
-              label="Google"
+              label="Continue with Google"
+              loading={googleSubmitting}
+              disabled={!authReady || googleSubmitting}
+              onClick={() => void handleGoogleSignIn()}
             />
-            <button
-              type="button"
-              className="flex items-center justify-center gap-2 py-3 border border-outline-variant/20 rounded-xl bg-surface-container-low/40 text-on-surface-variant cursor-not-allowed"
-              disabled
-            >
-              <Github className="w-5 h-5" />
-              <span className="text-sm font-medium">Coming Soon</span>
-            </button>
           </div>
 
           <div className="flex items-center gap-4 text-outline-variant">
@@ -348,15 +361,28 @@ function NoticeCard({ notice }: { notice: Notice }) {
   );
 }
 
-function SocialButton({ icon, label }: { icon: string; label: string }) {
+function SocialButton({
+  icon,
+  label,
+  loading,
+  disabled,
+  onClick,
+}: {
+  icon: string;
+  label: string;
+  loading: boolean;
+  disabled: boolean;
+  onClick: () => void;
+}) {
   return (
     <button
       type="button"
-      className="flex items-center justify-center gap-2 py-3 border border-outline-variant/20 rounded-xl bg-surface-container-low/40 text-on-surface-variant cursor-not-allowed"
-      disabled
+      onClick={onClick}
+      className="flex items-center justify-center gap-2 py-3 border border-outline-variant/20 rounded-xl bg-surface-container-low/40 text-on-surface-variant hover:bg-surface-container-low transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+      disabled={disabled}
     >
-      <img src={icon} alt={label} className="w-5 h-5 opacity-70" referrerPolicy="no-referrer" />
-      <span className="text-sm font-medium">{label} Soon</span>
+      {loading ? <LoaderCircle className="w-5 h-5 animate-spin" /> : <img src={icon} alt="" className="w-5 h-5 opacity-70" referrerPolicy="no-referrer" />}
+      <span className="text-sm font-medium">{label}</span>
     </button>
   );
 }

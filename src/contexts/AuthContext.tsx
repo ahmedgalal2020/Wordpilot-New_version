@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
-import { getMissingClientEnv, hasSupabaseEnv } from '../lib/env';
+import { getAppRedirectUrl, getMissingClientEnv, hasSupabaseEnv } from '../lib/env';
 import { supabase } from '../lib/supabase';
 
 type UserProfile = {
@@ -31,6 +31,7 @@ type AuthContextValue = {
     signOutNow: () => Promise<void>;
   };
   signIn: (email: string, password: string) => Promise<{ error: string | null; success: boolean }>;
+  signInWithGoogle: () => Promise<{ error: string | null }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: string | null; needsEmailVerification: boolean }>;
   resendConfirmation: (email: string) => Promise<{ error: string | null; message: string | null }>;
   resetPassword: (email: string) => Promise<{ error: string | null; message: string | null }>;
@@ -357,6 +358,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: error?.message ?? null, success: !error };
   }
 
+  async function signInWithGoogle() {
+    if (!authReady) {
+      return { error: authMessage };
+    }
+
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: getAppRedirectUrl('/dashboard'),
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'select_account',
+        },
+      },
+    });
+
+    return { error: error?.message ?? null };
+  }
+
   async function signUp(email: string, password: string, fullName: string) {
     if (!authReady) {
       return { error: authMessage, needsEmailVerification: false };
@@ -369,7 +389,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         data: {
           full_name: fullName,
         },
-        emailRedirectTo: `${window.location.origin}/dashboard`,
+        emailRedirectTo: getAppRedirectUrl('/dashboard'),
       },
     });
 
@@ -400,7 +420,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       type: 'signup',
       email,
       options: {
-        emailRedirectTo: `${window.location.origin}/dashboard`,
+        emailRedirectTo: getAppRedirectUrl('/dashboard'),
       },
     });
 
@@ -420,7 +440,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: getAppRedirectUrl('/reset-password'),
     });
 
     if (error) {
@@ -574,6 +594,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signOutNow: signOut,
       },
       signIn,
+      signInWithGoogle,
       signUp,
       resendConfirmation,
       resetPassword,
