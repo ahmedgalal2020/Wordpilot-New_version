@@ -74,35 +74,35 @@ export function getLevelProgress(_level: CefrLevel, completedCount: number, tota
 export function getPracticeExercises(level: CefrLevel, language: LearningLanguage = 'English'): PracticeExercise[] {
   const templates: Record<PracticeSkill, Omit<PracticeExercise, 'id' | 'level' | 'status' | 'difficulty' | 'sourceText'>> = {
     Dictation: {
-      title: getSkillTitle(level, 'Dictation'),
+      title: getSkillTitle(level, 'Dictation', language),
       skill: 'Dictation',
-      focus: getSkillFocus(level, 'Dictation'),
+      focus: getSkillFocus(level, 'Dictation', language),
       duration: '12 min',
-      description: 'Listen, type, compare, then repeat the hardest sentence.',
+      description: getSkillDescription('Dictation', language),
       language,
     },
     Reading: {
-      title: getSkillTitle(level, 'Reading'),
+      title: getSkillTitle(level, 'Reading', language),
       skill: 'Reading',
-      focus: getSkillFocus(level, 'Reading'),
+      focus: getSkillFocus(level, 'Reading', language),
       duration: '10 min',
-      description: 'Read the text, mark useful words, then practise the key sentence.',
+      description: getSkillDescription('Reading', language),
       language,
     },
     Listening: {
-      title: getSkillTitle(level, 'Listening'),
+      title: getSkillTitle(level, 'Listening', language),
       skill: 'Listening',
-      focus: getSkillFocus(level, 'Listening'),
+      focus: getSkillFocus(level, 'Listening', language),
       duration: '15 min',
-      description: 'Replay phrase groups and focus on endings, connectors, and rhythm.',
+      description: getSkillDescription('Listening', language),
       language,
     },
     Writing: {
-      title: getSkillTitle(level, 'Writing'),
+      title: getSkillTitle(level, 'Writing', language),
       skill: 'Writing',
-      focus: getSkillFocus(level, 'Writing'),
+      focus: getSkillFocus(level, 'Writing', language),
       duration: '18 min',
-      description: 'Rebuild the idea from memory, then compare with the original.',
+      description: getSkillDescription('Writing', language),
       language,
     },
   };
@@ -223,28 +223,7 @@ function buildLessonExercises(
   lesson: Omit<PracticeLesson, 'exercises'>,
   vocabulary: string[],
 ): PracticeExercise[] {
-  const templates: Record<PracticeSkill, { title: string; duration: string; description: string }> = {
-    Dictation: {
-      title: 'Listen & Type',
-      duration: '12 min',
-      description: 'Type the target passage exactly and review missing, wrong, and extra words.',
-    },
-    Reading: {
-      title: 'Read & Rebuild',
-      duration: '10 min',
-      description: 'Read the passage, hide it, then rebuild the meaning from memory.',
-    },
-    Listening: {
-      title: 'Catch the Details',
-      duration: '15 min',
-      description: 'Replay phrase groups and capture connectors, endings, and key vocabulary.',
-    },
-    Writing: {
-      title: 'Write Your Version',
-      duration: '18 min',
-      description: 'Use the lesson prompt to write a clear version with the target vocabulary.',
-    },
-  };
+  const templates = getLessonExerciseTemplates(lesson.language);
 
   return PRACTICE_SKILLS.map((skill) => ({
     id: `${lesson.id}-${skill.toLowerCase()}`,
@@ -253,7 +232,7 @@ function buildLessonExercises(
     title: templates[skill].title,
     skill,
     level: lesson.level,
-    focus: `${lesson.theme.toLowerCase()} ${skill.toLowerCase()}`,
+    focus: getLessonFocus(lesson, skill),
     duration: templates[skill].duration,
     difficulty: getDifficulty(lesson.level),
     status: 'not_started',
@@ -266,21 +245,22 @@ function buildLessonExercises(
 function buildLessonSourceText(lesson: Omit<PracticeLesson, 'exercises'>, skill: PracticeSkill, vocabulary: string[]) {
   const words = vocabulary.slice(0, 5).join(', ');
   const targetLine = getLanguageLessonLine(lesson, vocabulary);
-  const shared = `${targetLine} Target words: ${words}.`;
+  const labels = getSourceInstructionLabels(lesson.language);
+  const shared = `${targetLine} ${labels.targetWords}: ${words}.`;
 
   if (skill === 'Writing') {
-    return `${shared} Writing task: produce a clear response that proves you can ${lesson.canDo.toLowerCase()} Use at least four target words and one sentence with ${lesson.grammarFocus.toLowerCase()}.`;
+    return `${shared} ${labels.writingTask}: ${labels.writePrompt(lesson.canDo, lesson.grammarFocus)}.`;
   }
 
   if (skill === 'Reading') {
-    return `${shared} Read carefully, notice the grammar focus, then rebuild the meaning in your own words.`;
+    return `${shared} ${labels.readingPrompt}.`;
   }
 
   if (skill === 'Listening') {
-    return `${shared} Listen for phrase groups, sentence endings, and the target words. Pause after each phrase, then write what you understood.`;
+    return `${shared} ${labels.listeningPrompt}.`;
   }
 
-  return `${shared} This dictation checks spelling, word order, and control of ${lesson.grammarFocus.toLowerCase()}. Listen once, type carefully, then repeat the hardest sentence.`;
+  return `${shared} ${labels.dictationPrompt(lesson.grammarFocus)}.`;
 }
 
 function getLanguageLessonLine(lesson: Omit<PracticeLesson, 'exercises'>, vocabulary: string[]) {
@@ -326,13 +306,11 @@ function getLocalizedLessonTheme(
     return fallback;
   }
 
-  const labels: Record<Exclude<LearningLanguage, 'English'>, { title: string; objective: string; canDo: string; grammarFocus: string }> = {
-    German: {
-      title: `${level} Training ${lessonNumber}`,
-      objective: 'zentrale Woerter, Satzbau und Hoerverstehen sicher trainieren.',
-      canDo: 'den Text verstehen, nachsprechen und korrekt wiedergeben.',
-      grammarFocus: 'Wortstellung, Artikel und klare Satzenden',
-    },
+  if (language === 'German') {
+    return GERMAN_LESSON_THEMES[level][lessonNumber - 1] ?? fallback;
+  }
+
+  const labels: Record<Exclude<LearningLanguage, 'English' | 'German'>, { title: string; objective: string; canDo: string; grammarFocus: string }> = {
     Spanish: {
       title: `${level} Practica ${lessonNumber}`,
       objective: 'practicar vocabulario, estructura y comprension auditiva.',
@@ -354,6 +332,90 @@ function getLocalizedLessonTheme(
   };
 
   return labels[language];
+}
+
+function getLessonExerciseTemplates(language: LearningLanguage): Record<PracticeSkill, { title: string; duration: string; description: string }> {
+  if (language === 'German') {
+    return {
+      Dictation: {
+        title: 'Hoeren & Schreiben',
+        duration: '12 min',
+        description: 'Schreibe den Zieltext genau mit und pruefe fehlende, falsche und zusaetzliche Woerter.',
+      },
+      Reading: {
+        title: 'Lesen & Rekonstruieren',
+        duration: '10 min',
+        description: 'Lies den Text, verdecke ihn und baue die Bedeutung aus dem Gedaechtnis neu auf.',
+      },
+      Listening: {
+        title: 'Details Erkennen',
+        duration: '15 min',
+        description: 'Hoere Satzgruppen erneut und achte auf Endungen, Konnektoren und Zielwoerter.',
+      },
+      Writing: {
+        title: 'Eigene Version Schreiben',
+        duration: '18 min',
+        description: 'Schreibe eine klare eigene Version mit dem Wortschatz und der Grammatik der Lektion.',
+      },
+    };
+  }
+
+  return {
+    Dictation: {
+      title: 'Listen & Type',
+      duration: '12 min',
+      description: 'Type the target passage exactly and review missing, wrong, and extra words.',
+    },
+    Reading: {
+      title: 'Read & Rebuild',
+      duration: '10 min',
+      description: 'Read the passage, hide it, then rebuild the meaning from memory.',
+    },
+    Listening: {
+      title: 'Catch the Details',
+      duration: '15 min',
+      description: 'Replay phrase groups and capture connectors, endings, and key vocabulary.',
+    },
+    Writing: {
+      title: 'Write Your Version',
+      duration: '18 min',
+      description: 'Use the lesson prompt to write a clear version with the target vocabulary.',
+    },
+  };
+}
+
+function getLessonFocus(lesson: Omit<PracticeLesson, 'exercises'>, skill: PracticeSkill) {
+  if (lesson.language === 'German') {
+    return `${lesson.theme.toLowerCase()} ${getLocalizedSkillFocus('German', lesson.level, skill).toLowerCase()}`;
+  }
+
+  return `${lesson.theme.toLowerCase()} ${skill.toLowerCase()}`;
+}
+
+function getSourceInstructionLabels(language: LearningLanguage) {
+  if (language === 'German') {
+    return {
+      targetWords: 'Zielwoerter',
+      writingTask: 'Schreibaufgabe',
+      writePrompt: (canDo: string, grammarFocus: string) =>
+        `Schreibe eine klare Antwort und zeige, dass du ${canDo.toLowerCase()} Nutze mindestens vier Zielwoerter und einen Satz mit ${grammarFocus.toLowerCase()}`,
+      readingPrompt: 'Lies genau, achte auf den Grammatikfokus und rekonstruiere die Bedeutung mit eigenen Worten',
+      listeningPrompt: 'Hoere auf Satzgruppen, Endungen und Zielwoerter. Pausiere nach jeder Wortgruppe und schreibe, was du verstanden hast',
+      dictationPrompt: (grammarFocus: string) =>
+        `Dieses Diktat prueft Rechtschreibung, Wortstellung und ${grammarFocus.toLowerCase()}. Hoere einmal zu, schreibe sorgfaeltig und wiederhole den schwierigsten Satz`,
+    };
+  }
+
+  return {
+    targetWords: 'Target words',
+    writingTask: 'Writing task',
+    writePrompt: (canDo: string, grammarFocus: string) =>
+      `produce a clear response that proves you can ${canDo.toLowerCase()} Use at least four target words and one sentence with ${grammarFocus.toLowerCase()}`,
+    readingPrompt: 'Read carefully, notice the grammar focus, then rebuild the meaning in your own words',
+    listeningPrompt: 'Listen for phrase groups, sentence endings, and the target words. Pause after each phrase, then write what you understood',
+    dictationPrompt: (grammarFocus: string) =>
+      `This dictation checks spelling, word order, and control of ${grammarFocus.toLowerCase()}. Listen once, type carefully, then repeat the hardest sentence`,
+  };
 }
 
 function getDifficulty(level: CefrLevel): PracticeExercise['difficulty'] {
@@ -450,7 +512,133 @@ const LESSON_THEMES: Record<CefrLevel, Array<{ title: string; objective: string;
   ],
 };
 
-function getSkillTitle(level: CefrLevel, skill: PracticeSkill) {
+const GERMAN_LESSON_THEMES: Record<CefrLevel, Array<{ title: string; objective: string; canDo: string; grammarFocus: string }>> = {
+  A1: [
+    { title: 'Begruessung & Vorstellung', objective: 'Begruessungen, Namen und einfache Angaben zur Person verwenden.', canDo: 'dich vorstellen und eine einfache Frage stellen.', grammarFocus: 'sein, heissen und Personalpronomen' },
+    { title: 'Zahlen & Uhrzeit', objective: 'Zahlen, Tage und einfache Zeitangaben sicher erkennen.', canDo: 'sagen, wann etwas passiert.', grammarFocus: 'Zahlen, Uhrzeit und kurze Zeitphrasen' },
+    { title: 'Familie & Personen', objective: 'nahe Personen mit einfachen Adjektiven beschreiben.', canDo: 'ueber Familie und Freunde sprechen.', grammarFocus: 'Possessivartikel und einfache Adjektive' },
+    { title: 'Tagesablauf', objective: 'haeufige Handlungen im Alltag verstehen.', canDo: 'einen normalen Tag einfach beschreiben.', grammarFocus: 'Praesens regelmaessiger Verben' },
+    { title: 'Essen & Trinken', objective: 'Grundwortschatz fuer Essen in hoeflichen Bitten nutzen.', canDo: 'einfach etwas bestellen oder erfragen.', grammarFocus: 'ich moechte und ich nehme' },
+    { title: 'Orte in der Stadt', objective: 'wichtige Orte und einfache Wegfragen erkennen.', canDo: 'fragen, wo ein Ort ist.', grammarFocus: 'wo, hier, dort und einfache Praepositionen' },
+    { title: 'Wohnung & Dinge', objective: 'Zimmer und Alltagsgegenstaende benennen.', canDo: 'ein Zimmer einfach beschreiben.', grammarFocus: 'Artikel, Singular und Plural' },
+    { title: 'Einkaufen', objective: 'Preis, Farbe und Groesse verstehen.', canDo: 'etwas Einfaches kaufen.', grammarFocus: 'dieser, diese, dieses und wie viel' },
+    { title: 'Wetter & Jahreszeiten', objective: 'einfache Wetteraussagen erkennen.', canDo: 'sagen, wie das Wetter ist.', grammarFocus: 'es ist und es gibt' },
+    { title: 'Verkehr', objective: 'einfache Reisewoerter und kurze Fragen nutzen.', canDo: 'nach Bus, Zug oder Fahrkarte fragen.', grammarFocus: 'wohin, wann und kurze Fragen' },
+    { title: 'Gesundheit', objective: 'einfach sagen, wie es dir geht.', canDo: 'ein einfaches Problem beschreiben.', grammarFocus: 'haben, sein und mir tut weh' },
+    { title: 'A1 Wiederholung', objective: 'Vorstellung, Alltag, Orte und Beduerfnisse verbinden.', canDo: 'ein einfaches Anfaengergespraech fuehren.', grammarFocus: 'kurze Hauptsaetze' },
+  ],
+  A2: [
+    { title: 'Letztes Wochenende', objective: 'einfache vergangene Ereignisse verstehen.', canDo: 'erzaehlen, was kuerzlich passiert ist.', grammarFocus: 'Perfekt mit haben und sein' },
+    { title: 'Plaene & Einladungen', objective: 'Plaene und hoefliche Einladungen formulieren.', canDo: 'ein einfaches Treffen vereinbaren.', grammarFocus: 'moechte, wollen und werden' },
+    { title: 'Probleme auf Reisen', objective: 'einfache Reiseprobleme erklaeren.', canDo: 'auf einer Reise um Hilfe bitten.', grammarFocus: 'weil und einfache Begruendungen' },
+    { title: 'Arbeit & Studium', objective: 'Aufgaben, Kurse und Verantwortungen beschreiben.', canDo: 'ueber einen Arbeits- oder Studientag sprechen.', grammarFocus: 'Haeufigkeitsadverbien' },
+    { title: 'Digitaler Alltag', objective: 'haeufige Technikwoerter verwenden.', canDo: 'eine einfache digitale Aufgabe erklaeren.', grammarFocus: 'Imperativ und Reihenfolgewoerter' },
+    { title: 'Termine & Behoerden', objective: 'Informationen zu Terminen und Services verstehen.', canDo: 'hoeflich um Auskunft bitten.', grammarFocus: 'Modalverben fuer Bitten' },
+    { title: 'Optionen Vergleichen', objective: 'einfache Moeglichkeiten vergleichen.', canDo: 'eine Wahl begruenden.', grammarFocus: 'Komparativ' },
+    { title: 'Geschichten & Ereignisse', objective: 'einer kurzen chronologischen Geschichte folgen.', canDo: 'ein Ereignis einfach nacherzaehlen.', grammarFocus: 'zuerst, dann, danach' },
+    { title: 'Regeln & Rat', objective: 'einfache Regeln und Ratschlaege verstehen.', canDo: 'einen einfachen Rat geben.', grammarFocus: 'sollen und muessen' },
+    { title: 'Meinungen', objective: 'einfache Meinungen mit Gruenden ausdruecken.', canDo: 'sagen, was du denkst und warum.', grammarFocus: 'ich finde, dass und weil' },
+    { title: 'Nachrichten & E-Mails', objective: 'kurze praktische Nachrichten schreiben.', canDo: 'eine klare Bitte oder Antwort senden.', grammarFocus: 'hoefliche Anrede und Schlussformel' },
+    { title: 'A2 Wiederholung', objective: 'Vergangenheit, Plaene, Meinungen und Bitten verbinden.', canDo: 'praktische Alltagssituationen bewaeltigen.', grammarFocus: 'verbundene kurze Absaetze' },
+  ],
+  B1: [
+    { title: 'Erfahrungen Erzaehlen', objective: 'Erfahrungen mit Details und Reihenfolge beschreiben.', canDo: 'eine zusammenhaengende persoenliche Geschichte erzaehlen.', grammarFocus: 'Perfekt, Praeteritum und Konnektoren' },
+    { title: 'Probleme & Loesungen', objective: 'ein Problem erklaeren und eine Loesung vorschlagen.', canDo: 'an einer praktischen Diskussion teilnehmen.', grammarFocus: 'Ursache und Folge' },
+    { title: 'Kommunikation im Beruf', objective: 'Bitten, Updates und Prioritaeten verstehen.', canDo: 'ein nuetzliches Arbeitsupdate schreiben.', grammarFocus: 'Modalverben und hoeflicher Ton' },
+    { title: 'Lernstrategien', objective: 'Lerngewohnheiten und Fortschritt besprechen.', canDo: 'eine Lernstrategie erklaeren.', grammarFocus: 'Infinitiv mit zu' },
+    { title: 'Gemeinschaft & Alltag', objective: 'ueber lokale Themen und Services sprechen.', canDo: 'eine Meinung zu Beduerfnissen im Umfeld geben.', grammarFocus: 'Relativsaetze' },
+    { title: 'Medien & Nachrichten', objective: 'Hauptideen in nachrichtenartigen Texten erkennen.', canDo: 'einen kurzen Bericht zusammenfassen.', grammarFocus: 'indirekte Rede in Grundform' },
+    { title: 'Gesundheit & Lebensstil', objective: 'Gewohnheiten, Routinen und Rat besprechen.', canDo: 'eine Lebensstilaenderung erklaeren.', grammarFocus: 'wenn-Saetze' },
+    { title: 'Kultur & Reisen', objective: 'Orte und Gewohnheiten vergleichen.', canDo: 'kulturelle Unterschiede respektvoll beschreiben.', grammarFocus: 'Vergleich und Gegensatz' },
+    { title: 'Geldentscheidungen', objective: 'Budgets, Kosten und Entscheidungen verstehen.', canDo: 'eine finanzielle Entscheidung erklaeren.', grammarFocus: 'Mengenangaben' },
+    { title: 'Umwelt im Alltag', objective: 'ueber alltaegliche Umweltmassnahmen sprechen.', canDo: 'realistische Verbesserungen vorschlagen.', grammarFocus: 'Passiv Grundlagen' },
+    { title: 'Kurzpraesentationen', objective: 'Ideen fuer einen kurzen Vortrag ordnen.', canDo: 'einen klaren Punkt mit Beispielen praesentieren.', grammarFocus: 'Redemittel zur Strukturierung' },
+    { title: 'B1 Wiederholung', objective: 'Erzaehlen, Meinung, Rat und Zusammenfassung verbinden.', canDo: 'selbststaendig ueber vertraute Themen kommunizieren.', grammarFocus: 'Absatzstruktur' },
+  ],
+  B2: [
+    { title: 'Akademische Thesen', objective: 'Thesen, Belege und Beispiele nachvollziehen.', canDo: 'ein Argument klar erklaeren.', grammarFocus: 'komplexe Verknuepfungen' },
+    { title: 'Forschung & Daten', objective: 'Trends, Zahlen und vorsichtige Aussagen verstehen.', canDo: 'Daten verantwortungsvoll zusammenfassen.', grammarFocus: 'Hedging und vorsichtige Formulierungen' },
+    { title: 'Strategie im Beruf', objective: 'Ziele, Abwaegungen und Prioritaeten diskutieren.', canDo: 'eine professionelle Empfehlung schreiben.', grammarFocus: 'Konditionalsaetze und Gegensatz' },
+    { title: 'Auswirkung von Technologie', objective: 'Nutzen, Risiken und Ethik bewerten.', canDo: 'differenziert ueber Technologie argumentieren.', grammarFocus: 'Nominalisierung' },
+    { title: 'Oeffentliche Politik', objective: 'formelle Sprache in Politik und Verwaltung verstehen.', canDo: 'ein oeffentliches Thema ausgewogen erklaeren.', grammarFocus: 'Passiv und formeller Stil' },
+    { title: 'Kultur & Identitaet', objective: 'Identitaet, Werte und Zugehoerigkeit analysieren.', canDo: 'Perspektiven differenziert vergleichen.', grammarFocus: 'Konzessivsaetze' },
+    { title: 'Business Cases', objective: 'Markt-, Kunden- und Entscheidungssprache verstehen.', canDo: 'einen Business Case zusammenfassen.', grammarFocus: 'Ursache-Wirkung-Ketten' },
+    { title: 'Wissenschaft Vermitteln', objective: 'Belege erklaeren, ohne zu stark zu vereinfachen.', canDo: 'wissenschaftliche Ergebnisse verstaendlich kommunizieren.', grammarFocus: 'Relativ- und Partizipialkonstruktionen' },
+    { title: 'Debatte & Gegenargumente', objective: 'Gegenargumente und Erwiderungen erkennen.', canDo: 'auf gegensaetzliche Positionen reagieren.', grammarFocus: 'obwohl, dennoch und trotz' },
+    { title: 'Laengeres Hoeren', objective: 'Satzenden in laengerer Sprache erkennen.', canDo: 'Notizen aus einem dichten Abschnitt machen.', grammarFocus: 'Diskursmarker' },
+    { title: 'Formelles Schreiben', objective: 'geordnete und praezise Absaetze schreiben.', canDo: 'einen starken akademischen oder beruflichen Absatz bauen.', grammarFocus: 'Themensatz und Kohesion' },
+    { title: 'B2 Wiederholung', objective: 'Belege, Ausgewogenheit, Praezision und Fluessigkeit verbinden.', canDo: 'anspruchsvolle Studien- und Berufsthemen bewaeltigen.', grammarFocus: 'fortgeschrittene Absatzkontrolle' },
+  ],
+  C1: [
+    { title: 'Nuancierte Argumente', objective: 'subtile Aussagen und Implikationen verfolgen.', canDo: 'Nuancen erklaeren, ohne Klarheit zu verlieren.', grammarFocus: 'komplexe Unterordnung' },
+    { title: 'Register & Ton', objective: 'formellen, neutralen und persuasiven Stil unterscheiden.', canDo: 'den Ton an Zielgruppe und Situation anpassen.', grammarFocus: 'Registerwechsel' },
+    { title: 'Kritisches Lesen', objective: 'Annahmen und Belege bewerten.', canDo: 'einen Text fair kritisieren.', grammarFocus: 'Haltungsmarker' },
+    { title: 'Professionelle Briefings', objective: 'dichte Updates schnell verarbeiten.', canDo: 'Managementinformationen zusammenfassen.', grammarFocus: 'komprimierte Nominalgruppen' },
+    { title: 'Abstrakte Konzepte', objective: 'abstrakten Wortschatz praezise verwenden.', canDo: 'komplexe Begriffe definieren und anwenden.', grammarFocus: 'Definitionsstrukturen' },
+    { title: 'Verhandlungssprache', objective: 'Zugestaendnisse und Bedingungen verstehen.', canDo: 'taktvoll verhandeln.', grammarFocus: 'diplomatische Formulierungen' },
+    { title: 'Akademische Synthese', objective: 'mehrere Sichtweisen verbinden.', canDo: 'Quellen in einem Absatz synthetisieren.', grammarFocus: 'Synthesesprache' },
+    { title: 'Risiko & Unsicherheit', objective: 'Wahrscheinlichkeit und Begrenzung ausdruecken.', canDo: 'Risiko verantwortungsvoll diskutieren.', grammarFocus: 'Modalitaet und Einschraenkung' },
+    { title: 'Rhetorische Mittel', objective: 'Betonung und Ueberzeugung erkennen.', canDo: 'rhetorische Wirkung erklaeren.', grammarFocus: 'Emphasestrukturen' },
+    { title: 'Schnelle Sprache', objective: 'reduzierte Formen und dichte Phrasen erfassen.', canDo: 'schneller Expertensprache folgen.', grammarFocus: 'Ellipse und Referenz' },
+    { title: 'Praezises Redigieren', objective: 'Klarheit, Fluss und Knappheit verbessern.', canDo: 'einen Absatz auf C1-Niveau ueberarbeiten.', grammarFocus: 'Kohesion und Knappheit' },
+    { title: 'C1 Wiederholung', objective: 'Nuance, Tempo, Register und Praezision verbinden.', canDo: 'sicher in fortgeschrittenen Situationen handeln.', grammarFocus: 'kontrollierte sprachliche Differenzierung' },
+  ],
+  C2: [
+    { title: 'Nahezu Muttersprachlicher Fluss', objective: 'Rhythmus, Implikation und Betonung kontrollieren.', canDo: 'natuerliche anspruchsvolle Formulierungen produzieren.', grammarFocus: 'Informationsstruktur' },
+    { title: 'Subtext & Implikation', objective: 'erkennen, was angedeutet, aber nicht gesagt wird.', canDo: 'Subtext praezise erklaeren.', grammarFocus: 'pragmatische Bedeutung' },
+    { title: 'Redaktioneller Stil', objective: 'Stimme, Haltung und Eleganz analysieren.', canDo: 'mit redaktioneller Kontrolle umformulieren.', grammarFocus: 'Stil und Kadenz' },
+    { title: 'Fachdiskurs', objective: 'fachspezifische Praezision bewaeltigen.', canDo: 'Expertentexte zusammenfassen.', grammarFocus: 'technische Nominalgruppen' },
+    { title: 'Ironie & Mehrdeutigkeit', objective: 'vielschichtige Bedeutung erkennen.', canDo: 'Ironie erklaeren, ohne sie zu verflachen.', grammarFocus: 'kontrastive Rahmung' },
+    { title: 'Juristische Praezision', objective: 'Pflichten, Ausnahmen und Reichweite erkennen.', canDo: 'formelle Einschraenkungen interpretieren.', grammarFocus: 'Gueltigkeit und Qualifikation' },
+    { title: 'Literarische Textur', objective: 'Bildsprache, Rhythmus und Stimme verfolgen.', canDo: 'literarische Wirkung praezise besprechen.', grammarFocus: 'figurative Sprache' },
+    { title: 'Schnelle Synthese', objective: 'dichte Informationen schnell verbinden.', canDo: 'unter Zeitdruck knapp synthetisieren.', grammarFocus: 'Verdichtung' },
+    { title: 'Persuasive Meisterschaft', objective: 'Argument, Ton und Publikum kontrollieren.', canDo: 'ueberzeugende Expertentexte schreiben.', grammarFocus: 'rhetorische Architektur' },
+    { title: 'Akzent & Variation', objective: 'Aussprache- und Gebrauchsvariation bewaeltigen.', canDo: 'vielfaeltige anspruchsvolle Sprache verstehen.', grammarFocus: 'Variationsbewusstsein' },
+    { title: 'Finales Genauigkeitslabor', objective: 'kleine Fehler in Schreibung, Ordnung und Stil entfernen.', canDo: 'nahezu muttersprachliche Genauigkeit erreichen.', grammarFocus: 'Mikro-Editing' },
+    { title: 'C2 Wiederholung', objective: 'Meisterschaft, Nuance, Tempo und Stil verbinden.', canDo: 'auf nahezu muttersprachlichem Niveau agieren.', grammarFocus: 'vollstaendige Sprachkontrolle' },
+  ],
+};
+
+function getSkillTitle(level: CefrLevel, skill: PracticeSkill, language: LearningLanguage = 'English') {
+  if (language === 'German') {
+    const germanTitles: Record<PracticeSkill, Record<CefrLevel, string>> = {
+      Dictation: {
+        A1: 'Kernwoerter',
+        A2: 'Alltagssaetze',
+        B1: 'Klarer Absatz',
+        B2: 'Akademischer Absatz',
+        C1: 'Komplexes Argument',
+        C2: 'Natuerlicher Rhythmus',
+      },
+      Reading: {
+        A1: 'Lesen & Zuordnen',
+        A2: 'Lesen & Bemerken',
+        B1: 'Hauptidee',
+        B2: 'Wortschatzfokus',
+        C1: 'Argumentkarte',
+        C2: 'Stilanalyse',
+      },
+      Listening: {
+        A1: 'Klangcheck',
+        A2: 'Phrasenhoeren',
+        B1: 'Satzfluss',
+        B2: 'Lange Endungen',
+        C1: 'Schnelle Details',
+        C2: 'Subtile Bedeutung',
+      },
+      Writing: {
+        A1: 'Abschreiben & Bauen',
+        A2: 'Kurz Umformen',
+        B1: 'Text Rekonstruieren',
+        B2: 'Strukturiert Umformen',
+        C1: 'Praezise Umformung',
+        C2: 'Stiltransfer',
+      },
+    };
+
+    return germanTitles[skill][level];
+  }
+
   const titles: Record<PracticeSkill, Record<CefrLevel, string>> = {
     Dictation: {
       A1: 'Core Words',
@@ -489,7 +677,11 @@ function getSkillTitle(level: CefrLevel, skill: PracticeSkill) {
   return titles[skill][level];
 }
 
-function getSkillFocus(level: CefrLevel, skill: PracticeSkill) {
+function getSkillFocus(level: CefrLevel, skill: PracticeSkill, language: LearningLanguage = 'English') {
+  if (language === 'German') {
+    return getLocalizedSkillFocus(language, level, skill);
+  }
+
   const levelFocus: Record<CefrLevel, string> = {
     A1: 'basics',
     A2: 'daily use',
@@ -500,6 +692,28 @@ function getSkillFocus(level: CefrLevel, skill: PracticeSkill) {
   };
 
   return `${levelFocus[level]} ${skill.toLowerCase()}`;
+}
+
+function getSkillDescription(skill: PracticeSkill, language: LearningLanguage) {
+  if (language === 'German') {
+    const descriptions: Record<PracticeSkill, string> = {
+      Dictation: 'Hoere, schreibe, vergleiche und wiederhole den schwierigsten Satz.',
+      Reading: 'Lies den Text, markiere nuetzliche Woerter und uebe den Schluesselsatz.',
+      Listening: 'Hoere Satzgruppen erneut und achte auf Endungen, Konnektoren und Rhythmus.',
+      Writing: 'Baue die Idee aus dem Gedaechtnis neu auf und vergleiche sie mit dem Original.',
+    };
+
+    return descriptions[skill];
+  }
+
+  const descriptions: Record<PracticeSkill, string> = {
+    Dictation: 'Listen, type, compare, then repeat the hardest sentence.',
+    Reading: 'Read the text, mark useful words, then practise the key sentence.',
+    Listening: 'Replay phrase groups and focus on endings, connectors, and rhythm.',
+    Writing: 'Rebuild the idea from memory, then compare with the original.',
+  };
+
+  return descriptions[skill];
 }
 
 function getLessonVocabulary(language: LearningLanguage, level: CefrLevel, lessonIndex: number) {
@@ -640,11 +854,35 @@ const LOCALIZED_SOURCES: Partial<Record<LearningLanguage, Partial<Record<CefrLev
       Listening: 'Listen to the short sentence. Pause after each word and repeat it once.',
       Writing: 'I can write a short sentence about my day.',
     },
+    A2: {
+      Dictation: 'Yesterday I missed the bus, so I walked to the station and bought a new ticket.',
+      Reading: 'The message explains the time, place, and reason for the meeting in simple sentences.',
+      Listening: 'Listen for the plan, the problem, and the polite request at the end of the message.',
+      Writing: 'Write a short reply. Say thank you, explain your plan, and ask one clear question.',
+    },
+    B1: {
+      Dictation: 'Many learners improve when they practise regularly, review mistakes, and explain their strategy in clear paragraphs.',
+      Reading: 'The report describes a local problem, compares two solutions, and suggests a practical next step.',
+      Listening: 'Follow the speaker as they tell a short experience, give an opinion, and summarize the result.',
+      Writing: 'Rebuild the story with a beginning, a problem, a solution, and one personal opinion.',
+    },
     B2: {
       Dictation: 'Academic progress depends on regular practice, focused listening, and careful review of sentence endings.',
       Reading: 'The paragraph explains how evidence, examples, and precise vocabulary make an argument stronger.',
       Listening: 'Long sentences are easier to understand when you hear connectors, pauses, and final words clearly.',
       Writing: 'Rebuild the paragraph with a clear topic sentence, one example, and a precise conclusion.',
+    },
+    C1: {
+      Dictation: 'Advanced learners refine their accuracy by identifying nuance, questioning assumptions, and reformulating dense arguments precisely.',
+      Reading: 'The briefing balances evidence, uncertainty, and stakeholder concerns without losing a clear professional tone.',
+      Listening: 'Track the speaker\'s stance, concessions, and implied meaning while the argument moves quickly.',
+      Writing: 'Rewrite the argument with a sharper register, controlled hedging, and concise transitions.',
+    },
+    C2: {
+      Dictation: 'Near-native command requires sensitivity to subtext, cadence, register, and the smallest shifts in emphasis.',
+      Reading: 'The editorial uses irony, compressed references, and stylistic contrast to guide the reader\'s interpretation.',
+      Listening: 'Notice implication, rhythm, and variation while preserving the exact meaning of each phrase.',
+      Writing: 'Transform the text into a polished version with editorial control, precision, and natural flow.',
     },
   },
   German: {
@@ -654,11 +892,35 @@ const LOCALIZED_SOURCES: Partial<Record<LearningLanguage, Partial<Record<CefrLev
       Listening: 'Hoer den kurzen Satz. Mach nach jedem Wort eine Pause.',
       Writing: 'Ich schreibe einen kurzen Satz ueber meinen Tag.',
     },
+    A2: {
+      Dictation: 'Gestern habe ich den Bus verpasst, deshalb bin ich zum Bahnhof gelaufen.',
+      Reading: 'Die Nachricht nennt die Zeit, den Ort und den Grund fuer das Treffen in einfachen Saetzen.',
+      Listening: 'Hoer auf den Plan, das Problem und die hoefliche Bitte am Ende der Nachricht.',
+      Writing: 'Schreibe eine kurze Antwort. Bedanke dich, erklaere deinen Plan und stelle eine klare Frage.',
+    },
+    B1: {
+      Dictation: 'Viele Lernende machen Fortschritte, wenn sie regelmaessig ueben und ihre Fehler am Ende der Woche pruefen.',
+      Reading: 'Der Bericht beschreibt ein lokales Problem, vergleicht zwei Loesungen und schlaegt einen praktischen Schritt vor.',
+      Listening: 'Folge dem Sprecher, wenn er eine Erfahrung erzaehlt, eine Meinung gibt und das Ergebnis zusammenfasst.',
+      Writing: 'Baue die Geschichte mit Anfang, Problem, Loesung und einer persoenlichen Meinung neu auf.',
+    },
     B2: {
       Dictation: 'Akademischer Fortschritt entsteht durch regelmaessige Uebung, genaues Zuhoeren und bewusste Arbeit an Satzenden.',
       Reading: 'Der Abschnitt zeigt, wie Beispiele, Belege und praezise Woerter ein Argument staerker machen.',
       Listening: 'Lange Saetze werden klarer, wenn man Konnektoren, Pausen und Endungen bewusst hoert.',
       Writing: 'Formuliere den Absatz mit einer klaren Hauptidee, einem Beispiel und einem praezisen Schluss neu.',
+    },
+    C1: {
+      Dictation: 'Fortgeschrittene Lernende verbessern ihre Genauigkeit, indem sie Nuancen erkennen und dichte Argumente praezise umformulieren.',
+      Reading: 'Das Briefing verbindet Belege, Unsicherheit und Interessen verschiedener Gruppen in einem professionellen Ton.',
+      Listening: 'Achte auf Haltung, Zugestaendnisse und implizite Bedeutung, waehrend das Argument schnell voranschreitet.',
+      Writing: 'Formuliere das Argument mit passendem Register, vorsichtiger Einschraenkung und knappen Uebergaengen neu.',
+    },
+    C2: {
+      Dictation: 'Nahezu muttersprachliche Sicherheit verlangt Gespuer fuer Subtext, Rhythmus, Register und feinste Betonungsunterschiede.',
+      Reading: 'Der Kommentar nutzt Ironie, verdichtete Bezuge und stilistische Kontraste, um die Deutung zu lenken.',
+      Listening: 'Erkenne Implikation, Rhythmus und Variation, ohne die genaue Bedeutung der einzelnen Phrasen zu verlieren.',
+      Writing: 'Verwandle den Text in eine geschliffene Fassung mit redaktioneller Kontrolle, Praezision und natuerlichem Fluss.',
     },
   },
   Spanish: {
