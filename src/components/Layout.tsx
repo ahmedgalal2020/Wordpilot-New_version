@@ -183,7 +183,7 @@ export function Navbar() {
     return (
       <header className="w-full px-4 sm:px-6 lg:px-8 py-8 sm:py-10 flex justify-center">
         <Link to="/" className="flex items-center gap-2">
-          <div className="text-xl sm:text-2xl font-black tracking-tighter text-primary font-headline">WordPilot</div>
+          <img src="/wordpilot-logo.png" alt="WordPilot" className="h-10 w-auto sm:h-12" />
         </Link>
       </header>
     );
@@ -192,8 +192,8 @@ export function Navbar() {
   return (
     <nav className="bg-surface fixed top-0 w-full z-50 border-b border-surface-container">
       <div className="flex justify-between items-center h-16 px-4 sm:px-6 lg:px-8 max-w-[1440px] mx-auto gap-3">
-        <Link to="/" className="text-lg sm:text-2xl font-black tracking-tighter text-primary font-headline shrink-0">
-          WordPilot
+        <Link to="/" className="shrink-0" aria-label="WordPilot home">
+          <img src="/wordpilot-logo.png" alt="WordPilot" className="h-8 w-auto sm:h-9" />
         </Link>
 
         <div className="hidden lg:flex items-center gap-6 xl:gap-8 font-headline font-semibold tracking-tight">
@@ -469,7 +469,7 @@ export function Footer() {
     <footer className="bg-surface w-full py-10 sm:py-12 px-4 sm:px-6 lg:px-8 border-t border-surface-container">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center max-w-[1440px] mx-auto">
         <div className="space-y-4">
-          <div className="font-headline font-bold text-on-surface text-xl">WordPilot</div>
+          <img src="/wordpilot-logo.png" alt="WordPilot" className="h-9 w-auto" />
           <p className="text-xs tracking-wide leading-relaxed text-on-surface-variant max-w-xs">
             Copyright 2026 WordPilot. Built by Eng.Ahmed Hassan.
           </p>
