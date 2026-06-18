@@ -34,14 +34,37 @@ export function LevelSelectionPanel({
   onSelect: (level: CefrLevel) => void;
   onSave: () => void;
 }) {
+  const isGerman = selectedLanguage === 'German';
+  const copy = isGerman
+    ? {
+        eyebrow: 'Sprache und Niveau wählen',
+        title: 'Lernweg festlegen',
+        description: 'Sprache und GER-Niveau steuern Trainingsplan, KI-Übungen, Verlauf, Filter und Fortschrittsempfehlungen.',
+        save: 'Lernweg speichern',
+        saving: 'Speichern...',
+        saved: 'Lernweg gespeichert',
+        language: 'Sprache',
+        level: 'GER-Niveau',
+      }
+    : {
+        eyebrow: 'Choose language and level',
+        title: 'Set your learning path',
+        description: 'Your language and CEFR level control the training plan, AI practice defaults, history filters, and progress recommendations.',
+        save: 'Save path',
+        saving: 'Saving...',
+        saved: 'Path saved',
+        language: 'Language',
+        level: 'CEFR level',
+      };
+
   return (
     <section className="bg-surface-container-lowest rounded-[2rem] p-6 sm:p-8 whisper-shadow">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-6">
         <div>
-          <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary mb-2">Choose language and level</p>
-          <h2 className="font-headline font-black text-2xl text-on-surface">Set your learning path</h2>
+          <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary mb-2">{copy.eyebrow}</p>
+          <h2 className="font-headline font-black text-2xl text-on-surface">{copy.title}</h2>
           <p className="mt-2 text-sm text-on-surface-variant max-w-2xl">
-            Your language and CEFR level control the training plan, AI practice defaults, history filters, and progress recommendations.
+            {copy.description}
           </p>
         </div>
         {hasChanges ? (
@@ -51,17 +74,17 @@ export function LevelSelectionPanel({
             disabled={saving}
             className="inline-flex items-center justify-center rounded-full bg-primary px-5 py-3 text-sm font-bold text-on-primary transition hover:bg-primary-dim disabled:opacity-70"
           >
-            {saving ? 'Saving...' : 'Save path'}
+            {saving ? copy.saving : copy.save}
           </button>
         ) : (
           <span className="inline-flex items-center justify-center rounded-full bg-tertiary-container px-4 py-2 text-xs font-bold text-tertiary">
-            Path saved
+            {copy.saved}
           </span>
         )}
       </div>
 
       <div className="mb-6">
-        <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Language</p>
+        <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">{copy.language}</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
           {LEARNING_LANGUAGES.map((item) => {
             const active = item.language === selectedLanguage;
@@ -87,7 +110,7 @@ export function LevelSelectionPanel({
         </div>
       </div>
 
-      <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">CEFR level</p>
+      <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">{copy.level}</p>
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
         {CEFR_LEVELS.map((item) => {
           const active = item.level === selectedLevel;
@@ -145,6 +168,7 @@ export function CurrentLevelCard({
   const location = useLocation();
   const navigate = useNavigate();
   const isPracticePathPage = location.pathname === '/practice-path';
+  const isGerman = language === 'German';
 
   function openPracticePath() {
     if (location.pathname === '/practice-path') {
@@ -162,13 +186,13 @@ export function CurrentLevelCard({
     <section className="bg-surface-container-low rounded-2xl p-6 sm:p-8 whisper-shadow">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
-          <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary mb-2">Current Path</p>
-          <h2 className="font-headline font-black text-3xl text-on-surface">{language} {level} - {levelInfo?.title}</h2>
-          <p className="mt-2 text-sm text-on-surface-variant max-w-2xl">{levelInfo?.description}</p>
+          <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary mb-2">{isGerman ? 'Aktiver Lernweg' : 'Current Path'}</p>
+          <h2 className="font-headline font-black text-3xl text-on-surface">{isGerman ? 'Deutsch' : language} {level} - {formatLevelTitle(level, levelInfo?.title, isGerman)}</h2>
+          <p className="mt-2 text-sm text-on-surface-variant max-w-2xl">{formatLevelDescription(level, levelInfo?.description, isGerman)}</p>
         </div>
         {isPracticePathPage ? (
           <span className="inline-flex shrink-0 items-center justify-center rounded-full bg-primary-container px-4 py-2 text-xs font-bold text-primary">
-            Active path
+            {isGerman ? 'Aktiver Weg' : 'Active path'}
           </span>
         ) : (
           <button
@@ -176,13 +200,13 @@ export function CurrentLevelCard({
             onClick={openPracticePath}
             className="inline-flex shrink-0 items-center justify-center rounded-full bg-primary px-5 py-3 text-sm font-bold text-on-primary hover:bg-primary-dim transition"
           >
-            Open Practice Path
+            {isGerman ? 'Übungsweg öffnen' : 'Open Practice Path'}
           </button>
         )}
       </div>
       <div className="mt-6">
         <div className="flex items-center justify-between text-xs font-bold uppercase tracking-widest text-on-surface-variant">
-          <span>Level progress</span>
+          <span>{isGerman ? 'Niveaufortschritt' : 'Level progress'}</span>
           <span>{progress}%</span>
         </div>
         <div className="mt-3 h-3 overflow-hidden rounded-full bg-surface-container-high">
@@ -194,7 +218,7 @@ export function CurrentLevelCard({
           <div className="flex items-start gap-3">
             <Target className="mt-0.5 h-5 w-5 text-primary" />
             <div>
-              <p className="font-headline font-bold text-on-surface">Next recommended practice</p>
+              <p className="font-headline font-bold text-on-surface">{isGerman ? 'Nächste Empfehlung' : 'Next recommended practice'}</p>
               <p className="mt-1 text-sm text-on-surface-variant">{recommendation}</p>
             </div>
           </div>
@@ -218,6 +242,7 @@ export function PracticeRecommendationCard({
   const location = useLocation();
   const navigate = useNavigate();
   const isPracticePathPage = location.pathname === '/practice-path';
+  const isGerman = language === 'German';
 
   function openTrainingPlan() {
     if (location.pathname === '/practice-path') {
@@ -235,7 +260,7 @@ export function PracticeRecommendationCard({
     <div className="bg-primary text-on-primary rounded-2xl p-6 sm:p-8 whisper-shadow">
       <div className="flex items-center gap-2 text-primary-container text-[0.6875rem] font-bold tracking-widest uppercase">
         <Sparkles className="h-4 w-4" />
-        Practice Recommendation
+        {isGerman ? 'Übungsempfehlung' : 'Practice Recommendation'}
       </div>
       <p className="mt-4 text-xl font-headline font-black leading-snug">
         {buildPracticeRecommendation(level, report, language)}
@@ -247,7 +272,7 @@ export function PracticeRecommendationCard({
             onClick={openTrainingPlan}
             className="rounded-full bg-white/15 px-5 py-3 text-sm font-bold text-on-primary hover:bg-white/25 transition"
           >
-            Open training plan
+            {isGerman ? 'Trainingsplan öffnen' : 'Open training plan'}
           </button>
         )}
         <Link
@@ -255,7 +280,7 @@ export function PracticeRecommendationCard({
           state={isPro ? { language, level, skillType: 'Dictation', fromPracticePath: true } : undefined}
           className="rounded-full bg-white px-5 py-3 text-sm font-bold text-primary"
         >
-          {isPro ? 'Generate practice' : 'Unlock AI practice'}
+          {isPro ? (isGerman ? 'Übung erstellen' : 'Generate practice') : (isGerman ? 'KI-Übung freischalten' : 'Unlock AI practice')}
         </Link>
       </div>
     </div>
@@ -270,29 +295,31 @@ export function PracticeExerciseCard({
   exercise: PracticeExercise;
   onStart: (exercise: PracticeExercise) => void;
 }) {
+  const isGerman = exercise.language === 'German';
+
   return (
     <div className="bg-surface-container-lowest rounded-2xl p-5 sm:p-6 whisper-shadow border border-outline-variant/10">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary">{exercise.skill}</p>
+          <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary">{formatPracticeSkill(exercise.skill, isGerman)}</p>
           <h3 className="mt-2 font-headline font-bold text-xl text-on-surface">{exercise.title}</h3>
           {exercise.lessonTitle && (
             <p className="mt-1 text-xs font-semibold text-on-surface-variant">{exercise.lessonTitle}</p>
           )}
         </div>
-        <StatusPill status={exercise.status} />
+        <StatusPill status={exercise.status} isGerman={isGerman} />
       </div>
       <p className="mt-3 text-sm leading-6 text-on-surface-variant">{exercise.description}</p>
       <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-        <MetaBox label="Focus" value={exercise.focus} />
-        <MetaBox label="Time" value={exercise.duration} />
+        <MetaBox label={isGerman ? 'Fokus' : 'Focus'} value={exercise.focus} />
+        <MetaBox label={isGerman ? 'Zeit' : 'Time'} value={exercise.duration} />
       </div>
       <button
         type="button"
         onClick={() => onStart(exercise)}
         className="mt-5 inline-flex w-full items-center justify-center rounded-full bg-primary px-5 py-3 text-sm font-bold text-on-primary transition hover:bg-primary-dim"
       >
-        {exercise.status === 'completed' ? 'Retry practice' : exercise.status === 'in_progress' ? 'Continue' : 'Start'}
+        {formatPracticeAction(exercise.status, isGerman)}
       </button>
     </div>
   );
@@ -401,8 +428,10 @@ export function WeeklyProgressReport({
   );
 }
 
-function StatusPill({ status }: { status: PracticeStatus }) {
-  const label = status === 'not_started' ? 'Not started' : status === 'in_progress' ? 'In progress' : 'Completed';
+function StatusPill({ status, isGerman = false }: { status: PracticeStatus; isGerman?: boolean }) {
+  const label = isGerman
+    ? status === 'not_started' ? 'Nicht begonnen' : status === 'in_progress' ? 'In Arbeit' : 'Abgeschlossen'
+    : status === 'not_started' ? 'Not started' : status === 'in_progress' ? 'In progress' : 'Completed';
   return (
     <span
       className={cn(
@@ -416,6 +445,63 @@ function StatusPill({ status }: { status: PracticeStatus }) {
       {label}
     </span>
   );
+}
+
+function formatPracticeSkill(skill: PracticeExercise['skill'], isGerman: boolean) {
+  if (!isGerman) {
+    return skill;
+  }
+
+  const labels: Record<PracticeExercise['skill'], string> = {
+    Dictation: 'Diktat',
+    Reading: 'Lesen',
+    Listening: 'Hören',
+    Writing: 'Schreiben',
+  };
+
+  return labels[skill];
+}
+
+function formatPracticeAction(status: PracticeStatus, isGerman: boolean) {
+  if (!isGerman) {
+    return status === 'completed' ? 'Retry practice' : status === 'in_progress' ? 'Continue' : 'Start';
+  }
+
+  return status === 'completed' ? 'Erneut üben' : status === 'in_progress' ? 'Fortsetzen' : 'Beginnen';
+}
+
+function formatLevelTitle(level: CefrLevel, fallback: string | undefined, isGerman: boolean) {
+  if (!isGerman) {
+    return fallback;
+  }
+
+  const titles: Record<CefrLevel, string> = {
+    A1: 'Grundlagen',
+    A2: 'Alltagssprache',
+    B1: 'Selbstständige Kommunikation',
+    B2: 'Studium und Beruf',
+    C1: 'Fortgeschrittene Präzision',
+    C2: 'Nahezu muttersprachliche Beherrschung',
+  };
+
+  return titles[level];
+}
+
+function formatLevelDescription(level: CefrLevel, fallback: string | undefined, isGerman: boolean) {
+  if (!isGerman) {
+    return fallback;
+  }
+
+  const descriptions: Record<CefrLevel, string> = {
+    A1: 'Kurze Sätze, sehr vertraute Wörter und erste sichere Hör- und Schreibgewohnheiten.',
+    A2: 'Alltagsthemen, einfache zusammenhängende Sätze und praktische Verständigung.',
+    B1: 'Vertraute Themen, zusammenhängende Absätze und begründete Meinungen.',
+    B2: 'Komplexere Sachtexte, präziser Wortschatz und klare Argumentation in Studium und Beruf.',
+    C1: 'Dichte Texte, Registerkontrolle, implizite Bedeutung und präzise Umformulierung.',
+    C2: 'Feine Bedeutungsnuancen, Stil, Rhythmus und nahezu muttersprachliche Genauigkeit.',
+  };
+
+  return descriptions[level];
 }
 
 function MetaBox({ label, value }: { label: string; value: string }) {

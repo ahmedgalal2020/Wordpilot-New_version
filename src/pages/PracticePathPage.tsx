@@ -49,6 +49,62 @@ export default function PracticePathPage() {
   const savedLanguage = normalizeLearningLanguage(profile?.target_language);
   const savedLevel = normalizeCefrLevel(profile?.cefr_level);
   const hasPathChanges = selectedLanguage !== savedLanguage || selectedLevel !== savedLevel;
+  const isGermanPath = selectedLanguage === 'German';
+  const pathCopy = isGermanPath
+    ? {
+        pageEyebrow: 'Übungsweg',
+        title: 'Mein Lernweg',
+        intro: 'Wähle Sprache und GER-Niveau und folge einem strukturierten Plan mit Diktat, Lesen, Hören und Schreiben.',
+        lessonsTitle: `Deutsch ${selectedLevel} Lektionen`,
+        lessonsSummary: '12 Lektionen. Jede Lektion enthält Diktat, Lesen, Hören und Schreiben.',
+        syncingProgress: 'Fortschritt wird synchronisiert',
+        syncingPath: 'Status wird synchronisiert',
+        syncError: 'Der Übungsfortschritt konnte nicht synchronisiert werden:',
+        curriculum: 'Lehrplan',
+        pathCount: '12 Lektionen',
+        lessonCount: 'Lektionen',
+        lessonLabel: 'Lektion',
+        selectedLesson: 'Ausgewählte Lektion',
+        goal: 'Ziel',
+        canDo: 'Kann ich',
+        grammar: 'Grammatik',
+        lessonWords: 'Lektionswörter',
+        aiEyebrow: 'KI-Übung',
+        aiTitle: `Übungstext für Deutsch ${selectedLevel} erstellen`,
+        aiDescription: 'Erstelle niveaugerechtes Material für Diktat, Hören, Lesen oder Schreiben und nutze es in deinem aktuellen Lernweg.',
+        checkingAccess: 'KI-Zugang wird geprüft',
+        generate: 'Für mein Niveau erstellen',
+        premiumTitle: 'Premium-KI-Übungen sind gesperrt',
+        premiumDescription: 'Kostenlose Nutzer können dem Übungsweg folgen. Pro schaltet KI-generierte Texte für jedes Niveau und jede Fertigkeit frei.',
+        upgrade: 'Upgrade',
+      }
+    : {
+        pageEyebrow: 'Practice Path',
+        title: 'My Learning Path',
+        intro: 'Choose a language and CEFR level, then follow a structured weekly plan across dictation, reading, listening, and writing.',
+        lessonsTitle: `${selectedLanguage} ${selectedLevel} Lessons`,
+        lessonsSummary: '12 lessons. Each lesson has dictation, reading, listening, and writing.',
+        syncingProgress: 'Syncing progress',
+        syncingPath: 'Syncing path status',
+        syncError: 'Practice progress could not sync:',
+        curriculum: 'Curriculum',
+        pathCount: '12 lesson path',
+        lessonCount: 'lessons',
+        lessonLabel: 'Lesson',
+        selectedLesson: 'Selected lesson',
+        goal: 'Goal',
+        canDo: 'Can do',
+        grammar: 'Grammar',
+        lessonWords: 'Lesson words',
+        aiEyebrow: 'AI practice',
+        aiTitle: `Generate practice text for ${selectedLanguage} ${selectedLevel}`,
+        aiDescription: 'Create level-aligned dictation, listening, reading, or writing material and add it to your current path.',
+        checkingAccess: 'Checking AI access',
+        generate: 'Generate for my level',
+        premiumTitle: 'Premium AI practice is locked',
+        premiumDescription: 'Free users can follow the practice path. Pro unlocks AI-generated texts for each level and skill.',
+        upgrade: 'Upgrade',
+      };
 
   useEffect(() => {
     setSelectedLessonId(null);
@@ -59,17 +115,17 @@ export default function PracticePathPage() {
     setStatus(null);
     const result = await updateProfile({ cefr_level: selectedLevel, target_language: selectedLanguage });
     setSavingLevel(false);
-    setStatus(result.error ?? `${selectedLanguage} ${selectedLevel} is now your active training path.`);
+    setStatus(result.error ?? (selectedLanguage === 'German' ? `Deutsch ${selectedLevel} ist jetzt dein aktiver Lernweg.` : `${selectedLanguage} ${selectedLevel} is now your active training path.`));
   }
 
   function chooseLanguage(language: LearningLanguage) {
     setSelectedLanguage(language);
-    setStatus(`Previewing ${language} ${selectedLevel}. Save path to keep it in your profile.`);
+    setStatus(language === 'German' ? `Vorschau: Deutsch ${selectedLevel}. Speichere den Lernweg, um ihn im Profil zu behalten.` : `Previewing ${language} ${selectedLevel}. Save path to keep it in your profile.`);
   }
 
   function chooseLevel(level: CefrLevel) {
     setSelectedLevel(level);
-    setStatus(`Previewing ${selectedLanguage} ${level}. Save path to keep it in your profile.`);
+    setStatus(selectedLanguage === 'German' ? `Vorschau: Deutsch ${level}. Speichere den Lernweg, um ihn im Profil zu behalten.` : `Previewing ${selectedLanguage} ${level}. Save path to keep it in your profile.`);
   }
 
   async function startExercise(exercise: PracticeExercise) {
@@ -106,10 +162,10 @@ export default function PracticePathPage() {
   return (
     <main className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-12 pt-24 sm:pt-28 min-h-screen">
       <header className="mb-10 sm:mb-12">
-        <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary mb-3">Practice Path</p>
-        <h1 className="font-headline font-extrabold text-3xl sm:text-4xl tracking-tight text-on-surface">My Learning Path</h1>
+        <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary mb-3">{pathCopy.pageEyebrow}</p>
+        <h1 className="font-headline font-extrabold text-3xl sm:text-4xl tracking-tight text-on-surface">{pathCopy.title}</h1>
         <p className="text-on-surface-variant mt-3 max-w-2xl">
-          Choose a language and CEFR level, then follow a structured weekly plan across dictation, reading, listening, and writing.
+          {pathCopy.intro}
         </p>
       </header>
 
@@ -137,35 +193,35 @@ export default function PracticePathPage() {
         <section id="training-plan" className="scroll-mt-24">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
             <div>
-              <h2 className="font-headline font-black text-2xl text-on-surface">{selectedLanguage} {selectedLevel} Lessons</h2>
-              <p className="mt-1 text-sm text-on-surface-variant">12 lessons. Each lesson has dictation, reading, listening, and writing.</p>
+              <h2 className="font-headline font-black text-2xl text-on-surface">{pathCopy.lessonsTitle}</h2>
+              <p className="mt-1 text-sm text-on-surface-variant">{pathCopy.lessonsSummary}</p>
             </div>
             {reportLoading && (
               <span className="inline-flex items-center gap-2 text-sm font-semibold text-on-surface-variant">
                 <LoaderCircle className="h-4 w-4 animate-spin" />
-                Syncing progress
+                {pathCopy.syncingProgress}
               </span>
             )}
             {!reportLoading && practiceProgress.loading && (
               <span className="inline-flex items-center gap-2 text-sm font-semibold text-on-surface-variant">
                 <LoaderCircle className="h-4 w-4 animate-spin" />
-                Syncing path status
+                {pathCopy.syncingPath}
               </span>
             )}
           </div>
           {practiceProgress.error && (
             <div className="mb-5 rounded-2xl border border-primary/10 bg-primary/5 px-5 py-4 text-sm text-on-surface">
-              Practice progress could not sync: {practiceProgress.error}
+              {pathCopy.syncError} {practiceProgress.error}
             </div>
           )}
           <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 xl:items-start">
             <div className="xl:col-span-5 bg-surface-container-lowest rounded-2xl p-5 sm:p-6 whisper-shadow">
               <div className="flex items-center justify-between gap-4 mb-4">
                 <div>
-                  <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary">Curriculum</p>
-                  <h3 className="mt-1 font-headline font-black text-xl text-on-surface">12 lesson path</h3>
+                  <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary">{pathCopy.curriculum}</p>
+                  <h3 className="mt-1 font-headline font-black text-xl text-on-surface">{pathCopy.pathCount}</h3>
                 </div>
-                <span className="rounded-full bg-primary-container px-3 py-1 text-xs font-bold text-primary">{lessons.length} lessons</span>
+                <span className="rounded-full bg-primary-container px-3 py-1 text-xs font-bold text-primary">{lessons.length} {pathCopy.lessonCount}</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {lessons.map((lesson) => {
@@ -185,7 +241,7 @@ export default function PracticePathPage() {
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className={`text-[10px] font-bold uppercase tracking-widest ${active ? 'text-on-primary/75' : 'text-primary'}`}>
-                            Lesson {lesson.number}
+                            {pathCopy.lessonLabel} {lesson.number}
                           </p>
                           <h4 className="mt-1 font-headline font-bold text-sm leading-5">{lesson.theme}</h4>
                         </div>
@@ -212,24 +268,24 @@ export default function PracticePathPage() {
             <div className="xl:col-span-7 space-y-5">
               {selectedLesson && (
                 <div className="bg-surface-container-lowest rounded-2xl p-5 sm:p-6 whisper-shadow border border-outline-variant/10">
-                  <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary">Selected lesson</p>
+                  <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary">{pathCopy.selectedLesson}</p>
                   <h3 className="mt-2 font-headline font-black text-2xl text-on-surface">{selectedLesson.title}</h3>
                   <div className="mt-5 grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div className="rounded-2xl bg-surface-container-low p-4">
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Goal</p>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">{pathCopy.goal}</p>
                       <p className="mt-2 text-sm leading-6 text-on-surface">{selectedLesson.objective}</p>
                     </div>
                     <div className="rounded-2xl bg-surface-container-low p-4">
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Can do</p>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">{pathCopy.canDo}</p>
                       <p className="mt-2 text-sm leading-6 text-on-surface">{selectedLesson.canDo}</p>
                     </div>
                     <div className="rounded-2xl bg-surface-container-low p-4">
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Grammar</p>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">{pathCopy.grammar}</p>
                       <p className="mt-2 text-sm leading-6 text-on-surface">{selectedLesson.grammarFocus}</p>
                     </div>
                   </div>
                   <div className="mt-5">
-                    <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Lesson words</p>
+                    <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">{pathCopy.lessonWords}</p>
                     <div className="flex flex-wrap gap-2">
                       {selectedLesson.vocabulary.map((word) => (
                         <span key={word} className="rounded-full bg-primary-container px-3 py-1.5 text-xs font-bold text-primary">
@@ -262,16 +318,16 @@ export default function PracticePathPage() {
           <div className="lg:col-span-5 bg-surface-container-lowest rounded-2xl p-6 sm:p-8 whisper-shadow">
             <div className="flex items-center gap-2 text-primary text-[0.6875rem] font-bold tracking-widest uppercase">
               <Bot className="h-4 w-4" />
-              AI practice
+              {pathCopy.aiEyebrow}
             </div>
-            <h2 className="mt-3 font-headline font-black text-2xl text-on-surface">Generate practice text for {selectedLanguage} {selectedLevel}</h2>
+            <h2 className="mt-3 font-headline font-black text-2xl text-on-surface">{pathCopy.aiTitle}</h2>
             <p className="mt-2 text-sm leading-6 text-on-surface-variant">
-              Create level-aligned dictation, listening, reading, or writing material and add it to your current path.
+              {pathCopy.aiDescription}
             </p>
             {loadingEntitlements ? (
               <div className="mt-6 inline-flex items-center gap-2 text-sm text-on-surface-variant">
                 <LoaderCircle className="h-4 w-4 animate-spin" />
-                Checking AI access
+                {pathCopy.checkingAccess}
               </div>
             ) : entitlements.isPro ? (
               <Link
@@ -280,17 +336,17 @@ export default function PracticePathPage() {
                 className="mt-6 inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-bold text-on-primary"
               >
                 <Sparkles className="h-4 w-4" />
-                Generate for my level
+                {pathCopy.generate}
               </Link>
             ) : (
               <div className="mt-6 rounded-2xl bg-primary/5 border border-primary/10 p-5">
                 <div className="flex items-start gap-3">
                   <LockKeyhole className="mt-0.5 h-5 w-5 text-primary" />
                   <div>
-                    <p className="font-bold text-on-surface">Premium AI practice is locked</p>
-                    <p className="mt-1 text-sm text-on-surface-variant">Free users can follow the practice path. Pro unlocks AI-generated texts for each level and skill.</p>
+                    <p className="font-bold text-on-surface">{pathCopy.premiumTitle}</p>
+                    <p className="mt-1 text-sm text-on-surface-variant">{pathCopy.premiumDescription}</p>
                     <Link to="/pricing" className="mt-4 inline-flex rounded-full bg-primary px-5 py-3 text-sm font-bold text-on-primary">
-                      Upgrade
+                      {pathCopy.upgrade}
                     </Link>
                   </div>
                 </div>

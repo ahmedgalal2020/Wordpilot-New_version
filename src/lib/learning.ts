@@ -147,62 +147,103 @@ export function getCurriculumLessons(level: CefrLevel, language: LearningLanguag
 
 export function buildPracticeRecommendation(level: CefrLevel, report: WeeklyReport, fallbackLanguage = 'English') {
   const focus = getRecommendationFocus(level);
+  const isGerman = fallbackLanguage === 'German';
 
   if (report.currentWeek.sessionsCount === 0) {
+    if (isGerman) {
+      return `Beginne mit Deutsch ${level}: ${focus.germanDictation}, damit dein erster Wochenfortschritt sauber erfasst wird.`;
+    }
+
     return `Start with ${fallbackLanguage} ${level} ${focus.dictation} to create your first weekly progress signal.`;
   }
 
   const topMistake = report.topMistakes[0];
 
   if (topMistake?.status === 'missing') {
+    if (isGerman) {
+      return `Übe fehlende Wörter in Deutsch ${level}, besonders Artikel, Endungen und Satzschlüsse.`;
+    }
+
     return `Focus on missing words in ${fallbackLanguage} ${level} listening exercises, especially sentence endings.`;
   }
 
   if (topMistake?.status === 'extra') {
+    if (isGerman) {
+      return `Wähle ein langsameres Deutsch-${level}-Diktat und schreibe nur die Wörter, die du sicher hörst.`;
+    }
+
     return `Try a slower ${fallbackLanguage} ${level} dictation and type only the words you clearly hear.`;
   }
 
   if (topMistake?.status === 'wrong') {
+    if (isGerman) {
+      return `Trainiere Deutsch ${level} mit wiederholten Zielwörtern aus deiner Fehlerliste.`;
+    }
+
     return `Practice ${fallbackLanguage} ${level} vocabulary dictation with repeated words from your mistake list.`;
   }
 
   if (report.currentWeek.averageAccuracy !== null && report.currentWeek.averageAccuracy < 70) {
     const easierLevel = LEVEL_ORDER[Math.max(0, LEVEL_ORDER.indexOf(level) - 1)];
+    if (isGerman) {
+      return `Gehe kurz auf Deutsch ${easierLevel} zurück und festige Diktat, Artikel und Wortstellung, bevor du wieder ${level} übst.`;
+    }
+
     return `Try an easier ${fallbackLanguage} ${easierLevel} dictation session before moving back to ${level}.`;
   }
 
   if (report.currentWeek.averageAccuracy !== null && report.currentWeek.averageAccuracy >= 88) {
+    if (isGerman) {
+      return `Steigere dich mit Deutsch ${level}: ${focus.germanNextStep}.`;
+    }
+
     return `Practice ${fallbackLanguage} ${level} ${focus.nextStep}.`;
+  }
+
+  if (isGerman) {
+    return `Setze mit Deutsch ${level}: ${focus.germanDictation} fort und ergänze diese Woche eine Hörübung.`;
   }
 
   return `Continue with ${fallbackLanguage} ${level} ${focus.dictation}, then add one listening exercise this week.`;
 }
 
 function getRecommendationFocus(level: CefrLevel) {
-  const focus: Record<CefrLevel, { dictation: string; nextStep: string }> = {
+  const focus: Record<CefrLevel, { dictation: string; nextStep: string; germanDictation: string; germanNextStep: string }> = {
     A1: {
       dictation: 'beginner word and short sentence dictation',
       nextStep: 'short dictation with names, places, time, and everyday objects',
+      germanDictation: 'Wort- und Kurzsatzdiktat mit Namen, Orten, Zeiten und Alltagsgegenständen',
+      germanNextStep: 'kurze Diktate mit Artikeln, Zahlen und einfachen Fragen',
     },
     A2: {
       dictation: 'everyday sentence dictation',
       nextStep: 'daily-life dictation with plans, simple reasons, and clear sentence endings',
+      germanDictation: 'Alltagssatz-Diktat mit Plänen, Gründen und höflichen Bitten',
+      germanNextStep: 'kurze Alltagstexte mit Perfekt, weil-Sätzen und Modalverben',
     },
     B1: {
       dictation: 'connected paragraph dictation',
       nextStep: 'paragraph dictation with stories, opinions, and practical explanations',
+      germanDictation: 'Absatzdiktat mit Erfahrungen, Meinung und praktischer Erklärung',
+      germanNextStep: 'zusammenhängende Absätze mit Konnektoren, Relativsätzen und Begründungen',
     },
     B2: {
       dictation: 'academic and work-topic dictation',
       nextStep: 'academic dictation with longer sentences and denser vocabulary',
+      germanDictation: 'Diktat zu Studium und Beruf mit präzisem Wortschatz und längeren Sätzen',
+      germanNextStep: 'argumentative Absätze mit Belegen, Gegenpositionen und formellem Stil',
     },
     C1: {
       dictation: 'advanced argument dictation',
       nextStep: 'advanced dictation with nuance, register, and precise reformulation',
+      germanDictation: 'fortgeschrittenes Argumentationsdiktat mit Register und Nuance',
+      germanNextStep: 'präzise Umformulierung mit Hedging, Synthese und Registerkontrolle',
     },
     C2: {
       dictation: 'near-native rhythm dictation',
       nextStep: 'near-native dictation with subtext, style, speed, and micro-accuracy',
+      germanDictation: 'nahezu muttersprachliches Rhythmusdiktat mit Subtext und Stilkontrolle',
+      germanNextStep: 'Feinschliff an Subtext, Kadenz, Variation und mikropräziser Formulierung',
     },
   };
 
@@ -243,6 +284,10 @@ function buildLessonExercises(
 }
 
 function buildLessonSourceText(lesson: Omit<PracticeLesson, 'exercises'>, skill: PracticeSkill, vocabulary: string[]) {
+  if (lesson.language === 'German') {
+    return buildGermanLessonSourceText(lesson, skill, vocabulary);
+  }
+
   const words = vocabulary.slice(0, 5).join(', ');
   const targetLine = getLanguageLessonLine(lesson, vocabulary);
   const labels = getSourceInstructionLabels(lesson.language);
@@ -263,6 +308,30 @@ function buildLessonSourceText(lesson: Omit<PracticeLesson, 'exercises'>, skill:
   return `${shared} ${labels.dictationPrompt(lesson.grammarFocus)}.`;
 }
 
+function buildGermanLessonSourceText(
+  lesson: Omit<PracticeLesson, 'exercises'>,
+  skill: PracticeSkill,
+  vocabulary: string[],
+) {
+  const passage = GERMAN_LESSON_PASSAGES[lesson.level][lesson.number - 1];
+  const targetWords = vocabulary.slice(0, 5).join(', ');
+  const base = `${passage} Lernziel: ${lesson.objective} Ergebnis: ${lesson.canDo} Grammatik: ${lesson.grammarFocus}. Zielwörter: ${targetWords}.`;
+
+  if (skill === 'Writing') {
+    return `${base} Schreibauftrag: Verfasse eine eigene Version mit mindestens vier Zielwörtern. Achte besonders auf ${lesson.grammarFocus.toLowerCase()} und schreibe zusammenhängend.`;
+  }
+
+  if (skill === 'Reading') {
+    return `${base} Leseauftrag: Lies den Text sorgfältig, markiere die Zielwörter und rekonstruiere anschließend die Hauptaussage mit eigenen Worten.`;
+  }
+
+  if (skill === 'Listening') {
+    return `${base} Hörauftrag: Höre in Sinnabschnitten. Notiere zuerst Schlüsselwörter, dann Satzenden, Konnektoren und die genaue Wortstellung.`;
+  }
+
+  return `${base} Diktatauftrag: Höre einmal vollständig zu, schreibe dann Satz für Satz und prüfe am Ende Großschreibung, Artikel, Endungen und Wortstellung.`;
+}
+
 function getLanguageLessonLine(lesson: Omit<PracticeLesson, 'exercises'>, vocabulary: string[]) {
   const [one, two, three, four] = vocabulary;
   const advanced = lesson.level === 'B2' || lesson.level === 'C1' || lesson.level === 'C2';
@@ -272,8 +341,8 @@ function getLanguageLessonLine(lesson: Omit<PracticeLesson, 'exercises'>, vocabu
       ? `In this ${lesson.level} lesson about ${lesson.theme.toLowerCase()}, the learner studies ${one}, ${two}, and ${three} to build a precise argument with evidence and clear transitions.`
       : `In this ${lesson.level} lesson about ${lesson.theme.toLowerCase()}, I practise ${one}, ${two}, and ${three}. I use short clear sentences and check every word.`,
     German: advanced
-      ? `In dieser ${lesson.level} Lektion zum Thema ${lesson.theme} analysiert der Lerner ${one}, ${two} und ${three}, damit ein praeziser Text mit Belegen und klaren Uebergaengen entsteht.`
-      : `In dieser ${lesson.level} Lektion zum Thema ${lesson.theme} uebe ich ${one}, ${two} und ${three}. Ich schreibe kurze Saetze und pruefe jedes Wort.`,
+      ? `In dieser ${lesson.level} Lektion zum Thema ${lesson.theme} analysiert der Lerner ${one}, ${two} und ${three}, damit ein präziser Text mit Belegen und klaren Übergängen entsteht.`
+      : `In dieser ${lesson.level} Lektion zum Thema ${lesson.theme} übe ich ${one}, ${two} und ${three}. Ich schreibe kurze Sätze und prüfe jedes Wort.`,
     Spanish: advanced
       ? `En esta leccion ${lesson.level} sobre ${lesson.theme}, el estudiante analiza ${one}, ${two} y ${three} para construir un argumento preciso con evidencia y transiciones claras.`
       : `En esta leccion ${lesson.level} sobre ${lesson.theme}, practico ${one}, ${two} y ${three}. Uso frases cortas y reviso cada palabra.`,
@@ -338,19 +407,19 @@ function getLessonExerciseTemplates(language: LearningLanguage): Record<Practice
   if (language === 'German') {
     return {
       Dictation: {
-        title: 'Hoeren & Schreiben',
+        title: 'Hören & Schreiben',
         duration: '12 min',
-        description: 'Schreibe den Zieltext genau mit und pruefe fehlende, falsche und zusaetzliche Woerter.',
+        description: 'Schreibe den Zieltext genau mit und prüfe fehlende, falsche und zusätzliche Wörter.',
       },
       Reading: {
         title: 'Lesen & Rekonstruieren',
         duration: '10 min',
-        description: 'Lies den Text, verdecke ihn und baue die Bedeutung aus dem Gedaechtnis neu auf.',
+        description: 'Lies den Text, verdecke ihn und baue die Bedeutung aus dem Gedächtnis neu auf.',
       },
       Listening: {
         title: 'Details Erkennen',
         duration: '15 min',
-        description: 'Hoere Satzgruppen erneut und achte auf Endungen, Konnektoren und Zielwoerter.',
+        description: 'Höre Satzgruppen erneut und achte auf Endungen, Konnektoren und Zielwörter.',
       },
       Writing: {
         title: 'Eigene Version Schreiben',
@@ -395,14 +464,14 @@ function getLessonFocus(lesson: Omit<PracticeLesson, 'exercises'>, skill: Practi
 function getSourceInstructionLabels(language: LearningLanguage) {
   if (language === 'German') {
     return {
-      targetWords: 'Zielwoerter',
+      targetWords: 'Zielwörter',
       writingTask: 'Schreibaufgabe',
       writePrompt: (canDo: string, grammarFocus: string) =>
-        `Schreibe eine klare Antwort und zeige, dass du ${canDo.toLowerCase()} Nutze mindestens vier Zielwoerter und einen Satz mit ${grammarFocus.toLowerCase()}`,
+        `Schreibe eine klare Antwort und zeige, dass du ${canDo.toLowerCase()} Nutze mindestens vier Zielwörter und einen Satz mit ${grammarFocus.toLowerCase()}`,
       readingPrompt: 'Lies genau, achte auf den Grammatikfokus und rekonstruiere die Bedeutung mit eigenen Worten',
-      listeningPrompt: 'Hoere auf Satzgruppen, Endungen und Zielwoerter. Pausiere nach jeder Wortgruppe und schreibe, was du verstanden hast',
+      listeningPrompt: 'Höre auf Satzgruppen, Endungen und Zielwörter. Pausiere nach jeder Wortgruppe und schreibe, was du verstanden hast',
       dictationPrompt: (grammarFocus: string) =>
-        `Dieses Diktat prueft Rechtschreibung, Wortstellung und ${grammarFocus.toLowerCase()}. Hoere einmal zu, schreibe sorgfaeltig und wiederhole den schwierigsten Satz`,
+        `Dieses Diktat prüft Rechtschreibung, Wortstellung und ${grammarFocus.toLowerCase()}. Höre einmal zu, schreibe sorgfältig und wiederhole den schwierigsten Satz`,
     };
   }
 
@@ -514,88 +583,175 @@ const LESSON_THEMES: Record<CefrLevel, Array<{ title: string; objective: string;
 
 const GERMAN_LESSON_THEMES: Record<CefrLevel, Array<{ title: string; objective: string; canDo: string; grammarFocus: string }>> = {
   A1: [
-    { title: 'Begruessung & Vorstellung', objective: 'Begruessungen, Namen und einfache Angaben zur Person verwenden.', canDo: 'dich vorstellen und eine einfache Frage stellen.', grammarFocus: 'sein, heissen und Personalpronomen' },
+    { title: 'Begrüßung & Vorstellung', objective: 'Begrüßungen, Namen und einfache Angaben zur Person verwenden.', canDo: 'dich vorstellen und eine einfache Frage stellen.', grammarFocus: 'sein, heißen und Personalpronomen' },
     { title: 'Zahlen & Uhrzeit', objective: 'Zahlen, Tage und einfache Zeitangaben sicher erkennen.', canDo: 'sagen, wann etwas passiert.', grammarFocus: 'Zahlen, Uhrzeit und kurze Zeitphrasen' },
-    { title: 'Familie & Personen', objective: 'nahe Personen mit einfachen Adjektiven beschreiben.', canDo: 'ueber Familie und Freunde sprechen.', grammarFocus: 'Possessivartikel und einfache Adjektive' },
-    { title: 'Tagesablauf', objective: 'haeufige Handlungen im Alltag verstehen.', canDo: 'einen normalen Tag einfach beschreiben.', grammarFocus: 'Praesens regelmaessiger Verben' },
-    { title: 'Essen & Trinken', objective: 'Grundwortschatz fuer Essen in hoeflichen Bitten nutzen.', canDo: 'einfach etwas bestellen oder erfragen.', grammarFocus: 'ich moechte und ich nehme' },
-    { title: 'Orte in der Stadt', objective: 'wichtige Orte und einfache Wegfragen erkennen.', canDo: 'fragen, wo ein Ort ist.', grammarFocus: 'wo, hier, dort und einfache Praepositionen' },
-    { title: 'Wohnung & Dinge', objective: 'Zimmer und Alltagsgegenstaende benennen.', canDo: 'ein Zimmer einfach beschreiben.', grammarFocus: 'Artikel, Singular und Plural' },
-    { title: 'Einkaufen', objective: 'Preis, Farbe und Groesse verstehen.', canDo: 'etwas Einfaches kaufen.', grammarFocus: 'dieser, diese, dieses und wie viel' },
+    { title: 'Familie & Personen', objective: 'nahe Personen mit einfachen Adjektiven beschreiben.', canDo: 'über Familie und Freunde sprechen.', grammarFocus: 'Possessivartikel und einfache Adjektive' },
+    { title: 'Tagesablauf', objective: 'häufige Handlungen im Alltag verstehen.', canDo: 'einen normalen Tag einfach beschreiben.', grammarFocus: 'Präsens regelmäßiger Verben' },
+    { title: 'Essen & Trinken', objective: 'Grundwortschatz für Essen in höflichen Bitten nutzen.', canDo: 'einfach etwas bestellen oder erfragen.', grammarFocus: 'ich möchte und ich nehme' },
+    { title: 'Orte in der Stadt', objective: 'wichtige Orte und einfache Wegfragen erkennen.', canDo: 'fragen, wo ein Ort ist.', grammarFocus: 'wo, hier, dort und einfache Präpositionen' },
+    { title: 'Wohnung & Dinge', objective: 'Zimmer und Alltagsgegenstände benennen.', canDo: 'ein Zimmer einfach beschreiben.', grammarFocus: 'Artikel, Singular und Plural' },
+    { title: 'Einkaufen', objective: 'Preis, Farbe und Größe verstehen.', canDo: 'etwas Einfaches kaufen.', grammarFocus: 'dieser, diese, dieses und wie viel' },
     { title: 'Wetter & Jahreszeiten', objective: 'einfache Wetteraussagen erkennen.', canDo: 'sagen, wie das Wetter ist.', grammarFocus: 'es ist und es gibt' },
-    { title: 'Verkehr', objective: 'einfache Reisewoerter und kurze Fragen nutzen.', canDo: 'nach Bus, Zug oder Fahrkarte fragen.', grammarFocus: 'wohin, wann und kurze Fragen' },
+    { title: 'Verkehr', objective: 'einfache Reisewörter und kurze Fragen nutzen.', canDo: 'nach Bus, Zug oder Fahrkarte fragen.', grammarFocus: 'wohin, wann und kurze Fragen' },
     { title: 'Gesundheit', objective: 'einfach sagen, wie es dir geht.', canDo: 'ein einfaches Problem beschreiben.', grammarFocus: 'haben, sein und mir tut weh' },
-    { title: 'A1 Wiederholung', objective: 'Vorstellung, Alltag, Orte und Beduerfnisse verbinden.', canDo: 'ein einfaches Anfaengergespraech fuehren.', grammarFocus: 'kurze Hauptsaetze' },
+    { title: 'A1 Wiederholung', objective: 'Vorstellung, Alltag, Orte und Bedürfnisse verbinden.', canDo: 'ein einfaches Anfängergespräch führen.', grammarFocus: 'kurze Hauptsätze' },
   ],
   A2: [
-    { title: 'Letztes Wochenende', objective: 'einfache vergangene Ereignisse verstehen.', canDo: 'erzaehlen, was kuerzlich passiert ist.', grammarFocus: 'Perfekt mit haben und sein' },
-    { title: 'Plaene & Einladungen', objective: 'Plaene und hoefliche Einladungen formulieren.', canDo: 'ein einfaches Treffen vereinbaren.', grammarFocus: 'moechte, wollen und werden' },
-    { title: 'Probleme auf Reisen', objective: 'einfache Reiseprobleme erklaeren.', canDo: 'auf einer Reise um Hilfe bitten.', grammarFocus: 'weil und einfache Begruendungen' },
-    { title: 'Arbeit & Studium', objective: 'Aufgaben, Kurse und Verantwortungen beschreiben.', canDo: 'ueber einen Arbeits- oder Studientag sprechen.', grammarFocus: 'Haeufigkeitsadverbien' },
-    { title: 'Digitaler Alltag', objective: 'haeufige Technikwoerter verwenden.', canDo: 'eine einfache digitale Aufgabe erklaeren.', grammarFocus: 'Imperativ und Reihenfolgewoerter' },
-    { title: 'Termine & Behoerden', objective: 'Informationen zu Terminen und Services verstehen.', canDo: 'hoeflich um Auskunft bitten.', grammarFocus: 'Modalverben fuer Bitten' },
-    { title: 'Optionen Vergleichen', objective: 'einfache Moeglichkeiten vergleichen.', canDo: 'eine Wahl begruenden.', grammarFocus: 'Komparativ' },
-    { title: 'Geschichten & Ereignisse', objective: 'einer kurzen chronologischen Geschichte folgen.', canDo: 'ein Ereignis einfach nacherzaehlen.', grammarFocus: 'zuerst, dann, danach' },
-    { title: 'Regeln & Rat', objective: 'einfache Regeln und Ratschlaege verstehen.', canDo: 'einen einfachen Rat geben.', grammarFocus: 'sollen und muessen' },
-    { title: 'Meinungen', objective: 'einfache Meinungen mit Gruenden ausdruecken.', canDo: 'sagen, was du denkst und warum.', grammarFocus: 'ich finde, dass und weil' },
-    { title: 'Nachrichten & E-Mails', objective: 'kurze praktische Nachrichten schreiben.', canDo: 'eine klare Bitte oder Antwort senden.', grammarFocus: 'hoefliche Anrede und Schlussformel' },
-    { title: 'A2 Wiederholung', objective: 'Vergangenheit, Plaene, Meinungen und Bitten verbinden.', canDo: 'praktische Alltagssituationen bewaeltigen.', grammarFocus: 'verbundene kurze Absaetze' },
+    { title: 'Letztes Wochenende', objective: 'einfache vergangene Ereignisse verstehen.', canDo: 'erzählen, was kürzlich passiert ist.', grammarFocus: 'Perfekt mit haben und sein' },
+    { title: 'Pläne & Einladungen', objective: 'Pläne und höfliche Einladungen formulieren.', canDo: 'ein einfaches Treffen vereinbaren.', grammarFocus: 'möchte, wollen und werden' },
+    { title: 'Probleme auf Reisen', objective: 'einfache Reiseprobleme erklären.', canDo: 'auf einer Reise um Hilfe bitten.', grammarFocus: 'weil und einfache Begründungen' },
+    { title: 'Arbeit & Studium', objective: 'Aufgaben, Kurse und Verantwortungen beschreiben.', canDo: 'über einen Arbeits- oder Studientag sprechen.', grammarFocus: 'Häufigkeitsadverbien' },
+    { title: 'Digitaler Alltag', objective: 'häufige Technikwörter verwenden.', canDo: 'eine einfache digitale Aufgabe erklären.', grammarFocus: 'Imperativ und Reihenfolgewörter' },
+    { title: 'Termine & Behörden', objective: 'Informationen zu Terminen und Services verstehen.', canDo: 'höflich um Auskunft bitten.', grammarFocus: 'Modalverben für Bitten' },
+    { title: 'Optionen Vergleichen', objective: 'einfache Möglichkeiten vergleichen.', canDo: 'eine Wahl begründen.', grammarFocus: 'Komparativ' },
+    { title: 'Geschichten & Ereignisse', objective: 'einer kurzen chronologischen Geschichte folgen.', canDo: 'ein Ereignis einfach nacherzählen.', grammarFocus: 'zuerst, dann, danach' },
+    { title: 'Regeln & Rat', objective: 'einfache Regeln und Ratschläge verstehen.', canDo: 'einen einfachen Rat geben.', grammarFocus: 'sollen und müssen' },
+    { title: 'Meinungen', objective: 'einfache Meinungen mit Gründen ausdrücken.', canDo: 'sagen, was du denkst und warum.', grammarFocus: 'ich finde, dass und weil' },
+    { title: 'Nachrichten & E-Mails', objective: 'kurze praktische Nachrichten schreiben.', canDo: 'eine klare Bitte oder Antwort senden.', grammarFocus: 'höfliche Anrede und Schlussformel' },
+    { title: 'A2 Wiederholung', objective: 'Vergangenheit, Pläne, Meinungen und Bitten verbinden.', canDo: 'praktische Alltagssituationen bewältigen.', grammarFocus: 'verbundene kurze Absätze' },
   ],
   B1: [
-    { title: 'Erfahrungen Erzaehlen', objective: 'Erfahrungen mit Details und Reihenfolge beschreiben.', canDo: 'eine zusammenhaengende persoenliche Geschichte erzaehlen.', grammarFocus: 'Perfekt, Praeteritum und Konnektoren' },
-    { title: 'Probleme & Loesungen', objective: 'ein Problem erklaeren und eine Loesung vorschlagen.', canDo: 'an einer praktischen Diskussion teilnehmen.', grammarFocus: 'Ursache und Folge' },
-    { title: 'Kommunikation im Beruf', objective: 'Bitten, Updates und Prioritaeten verstehen.', canDo: 'ein nuetzliches Arbeitsupdate schreiben.', grammarFocus: 'Modalverben und hoeflicher Ton' },
-    { title: 'Lernstrategien', objective: 'Lerngewohnheiten und Fortschritt besprechen.', canDo: 'eine Lernstrategie erklaeren.', grammarFocus: 'Infinitiv mit zu' },
-    { title: 'Gemeinschaft & Alltag', objective: 'ueber lokale Themen und Services sprechen.', canDo: 'eine Meinung zu Beduerfnissen im Umfeld geben.', grammarFocus: 'Relativsaetze' },
+    { title: 'Erfahrungen Erzählen', objective: 'Erfahrungen mit Details und Reihenfolge beschreiben.', canDo: 'eine zusammenhängende persönliche Geschichte erzählen.', grammarFocus: 'Perfekt, Präteritum und Konnektoren' },
+    { title: 'Probleme & Lösungen', objective: 'ein Problem erklären und eine Lösung vorschlagen.', canDo: 'an einer praktischen Diskussion teilnehmen.', grammarFocus: 'Ursache und Folge' },
+    { title: 'Kommunikation im Beruf', objective: 'Bitten, Updates und Prioritäten verstehen.', canDo: 'ein nützliches Arbeitsupdate schreiben.', grammarFocus: 'Modalverben und höflicher Ton' },
+    { title: 'Lernstrategien', objective: 'Lerngewohnheiten und Fortschritt besprechen.', canDo: 'eine Lernstrategie erklären.', grammarFocus: 'Infinitiv mit zu' },
+    { title: 'Gemeinschaft & Alltag', objective: 'über lokale Themen und Services sprechen.', canDo: 'eine Meinung zu Bedürfnissen im Umfeld geben.', grammarFocus: 'Relativsätze' },
     { title: 'Medien & Nachrichten', objective: 'Hauptideen in nachrichtenartigen Texten erkennen.', canDo: 'einen kurzen Bericht zusammenfassen.', grammarFocus: 'indirekte Rede in Grundform' },
-    { title: 'Gesundheit & Lebensstil', objective: 'Gewohnheiten, Routinen und Rat besprechen.', canDo: 'eine Lebensstilaenderung erklaeren.', grammarFocus: 'wenn-Saetze' },
+    { title: 'Gesundheit & Lebensstil', objective: 'Gewohnheiten, Routinen und Rat besprechen.', canDo: 'eine Lebensstiländerung erklären.', grammarFocus: 'wenn-Sätze' },
     { title: 'Kultur & Reisen', objective: 'Orte und Gewohnheiten vergleichen.', canDo: 'kulturelle Unterschiede respektvoll beschreiben.', grammarFocus: 'Vergleich und Gegensatz' },
-    { title: 'Geldentscheidungen', objective: 'Budgets, Kosten und Entscheidungen verstehen.', canDo: 'eine finanzielle Entscheidung erklaeren.', grammarFocus: 'Mengenangaben' },
-    { title: 'Umwelt im Alltag', objective: 'ueber alltaegliche Umweltmassnahmen sprechen.', canDo: 'realistische Verbesserungen vorschlagen.', grammarFocus: 'Passiv Grundlagen' },
-    { title: 'Kurzpraesentationen', objective: 'Ideen fuer einen kurzen Vortrag ordnen.', canDo: 'einen klaren Punkt mit Beispielen praesentieren.', grammarFocus: 'Redemittel zur Strukturierung' },
-    { title: 'B1 Wiederholung', objective: 'Erzaehlen, Meinung, Rat und Zusammenfassung verbinden.', canDo: 'selbststaendig ueber vertraute Themen kommunizieren.', grammarFocus: 'Absatzstruktur' },
+    { title: 'Geldentscheidungen', objective: 'Budgets, Kosten und Entscheidungen verstehen.', canDo: 'eine finanzielle Entscheidung erklären.', grammarFocus: 'Mengenangaben' },
+    { title: 'Umwelt im Alltag', objective: 'über alltägliche Umweltmaßnahmen sprechen.', canDo: 'realistische Verbesserungen vorschlagen.', grammarFocus: 'Passiv Grundlagen' },
+    { title: 'Kurzpräsentationen', objective: 'Ideen für einen kurzen Vortrag ordnen.', canDo: 'einen klaren Punkt mit Beispielen präsentieren.', grammarFocus: 'Redemittel zur Strukturierung' },
+    { title: 'B1 Wiederholung', objective: 'Erzählen, Meinung, Rat und Zusammenfassung verbinden.', canDo: 'selbstständig über vertraute Themen kommunizieren.', grammarFocus: 'Absatzstruktur' },
   ],
   B2: [
-    { title: 'Akademische Thesen', objective: 'Thesen, Belege und Beispiele nachvollziehen.', canDo: 'ein Argument klar erklaeren.', grammarFocus: 'komplexe Verknuepfungen' },
+    { title: 'Akademische Thesen', objective: 'Thesen, Belege und Beispiele nachvollziehen.', canDo: 'ein Argument klar erklären.', grammarFocus: 'komplexe Verknüpfungen' },
     { title: 'Forschung & Daten', objective: 'Trends, Zahlen und vorsichtige Aussagen verstehen.', canDo: 'Daten verantwortungsvoll zusammenfassen.', grammarFocus: 'Hedging und vorsichtige Formulierungen' },
-    { title: 'Strategie im Beruf', objective: 'Ziele, Abwaegungen und Prioritaeten diskutieren.', canDo: 'eine professionelle Empfehlung schreiben.', grammarFocus: 'Konditionalsaetze und Gegensatz' },
-    { title: 'Auswirkung von Technologie', objective: 'Nutzen, Risiken und Ethik bewerten.', canDo: 'differenziert ueber Technologie argumentieren.', grammarFocus: 'Nominalisierung' },
-    { title: 'Oeffentliche Politik', objective: 'formelle Sprache in Politik und Verwaltung verstehen.', canDo: 'ein oeffentliches Thema ausgewogen erklaeren.', grammarFocus: 'Passiv und formeller Stil' },
-    { title: 'Kultur & Identitaet', objective: 'Identitaet, Werte und Zugehoerigkeit analysieren.', canDo: 'Perspektiven differenziert vergleichen.', grammarFocus: 'Konzessivsaetze' },
+    { title: 'Strategie im Beruf', objective: 'Ziele, Abwägungen und Prioritäten diskutieren.', canDo: 'eine professionelle Empfehlung schreiben.', grammarFocus: 'Konditionalsätze und Gegensatz' },
+    { title: 'Auswirkung von Technologie', objective: 'Nutzen, Risiken und Ethik bewerten.', canDo: 'differenziert über Technologie argumentieren.', grammarFocus: 'Nominalisierung' },
+    { title: 'Öffentliche Politik', objective: 'formelle Sprache in Politik und Verwaltung verstehen.', canDo: 'ein öffentliches Thema ausgewogen erklären.', grammarFocus: 'Passiv und formeller Stil' },
+    { title: 'Kultur & Identität', objective: 'Identität, Werte und Zugehörigkeit analysieren.', canDo: 'Perspektiven differenziert vergleichen.', grammarFocus: 'Konzessivsätze' },
     { title: 'Business Cases', objective: 'Markt-, Kunden- und Entscheidungssprache verstehen.', canDo: 'einen Business Case zusammenfassen.', grammarFocus: 'Ursache-Wirkung-Ketten' },
-    { title: 'Wissenschaft Vermitteln', objective: 'Belege erklaeren, ohne zu stark zu vereinfachen.', canDo: 'wissenschaftliche Ergebnisse verstaendlich kommunizieren.', grammarFocus: 'Relativ- und Partizipialkonstruktionen' },
-    { title: 'Debatte & Gegenargumente', objective: 'Gegenargumente und Erwiderungen erkennen.', canDo: 'auf gegensaetzliche Positionen reagieren.', grammarFocus: 'obwohl, dennoch und trotz' },
-    { title: 'Laengeres Hoeren', objective: 'Satzenden in laengerer Sprache erkennen.', canDo: 'Notizen aus einem dichten Abschnitt machen.', grammarFocus: 'Diskursmarker' },
-    { title: 'Formelles Schreiben', objective: 'geordnete und praezise Absaetze schreiben.', canDo: 'einen starken akademischen oder beruflichen Absatz bauen.', grammarFocus: 'Themensatz und Kohesion' },
-    { title: 'B2 Wiederholung', objective: 'Belege, Ausgewogenheit, Praezision und Fluessigkeit verbinden.', canDo: 'anspruchsvolle Studien- und Berufsthemen bewaeltigen.', grammarFocus: 'fortgeschrittene Absatzkontrolle' },
+    { title: 'Wissenschaft Vermitteln', objective: 'Belege erklären, ohne zu stark zu vereinfachen.', canDo: 'wissenschaftliche Ergebnisse verständlich kommunizieren.', grammarFocus: 'Relativ- und Partizipialkonstruktionen' },
+    { title: 'Debatte & Gegenargumente', objective: 'Gegenargumente und Erwiderungen erkennen.', canDo: 'auf gegensätzliche Positionen reagieren.', grammarFocus: 'obwohl, dennoch und trotz' },
+    { title: 'Längeres Hören', objective: 'Satzenden in längerer Sprache erkennen.', canDo: 'Notizen aus einem dichten Abschnitt machen.', grammarFocus: 'Diskursmarker' },
+    { title: 'Formelles Schreiben', objective: 'geordnete und präzise Absätze schreiben.', canDo: 'einen starken akademischen oder beruflichen Absatz bauen.', grammarFocus: 'Themensatz und Kohäsion' },
+    { title: 'B2 Wiederholung', objective: 'Belege, Ausgewogenheit, Präzision und Flüssigkeit verbinden.', canDo: 'anspruchsvolle Studien- und Berufsthemen bewältigen.', grammarFocus: 'fortgeschrittene Absatzkontrolle' },
   ],
   C1: [
-    { title: 'Nuancierte Argumente', objective: 'subtile Aussagen und Implikationen verfolgen.', canDo: 'Nuancen erklaeren, ohne Klarheit zu verlieren.', grammarFocus: 'komplexe Unterordnung' },
+    { title: 'Nuancierte Argumente', objective: 'subtile Aussagen und Implikationen verfolgen.', canDo: 'Nuancen erklären, ohne Klarheit zu verlieren.', grammarFocus: 'komplexe Unterordnung' },
     { title: 'Register & Ton', objective: 'formellen, neutralen und persuasiven Stil unterscheiden.', canDo: 'den Ton an Zielgruppe und Situation anpassen.', grammarFocus: 'Registerwechsel' },
     { title: 'Kritisches Lesen', objective: 'Annahmen und Belege bewerten.', canDo: 'einen Text fair kritisieren.', grammarFocus: 'Haltungsmarker' },
     { title: 'Professionelle Briefings', objective: 'dichte Updates schnell verarbeiten.', canDo: 'Managementinformationen zusammenfassen.', grammarFocus: 'komprimierte Nominalgruppen' },
-    { title: 'Abstrakte Konzepte', objective: 'abstrakten Wortschatz praezise verwenden.', canDo: 'komplexe Begriffe definieren und anwenden.', grammarFocus: 'Definitionsstrukturen' },
-    { title: 'Verhandlungssprache', objective: 'Zugestaendnisse und Bedingungen verstehen.', canDo: 'taktvoll verhandeln.', grammarFocus: 'diplomatische Formulierungen' },
+    { title: 'Abstrakte Konzepte', objective: 'abstrakten Wortschatz präzise verwenden.', canDo: 'komplexe Begriffe definieren und anwenden.', grammarFocus: 'Definitionsstrukturen' },
+    { title: 'Verhandlungssprache', objective: 'Zugeständnisse und Bedingungen verstehen.', canDo: 'taktvoll verhandeln.', grammarFocus: 'diplomatische Formulierungen' },
     { title: 'Akademische Synthese', objective: 'mehrere Sichtweisen verbinden.', canDo: 'Quellen in einem Absatz synthetisieren.', grammarFocus: 'Synthesesprache' },
-    { title: 'Risiko & Unsicherheit', objective: 'Wahrscheinlichkeit und Begrenzung ausdruecken.', canDo: 'Risiko verantwortungsvoll diskutieren.', grammarFocus: 'Modalitaet und Einschraenkung' },
-    { title: 'Rhetorische Mittel', objective: 'Betonung und Ueberzeugung erkennen.', canDo: 'rhetorische Wirkung erklaeren.', grammarFocus: 'Emphasestrukturen' },
+    { title: 'Risiko & Unsicherheit', objective: 'Wahrscheinlichkeit und Begrenzung ausdrücken.', canDo: 'Risiko verantwortungsvoll diskutieren.', grammarFocus: 'Modalität und Einschränkung' },
+    { title: 'Rhetorische Mittel', objective: 'Betonung und Überzeugung erkennen.', canDo: 'rhetorische Wirkung erklären.', grammarFocus: 'Emphasestrukturen' },
     { title: 'Schnelle Sprache', objective: 'reduzierte Formen und dichte Phrasen erfassen.', canDo: 'schneller Expertensprache folgen.', grammarFocus: 'Ellipse und Referenz' },
-    { title: 'Praezises Redigieren', objective: 'Klarheit, Fluss und Knappheit verbessern.', canDo: 'einen Absatz auf C1-Niveau ueberarbeiten.', grammarFocus: 'Kohesion und Knappheit' },
-    { title: 'C1 Wiederholung', objective: 'Nuance, Tempo, Register und Praezision verbinden.', canDo: 'sicher in fortgeschrittenen Situationen handeln.', grammarFocus: 'kontrollierte sprachliche Differenzierung' },
+    { title: 'Präzises Redigieren', objective: 'Klarheit, Fluss und Knappheit verbessern.', canDo: 'einen Absatz auf C1-Niveau überarbeiten.', grammarFocus: 'Kohäsion und Knappheit' },
+    { title: 'C1 Wiederholung', objective: 'Nuance, Tempo, Register und Präzision verbinden.', canDo: 'sicher in fortgeschrittenen Situationen handeln.', grammarFocus: 'kontrollierte sprachliche Differenzierung' },
   ],
   C2: [
-    { title: 'Nahezu Muttersprachlicher Fluss', objective: 'Rhythmus, Implikation und Betonung kontrollieren.', canDo: 'natuerliche anspruchsvolle Formulierungen produzieren.', grammarFocus: 'Informationsstruktur' },
-    { title: 'Subtext & Implikation', objective: 'erkennen, was angedeutet, aber nicht gesagt wird.', canDo: 'Subtext praezise erklaeren.', grammarFocus: 'pragmatische Bedeutung' },
+    { title: 'Nahezu Muttersprachlicher Fluss', objective: 'Rhythmus, Implikation und Betonung kontrollieren.', canDo: 'natürliche anspruchsvolle Formulierungen produzieren.', grammarFocus: 'Informationsstruktur' },
+    { title: 'Subtext & Implikation', objective: 'erkennen, was angedeutet, aber nicht gesagt wird.', canDo: 'Subtext präzise erklären.', grammarFocus: 'pragmatische Bedeutung' },
     { title: 'Redaktioneller Stil', objective: 'Stimme, Haltung und Eleganz analysieren.', canDo: 'mit redaktioneller Kontrolle umformulieren.', grammarFocus: 'Stil und Kadenz' },
-    { title: 'Fachdiskurs', objective: 'fachspezifische Praezision bewaeltigen.', canDo: 'Expertentexte zusammenfassen.', grammarFocus: 'technische Nominalgruppen' },
-    { title: 'Ironie & Mehrdeutigkeit', objective: 'vielschichtige Bedeutung erkennen.', canDo: 'Ironie erklaeren, ohne sie zu verflachen.', grammarFocus: 'kontrastive Rahmung' },
-    { title: 'Juristische Praezision', objective: 'Pflichten, Ausnahmen und Reichweite erkennen.', canDo: 'formelle Einschraenkungen interpretieren.', grammarFocus: 'Gueltigkeit und Qualifikation' },
-    { title: 'Literarische Textur', objective: 'Bildsprache, Rhythmus und Stimme verfolgen.', canDo: 'literarische Wirkung praezise besprechen.', grammarFocus: 'figurative Sprache' },
+    { title: 'Fachdiskurs', objective: 'fachspezifische Präzision bewältigen.', canDo: 'Expertentexte zusammenfassen.', grammarFocus: 'technische Nominalgruppen' },
+    { title: 'Ironie & Mehrdeutigkeit', objective: 'vielschichtige Bedeutung erkennen.', canDo: 'Ironie erklären, ohne sie zu verflachen.', grammarFocus: 'kontrastive Rahmung' },
+    { title: 'Juristische Präzision', objective: 'Pflichten, Ausnahmen und Reichweite erkennen.', canDo: 'formelle Einschränkungen interpretieren.', grammarFocus: 'Gültigkeit und Qualifikation' },
+    { title: 'Literarische Textur', objective: 'Bildsprache, Rhythmus und Stimme verfolgen.', canDo: 'literarische Wirkung präzise besprechen.', grammarFocus: 'figurative Sprache' },
     { title: 'Schnelle Synthese', objective: 'dichte Informationen schnell verbinden.', canDo: 'unter Zeitdruck knapp synthetisieren.', grammarFocus: 'Verdichtung' },
-    { title: 'Persuasive Meisterschaft', objective: 'Argument, Ton und Publikum kontrollieren.', canDo: 'ueberzeugende Expertentexte schreiben.', grammarFocus: 'rhetorische Architektur' },
-    { title: 'Akzent & Variation', objective: 'Aussprache- und Gebrauchsvariation bewaeltigen.', canDo: 'vielfaeltige anspruchsvolle Sprache verstehen.', grammarFocus: 'Variationsbewusstsein' },
+    { title: 'Persuasive Meisterschaft', objective: 'Argument, Ton und Publikum kontrollieren.', canDo: 'überzeugende Expertentexte schreiben.', grammarFocus: 'rhetorische Architektur' },
+    { title: 'Akzent & Variation', objective: 'Aussprache- und Gebrauchsvariation bewältigen.', canDo: 'vielfältige anspruchsvolle Sprache verstehen.', grammarFocus: 'Variationsbewusstsein' },
     { title: 'Finales Genauigkeitslabor', objective: 'kleine Fehler in Schreibung, Ordnung und Stil entfernen.', canDo: 'nahezu muttersprachliche Genauigkeit erreichen.', grammarFocus: 'Mikro-Editing' },
-    { title: 'C2 Wiederholung', objective: 'Meisterschaft, Nuance, Tempo und Stil verbinden.', canDo: 'auf nahezu muttersprachlichem Niveau agieren.', grammarFocus: 'vollstaendige Sprachkontrolle' },
+    { title: 'C2 Wiederholung', objective: 'Meisterschaft, Nuance, Tempo und Stil verbinden.', canDo: 'auf nahezu muttersprachlichem Niveau agieren.', grammarFocus: 'vollständige Sprachkontrolle' },
+  ],
+};
+
+const GERMAN_LESSON_PASSAGES: Record<CefrLevel, string[]> = {
+  A1: [
+    'Hallo, ich heiße Sara. Ich komme aus Berlin und wohne jetzt in Köln. Am Morgen trinke ich Wasser und schreibe drei neue Wörter in mein Heft.',
+    'Heute ist Montag. Der Kurs beginnt um neun Uhr. Um zehn Uhr machen wir eine kurze Pause und wiederholen die Zahlen von eins bis zwanzig.',
+    'Meine Familie ist klein. Mein Bruder ist freundlich, meine Mutter arbeitet viel, und mein Vater kocht gern. Am Abend essen wir zusammen.',
+    'Ich stehe um sieben Uhr auf. Danach wasche ich mich, frühstücke und gehe zur Schule. Jeden Tag lerne ich ein neues Wort.',
+    'Im Café bestelle ich Tee und ein Brot. Ich sage bitte und danke. Die Verkäuferin spricht langsam, und ich verstehe den Preis.',
+    'Die Apotheke ist neben dem Bahnhof. Der Supermarkt ist links, und die Schule ist rechts. Ich frage höflich nach dem Weg.',
+    'Mein Zimmer ist hell. Auf dem Tisch liegt ein Buch. Neben dem Bett steht eine Lampe, und im Schrank sind meine Jacken.',
+    'Ich kaufe einen blauen Stift. Der Stift kostet zwei Euro. Die Tasche ist zu groß, aber das Heft ist genau richtig.',
+    'Heute ist es kalt und windig. Im Winter trage ich eine Jacke. Im Sommer ist es warm, und ich gehe gern in den Park.',
+    'Ich brauche eine Fahrkarte nach Bonn. Der Zug fährt um acht Uhr ab. Am Gleis frage ich: Wann kommt der nächste Zug?',
+    'Mir geht es nicht gut. Ich habe Kopfschmerzen und brauche einen Termin beim Arzt. Die Praxis ist heute bis fünf Uhr offen.',
+    'Ich stelle mich vor, frage nach dem Weg und kaufe eine Fahrkarte. Danach schreibe ich fünf Sätze über meinen Tag.',
+  ],
+  A2: [
+    'Am Wochenende habe ich meine Freundin besucht. Wir haben zusammen gekocht, Musik gehört und später einen kurzen Spaziergang gemacht.',
+    'Morgen möchte ich ins Kino gehen. Ich lade dich ein, weil der Film früh beginnt. Wir können uns um sechs Uhr vor dem Eingang treffen.',
+    'Am Bahnhof war mein Zug verspätet. Deshalb habe ich eine Mitarbeiterin gefragt und eine neue Verbindung gesucht.',
+    'Ich studiere vormittags Deutsch und arbeite nachmittags im Büro. Meistens schreibe ich E-Mails und bereite kurze Termine vor.',
+    'Zuerst öffne ich die App, dann gebe ich mein Passwort ein. Danach lade ich das Dokument hoch und sende eine kurze Nachricht.',
+    'Ich brauche einen Termin beim Bürgerbüro. Könnten Sie mir bitte sagen, welche Unterlagen ich mitbringen muss?',
+    'Diese Wohnung ist heller, aber die andere ist günstiger. Ich wähle die kleinere Wohnung, weil sie näher an meiner Arbeit liegt.',
+    'Zuerst hat es geregnet, dann kam die Sonne heraus. Nach dem Kurs sind wir in ein Café gegangen und haben über den Tag gesprochen.',
+    'Du solltest früher losgehen, wenn der Bus oft voll ist. In der Bibliothek musst du leise sprechen und dein Handy ausschalten.',
+    'Ich finde den neuen Kurs gut, weil die Lehrerin klar spricht. Außerdem üben wir viel und bekommen schnelle Rückmeldung.',
+    'Sehr geehrte Frau Weber, vielen Dank für Ihre Nachricht. Ich komme gern zum Termin und bringe die Unterlagen mit.',
+    'Ich erzähle von gestern, plane ein Treffen, gebe eine Meinung und schreibe eine kurze höfliche Antwort.',
+  ],
+  B1: [
+    'Letztes Jahr bin ich in eine neue Stadt gezogen. Am Anfang war vieles ungewohnt, aber durch den Sprachkurs habe ich schnell Kontakte gefunden.',
+    'In unserem Haus gibt es zu wenig Platz für Fahrräder. Eine einfache Lösung wäre ein überdachter Bereich im Hof.',
+    'Im Team müssen wir die Aufgaben klar verteilen. Ich übernehme die Präsentation, während meine Kollegin die Zahlen vorbereitet.',
+    'Ich lerne besser, wenn ich kleine Ziele setze. Nach jeder Übung notiere ich Fehler und wiederhole die schwierigen Sätze laut.',
+    'In meinem Stadtteil wünschen sich viele Menschen mehr sichere Wege. Besonders Kinder und ältere Personen brauchen bessere Übergänge.',
+    'Der Artikel berichtet über steigende Mietpreise. Wichtig ist nicht nur der Preis, sondern auch die Frage, wer in der Stadt wohnen kann.',
+    'Gesunde Routinen entstehen langsam. Wer regelmäßig schläft, sich bewegt und bewusst isst, hat im Alltag oft mehr Energie.',
+    'Auf Reisen lernt man andere Gewohnheiten kennen. Manche Unterschiede sind klein, andere verändern den Blick auf den eigenen Alltag.',
+    'Vor einer größeren Ausgabe vergleiche ich Preise und Nutzen. So vermeide ich spontane Käufe und plane mein Budget realistischer.',
+    'Viele kleine Entscheidungen helfen der Umwelt. Man kann weniger Verpackung nutzen, öfter reparieren und kurze Wege zu Fuß gehen.',
+    'In meiner Präsentation erkläre ich zuerst das Problem, dann zwei Beispiele und am Ende meinen Vorschlag.',
+    'Ich erzähle eine Erfahrung, begründe eine Meinung, gebe einen Rat und fasse die wichtigsten Punkte klar zusammen.',
+  ],
+  B2: [
+    'Eine überzeugende These braucht mehr als eine persönliche Meinung. Sie sollte mit Beispielen, Belegen und einer klaren Struktur gestützt werden.',
+    'Statistiken zeigen Trends, aber sie erklären nicht automatisch die Ursachen. Deshalb müssen Daten vorsichtig interpretiert werden.',
+    'Eine gute Strategie berücksichtigt Ziele, Kosten und mögliche Risiken. Erst danach kann ein Team eine tragfähige Empfehlung formulieren.',
+    'Digitale Werkzeuge erleichtern den Alltag, werfen aber neue Fragen zum Datenschutz und zur Verantwortung auf.',
+    'Öffentliche Entscheidungen wirken oft auf verschiedene Gruppen unterschiedlich. Eine faire Analyse nennt Vorteile, Nachteile und Grenzen.',
+    'Identität entsteht aus Sprache, Erfahrung und Zugehörigkeit. Wer Perspektiven vergleicht, sollte Pauschalurteile vermeiden.',
+    'Ein Business Case ist überzeugend, wenn er Kundennutzen, Marktbedingungen und finanzielle Folgen nachvollziehbar verbindet.',
+    'Wissenschaftliche Ergebnisse müssen präzise und verständlich erklärt werden. Zu starke Vereinfachung kann die Aussage verfälschen.',
+    'In einer Debatte reicht Widerspruch allein nicht aus. Ein starkes Gegenargument erkennt die andere Position an und zeigt dann ihre Schwäche.',
+    'Bei längerem Zuhören helfen Notizen zu Schlüsselwörtern, Signalwörtern und Satzenden, damit die Argumentation nachvollziehbar bleibt.',
+    'Ein formeller Absatz beginnt mit einem klaren Themensatz. Danach folgen Belege, Erläuterung und ein präziser Schluss.',
+    'Ich verbinde These, Beleg, Gegenposition und Schlussfolgerung zu einem ausgewogenen Text auf gehobenem Niveau.',
+  ],
+  C1: [
+    'Nuancierte Argumente verlangen genaue Unterscheidungen. Ein Text kann zustimmen, einschränken und zugleich eine kritische Distanz bewahren.',
+    'Register entscheidet darüber, wie eine Aussage wirkt. Dieselbe Information kann sachlich, diplomatisch oder deutlich warnend formuliert werden.',
+    'Kritisches Lesen bedeutet nicht, einen Text abzulehnen. Es bedeutet, Annahmen, Belege und Schlussfolgerungen systematisch zu prüfen.',
+    'Ein professionelles Briefing verdichtet komplexe Informationen, ohne zentrale Risiken oder Zuständigkeiten unsichtbar zu machen.',
+    'Abstrakte Begriffe werden erst verständlich, wenn sie definiert, eingegrenzt und in einem konkreten Zusammenhang angewendet werden.',
+    'In Verhandlungen sind Zugeständnisse oft wirksamer, wenn sie an Bedingungen geknüpft und sprachlich respektvoll formuliert werden.',
+    'Eine akademische Synthese reiht Quellen nicht nur aneinander. Sie zeigt Beziehungen, Spannungen und gemeinsame Linien zwischen Positionen.',
+    'Wer über Risiko spricht, muss Wahrscheinlichkeit, Auswirkung und Unsicherheit trennen. Sonst entsteht eine scheinbare Genauigkeit.',
+    'Rhetorische Mittel lenken Aufmerksamkeit. Wiederholung, Kontrast und Zuspitzung können ein Argument verstärken oder verzerren.',
+    'Schnelle Expertensprache enthält oft Auslassungen und Verweise. Entscheidend ist, Bezugspunkte und logische Übergänge zu erkennen.',
+    'Präzises Redigieren entfernt nicht nur Fehler. Es schärft Beziehungen zwischen Sätzen, reduziert Überflüssiges und stärkt den roten Faden.',
+    'Ich formuliere differenziert, reagiere flexibel auf Register und überarbeite komplexe Aussagen mit kontrollierter Präzision.',
+  ],
+  C2: [
+    'Nahezu muttersprachlicher Sprachfluss zeigt sich in Rhythmus, Schwerpunktsetzung und der Fähigkeit, implizite Bedeutungen mitzusteuern.',
+    'Subtext entsteht dort, wo eine Aussage mehr andeutet, als sie offen benennt. Gute Analyse trennt Ton, Kontext und Absicht.',
+    'Redaktioneller Stil verlangt Entscheidungen über Tempo, Eleganz und Leserführung. Jedes Wort trägt zur Haltung des Textes bei.',
+    'Fachdiskurs verbindet terminologische Genauigkeit mit Verständlichkeit. Wer vereinfacht, darf die fachliche Reichweite nicht verfälschen.',
+    'Ironie lebt von Distanz zwischen Gesagtem und Gemeintem. Wird diese Distanz falsch gelesen, kippt die Interpretation des ganzen Textes.',
+    'Juristische und formelle Texte hängen an kleinen sprachlichen Markierungen. Ausnahmen, Bedingungen und Geltungsbereiche entscheiden über Bedeutung.',
+    'Literarische Textur entsteht aus Bildsprache, Klang, Perspektive und Rhythmus. Eine präzise Deutung respektiert diese Mehrschichtigkeit.',
+    'Schnelle Synthese unter Druck verlangt Auswahl. Nicht jede Information ist gleich wichtig; entscheidend ist die tragende Beziehung.',
+    'Persuasive Meisterschaft verbindet Logik, Ton und Timing. Ein starker Text überzeugt, ohne seine Komplexität zu verstecken.',
+    'Sprachvariation umfasst Akzent, Register und regionale Gewohnheiten. Fortgeschrittenes Verstehen erkennt Variation, ohne sie als Fehler zu behandeln.',
+    'Im finalen Genauigkeitslabor zählen kleinste Nuancen: Satzrhythmus, Wortwahl, Bezug, Zeichensetzung und stilistische Stimmigkeit.',
+    'Ich bewege mich sicher zwischen Stilen, erkenne Subtext und formuliere komplexe Bedeutungen präzise, elegant und situationsgerecht.',
   ],
 };
 
@@ -603,12 +759,12 @@ function getSkillTitle(level: CefrLevel, skill: PracticeSkill, language: Learnin
   if (language === 'German') {
     const germanTitles: Record<PracticeSkill, Record<CefrLevel, string>> = {
       Dictation: {
-        A1: 'Kernwoerter',
-        A2: 'Alltagssaetze',
+        A1: 'Kernwörter',
+        A2: 'Alltagssätze',
         B1: 'Klarer Absatz',
         B2: 'Akademischer Absatz',
         C1: 'Komplexes Argument',
-        C2: 'Natuerlicher Rhythmus',
+        C2: 'Natürlicher Rhythmus',
       },
       Reading: {
         A1: 'Lesen & Zuordnen',
@@ -620,7 +776,7 @@ function getSkillTitle(level: CefrLevel, skill: PracticeSkill, language: Learnin
       },
       Listening: {
         A1: 'Klangcheck',
-        A2: 'Phrasenhoeren',
+        A2: 'Phrasenhören',
         B1: 'Satzfluss',
         B2: 'Lange Endungen',
         C1: 'Schnelle Details',
@@ -631,7 +787,7 @@ function getSkillTitle(level: CefrLevel, skill: PracticeSkill, language: Learnin
         A2: 'Kurz Umformen',
         B1: 'Text Rekonstruieren',
         B2: 'Strukturiert Umformen',
-        C1: 'Praezise Umformung',
+        C1: 'Präzise Umformung',
         C2: 'Stiltransfer',
       },
     };
@@ -697,10 +853,10 @@ function getSkillFocus(level: CefrLevel, skill: PracticeSkill, language: Learnin
 function getSkillDescription(skill: PracticeSkill, language: LearningLanguage) {
   if (language === 'German') {
     const descriptions: Record<PracticeSkill, string> = {
-      Dictation: 'Hoere, schreibe, vergleiche und wiederhole den schwierigsten Satz.',
-      Reading: 'Lies den Text, markiere nuetzliche Woerter und uebe den Schluesselsatz.',
-      Listening: 'Hoere Satzgruppen erneut und achte auf Endungen, Konnektoren und Rhythmus.',
-      Writing: 'Baue die Idee aus dem Gedaechtnis neu auf und vergleiche sie mit dem Original.',
+      Dictation: 'Höre, schreibe, vergleiche und wiederhole den schwierigsten Satz.',
+      Reading: 'Lies den Text, markiere nützliche Wörter und übe den Schlüsselsatz.',
+      Listening: 'Höre Satzgruppen erneut und achte auf Endungen, Konnektoren und Rhythmus.',
+      Writing: 'Baue die Idee aus dem Gedächtnis neu auf und vergleiche sie mit dem Original.',
     };
 
     return descriptions[skill];
@@ -733,12 +889,12 @@ const VOCABULARY_BANK: Record<LearningLanguage, Record<CefrLevel, string[]>> = {
     C2: ['cadence', 'subtext', 'editorial', 'specialist', 'irony', 'obligation', 'imagery', 'compression', 'persuasion', 'variation', 'micro-editing', 'mastery', 'scope', 'qualification', 'texture', 'inference'],
   },
   German: {
-    A1: ['hallo', 'Name', 'heute', 'Morgen', 'Familie', 'Freund', 'Haus', 'Schule', 'Essen', 'Wasser', 'Strasse', 'Laden', 'Wetter', 'Fahrkarte', 'Arzt', 'bitte'],
-    A2: ['gestern', 'morgen', 'Einladung', 'weil', 'Problem', 'Bahnhof', 'Termin', 'vergleichen', 'guenstiger', 'Nachricht', 'Rat', 'Meinung', 'Antwort', 'Plan', 'Reise', 'online'],
-    B1: ['Erfahrung', 'Loesung', 'Prioritaet', 'Strategie', 'Gemeinschaft', 'Zusammenfassung', 'Gewohnheit', 'Kultur', 'Budget', 'Umwelt', 'Praesentation', 'Beleg', 'verbessern', 'erklaeren', 'vergleichen', 'vorschlagen'],
-    B2: ['These', 'Beleg', 'Trend', 'Strategie', 'Abwaegung', 'Auswirkung', 'Politik', 'Identitaet', 'Markt', 'Forschung', 'Gegenargument', 'Kohesion', 'praezise', 'bewerten', 'bedeutend', 'Ergebnis'],
-    C1: ['Nuance', 'Andeutung', 'Register', 'Annahme', 'Briefing', 'abstrakt', 'Zugestaendnis', 'Synthese', 'Unsicherheit', 'Rhetorik', 'Ellipse', 'Knappheit', 'Haltung', 'Einschraenkung', 'Wahrscheinlichkeit', 'Perspektive'],
-    C2: ['Rhythmus', 'Subtext', 'redaktionell', 'Fachdiskurs', 'Ironie', 'Verpflichtung', 'Bildsprache', 'Verdichtung', 'Ueberzeugung', 'Variation', 'Feinschliff', 'Meisterschaft', 'Gueltigkeit', 'Einschraenkung', 'Textur', 'Schlussfolgerung'],
+    A1: ['hallo', 'Name', 'heute', 'Morgen', 'Familie', 'Freund', 'Haus', 'Schule', 'Essen', 'Wasser', 'Straße', 'Laden', 'Wetter', 'Fahrkarte', 'Arzt', 'bitte', 'rechts', 'links', 'Zimmer', 'Termin'],
+    A2: ['gestern', 'morgen', 'Einladung', 'weil', 'Problem', 'Bahnhof', 'Termin', 'vergleichen', 'günstiger', 'Nachricht', 'Rat', 'Meinung', 'Antwort', 'Plan', 'Reise', 'online', 'Unterlagen', 'Verspätung', 'höflich', 'Vorschlag'],
+    B1: ['Erfahrung', 'Lösung', 'Priorität', 'Strategie', 'Gemeinschaft', 'Zusammenfassung', 'Gewohnheit', 'Kultur', 'Budget', 'Umwelt', 'Präsentation', 'Beleg', 'verbessern', 'erklären', 'vergleichen', 'vorschlagen', 'Übergang', 'Rückmeldung', 'Alltag', 'Standpunkt'],
+    B2: ['These', 'Beleg', 'Trend', 'Strategie', 'Abwägung', 'Auswirkung', 'Politik', 'Identität', 'Markt', 'Forschung', 'Gegenargument', 'Kohäsion', 'präzise', 'bewerten', 'bedeutend', 'Ergebnis', 'Datenschutz', 'Verantwortung', 'Signalwort', 'Schlussfolgerung'],
+    C1: ['Nuance', 'Implikation', 'Register', 'Annahme', 'Briefing', 'abstrakt', 'Zugeständnis', 'Synthese', 'Unsicherheit', 'Rhetorik', 'Ellipse', 'Knappheit', 'Haltung', 'Einschränkung', 'Wahrscheinlichkeit', 'Perspektive', 'Redigieren', 'Stimmigkeit', 'Bezugspunkt', 'Differenzierung'],
+    C2: ['Rhythmus', 'Subtext', 'redaktionell', 'Fachdiskurs', 'Ironie', 'Verpflichtung', 'Bildsprache', 'Verdichtung', 'Überzeugung', 'Variation', 'Feinschliff', 'Meisterschaft', 'Gültigkeit', 'Einschränkung', 'Textur', 'Schlussfolgerung', 'Mehrdeutigkeit', 'Reichweite', 'Kadenz', 'Sprachgefühl'],
   },
   Spanish: {
     A1: ['hola', 'nombre', 'hoy', 'manana', 'familia', 'amigo', 'casa', 'escuela', 'comida', 'agua', 'calle', 'tienda', 'tiempo', 'boleto', 'medico', 'gracias'],
@@ -802,7 +958,7 @@ function getPracticeSource(level: CefrLevel, skill: PracticeSkill, language: Lea
 function getLanguageFallbackSource(language: LearningLanguage, level: CefrLevel, skill: PracticeSkill) {
   const focus = getLocalizedSkillFocus(language, level, skill);
   const sources: Record<Exclude<LearningLanguage, 'English'>, string> = {
-    German: `Diese ${level} Uebung trainiert ${focus}. Hoer genau zu, markiere schwierige Woerter und wiederhole den wichtigsten Satz.`,
+    German: `Diese ${level}-Übung trainiert ${focus}. Höre genau zu, markiere schwierige Wörter und wiederhole den wichtigsten Satz.`,
     Spanish: `Este ejercicio ${level} entrena ${focus}. Escucha con atencion, marca las palabras dificiles y repite la frase principal.`,
     Italian: `Questo esercizio ${level} allena ${focus}. Ascolta con attenzione, segna le parole difficili e ripeti la frase principale.`,
     French: `Cet exercice ${level} travaille ${focus}. Ecoute attentivement, note les mots difficiles et repete la phrase principale.`,
@@ -820,7 +976,7 @@ function getLocalizedSkillFocus(language: LearningLanguage, level: CefrLevel, sk
     German: {
       Dictation: 'Diktat und genaue Rechtschreibung',
       Reading: 'Lesen und Verstehen',
-      Listening: 'Hoerverstehen und Satzrhythmus',
+      Listening: 'Hörverstehen und Satzrhythmus',
       Writing: 'Schreiben und klare Formulierung',
     },
     Spanish: {
@@ -887,40 +1043,40 @@ const LOCALIZED_SOURCES: Partial<Record<LearningLanguage, Partial<Record<CefrLev
   },
   German: {
     A1: {
-      Dictation: 'Ich lerne jeden Morgen. Ich hoere ein Wort und schreibe es langsam.',
-      Reading: 'Das ist mein Heft. Ich lese neue Woerter vor dem Kurs.',
-      Listening: 'Hoer den kurzen Satz. Mach nach jedem Wort eine Pause.',
-      Writing: 'Ich schreibe einen kurzen Satz ueber meinen Tag.',
+      Dictation: 'Ich lerne jeden Morgen. Ich höre ein Wort und schreibe es langsam.',
+      Reading: 'Das ist mein Heft. Ich lese neue Wörter vor dem Kurs.',
+      Listening: 'Höre den kurzen Satz. Mache nach jedem Wort eine Pause.',
+      Writing: 'Ich schreibe einen kurzen Satz über meinen Tag.',
     },
     A2: {
       Dictation: 'Gestern habe ich den Bus verpasst, deshalb bin ich zum Bahnhof gelaufen.',
-      Reading: 'Die Nachricht nennt die Zeit, den Ort und den Grund fuer das Treffen in einfachen Saetzen.',
-      Listening: 'Hoer auf den Plan, das Problem und die hoefliche Bitte am Ende der Nachricht.',
-      Writing: 'Schreibe eine kurze Antwort. Bedanke dich, erklaere deinen Plan und stelle eine klare Frage.',
+      Reading: 'Die Nachricht nennt die Zeit, den Ort und den Grund für das Treffen in einfachen Sätzen.',
+      Listening: 'Höre auf den Plan, das Problem und die höfliche Bitte am Ende der Nachricht.',
+      Writing: 'Schreibe eine kurze Antwort. Bedanke dich, erkläre deinen Plan und stelle eine klare Frage.',
     },
     B1: {
-      Dictation: 'Viele Lernende machen Fortschritte, wenn sie regelmaessig ueben und ihre Fehler am Ende der Woche pruefen.',
-      Reading: 'Der Bericht beschreibt ein lokales Problem, vergleicht zwei Loesungen und schlaegt einen praktischen Schritt vor.',
-      Listening: 'Folge dem Sprecher, wenn er eine Erfahrung erzaehlt, eine Meinung gibt und das Ergebnis zusammenfasst.',
-      Writing: 'Baue die Geschichte mit Anfang, Problem, Loesung und einer persoenlichen Meinung neu auf.',
+      Dictation: 'Viele Lernende machen Fortschritte, wenn sie regelmäßig üben und ihre Fehler am Ende der Woche prüfen.',
+      Reading: 'Der Bericht beschreibt ein lokales Problem, vergleicht zwei Lösungen und schlägt einen praktischen Schritt vor.',
+      Listening: 'Folge dem Sprecher, wenn er eine Erfahrung erzählt, eine Meinung gibt und das Ergebnis zusammenfasst.',
+      Writing: 'Baue die Geschichte mit Anfang, Problem, Lösung und einer persönlichen Meinung neu auf.',
     },
     B2: {
-      Dictation: 'Akademischer Fortschritt entsteht durch regelmaessige Uebung, genaues Zuhoeren und bewusste Arbeit an Satzenden.',
-      Reading: 'Der Abschnitt zeigt, wie Beispiele, Belege und praezise Woerter ein Argument staerker machen.',
-      Listening: 'Lange Saetze werden klarer, wenn man Konnektoren, Pausen und Endungen bewusst hoert.',
-      Writing: 'Formuliere den Absatz mit einer klaren Hauptidee, einem Beispiel und einem praezisen Schluss neu.',
+      Dictation: 'Akademischer Fortschritt entsteht durch regelmäßige Übung, genaues Zuhören und bewusste Arbeit an Satzenden.',
+      Reading: 'Der Abschnitt zeigt, wie Beispiele, Belege und präzise Wörter ein Argument stärker machen.',
+      Listening: 'Lange Sätze werden klarer, wenn man Konnektoren, Pausen und Endungen bewusst hört.',
+      Writing: 'Formuliere den Absatz mit einer klaren Hauptidee, einem Beispiel und einem präzisen Schluss neu.',
     },
     C1: {
-      Dictation: 'Fortgeschrittene Lernende verbessern ihre Genauigkeit, indem sie Nuancen erkennen und dichte Argumente praezise umformulieren.',
+      Dictation: 'Fortgeschrittene Lernende verbessern ihre Genauigkeit, indem sie Nuancen erkennen und dichte Argumente präzise umformulieren.',
       Reading: 'Das Briefing verbindet Belege, Unsicherheit und Interessen verschiedener Gruppen in einem professionellen Ton.',
-      Listening: 'Achte auf Haltung, Zugestaendnisse und implizite Bedeutung, waehrend das Argument schnell voranschreitet.',
-      Writing: 'Formuliere das Argument mit passendem Register, vorsichtiger Einschraenkung und knappen Uebergaengen neu.',
+      Listening: 'Achte auf Haltung, Zugeständnisse und implizite Bedeutung, während das Argument schnell voranschreitet.',
+      Writing: 'Formuliere das Argument mit passendem Register, vorsichtiger Einschränkung und knappen Übergängen neu.',
     },
     C2: {
-      Dictation: 'Nahezu muttersprachliche Sicherheit verlangt Gespuer fuer Subtext, Rhythmus, Register und feinste Betonungsunterschiede.',
-      Reading: 'Der Kommentar nutzt Ironie, verdichtete Bezuge und stilistische Kontraste, um die Deutung zu lenken.',
+      Dictation: 'Nahezu muttersprachliche Sicherheit verlangt Gespür für Subtext, Rhythmus, Register und feinste Betonungsunterschiede.',
+      Reading: 'Der Kommentar nutzt Ironie, verdichtete Bezüge und stilistische Kontraste, um die Deutung zu lenken.',
       Listening: 'Erkenne Implikation, Rhythmus und Variation, ohne die genaue Bedeutung der einzelnen Phrasen zu verlieren.',
-      Writing: 'Verwandle den Text in eine geschliffene Fassung mit redaktioneller Kontrolle, Praezision und natuerlichem Fluss.',
+      Writing: 'Verwandle den Text in eine geschliffene Fassung mit redaktioneller Kontrolle, Präzision und natürlichem Fluss.',
     },
   },
   Spanish: {
