@@ -15,6 +15,7 @@ import {
   normalizeLearningLanguage,
   PracticeExercise,
 } from '../lib/learning';
+import { CURRICULUM_LEVELS, LESSON_JOURNEY, getCurriculumLevel, type CurriculumLanguage } from '../lib/curriculum';
 
 export default function PracticePathPage() {
   const navigate = useNavigate();
@@ -50,6 +51,10 @@ export default function PracticePathPage() {
   const savedLevel = normalizeCefrLevel(profile?.cefr_level);
   const hasPathChanges = selectedLanguage !== savedLanguage || selectedLevel !== savedLevel;
   const isGermanPath = selectedLanguage === 'German';
+  const structuredLanguage = selectedLanguage === 'English' || selectedLanguage === 'German' ? (selectedLanguage as CurriculumLanguage) : null;
+  const phaseOneLevels = structuredLanguage
+    ? [getCurriculumLevel(structuredLanguage, 1), getCurriculumLevel(structuredLanguage, 2)].filter(Boolean)
+    : [];
   const pathCopy = isGermanPath
     ? {
         pageEyebrow: 'Übungsweg',
@@ -189,6 +194,76 @@ export default function PracticePathPage() {
           recommendation={recommendation}
           showRecommendation={false}
         />
+
+        <section className="bg-surface-container-lowest rounded-2xl p-5 sm:p-6 whisper-shadow border border-outline-variant/10">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="max-w-3xl">
+              <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary">CEFR curriculum engine</p>
+              <h2 className="mt-2 font-headline font-black text-2xl text-on-surface">12-level mastery architecture</h2>
+              <p className="mt-2 text-sm leading-6 text-on-surface-variant">
+                The new engine separates dictation, comprehension, pronunciation, speaking, writing, roleplay, lesson tests, mastery scoring, and review queue eligibility.
+              </p>
+              <Link
+                to="/curriculum"
+                className="mt-4 inline-flex rounded-full bg-primary px-5 py-3 text-sm font-bold text-on-primary hover:bg-primary-dim transition"
+              >
+                Open curriculum beta
+              </Link>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2">
+              {CURRICULUM_LEVELS.map((level) => (
+                <span
+                  key={level.levelNumber}
+                  className={`rounded-xl px-3 py-2 text-center text-xs font-black ${
+                    phaseOneLevels.some((item) => item?.levelNumber === level.levelNumber)
+                      ? 'bg-primary text-on-primary'
+                      : 'bg-surface-container-low text-on-surface-variant'
+                  }`}
+                >
+                  {level.levelNumber}. {level.label}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-5 grid grid-cols-1 lg:grid-cols-12 gap-5">
+            <div className="lg:col-span-7 rounded-2xl bg-surface-container-low p-4">
+              <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Lesson journey</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
+                {LESSON_JOURNEY.map((step) => (
+                  <div key={step.order} className="rounded-xl bg-surface-container-lowest px-3 py-2">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-primary">Step {step.order}</p>
+                    <p className="mt-1 text-sm font-headline font-bold text-on-surface">{step.title}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="lg:col-span-5 rounded-2xl bg-surface-container-low p-4">
+              <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Phase 1 curriculum data</p>
+              {phaseOneLevels.length > 0 ? (
+                <div className="space-y-3">
+                  {phaseOneLevels.map((level) => (
+                    <div key={level!.title} className="rounded-xl bg-surface-container-lowest px-4 py-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="font-headline font-black text-on-surface">{level!.title}</p>
+                        <span className="rounded-full bg-primary-container px-3 py-1 text-[10px] font-bold text-primary">
+                          {level!.lessons.length} lessons
+                        </span>
+                      </div>
+                      <p className="mt-2 text-xs leading-5 text-on-surface-variant">
+                        {level!.lessons[0].theme} through {level!.lessons[level!.lessons.length - 1].theme}; {level!.lessons[0].exercises.length} exercise steps per lesson.
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm leading-6 text-on-surface-variant">
+                  The new curriculum engine currently ships Level 1 and Level 2 for English and German. Other languages keep the legacy fallback path for now.
+                </p>
+              )}
+            </div>
+          </div>
+        </section>
 
         <section id="training-plan" className="scroll-mt-24">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">

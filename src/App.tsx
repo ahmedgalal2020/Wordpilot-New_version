@@ -16,6 +16,7 @@ import AccountPage from './pages/AccountPage';
 import CertificatesPage from './pages/CertificatesPage';
 import LibraryPage from './pages/LibraryPage';
 import PracticePathPage from './pages/PracticePathPage';
+import CurriculumPage from './pages/CurriculumPage';
 import ShadowingPracticePage from './pages/ShadowingPracticePage';
 import HistoryPage from './pages/HistoryPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
@@ -51,6 +52,7 @@ export default function App() {
               <Route path="/ai-lab" element={<AILab />} />
               <Route path="/workspace" element={<DictationWorkspace />} />
               <Route path="/practice-path" element={<PracticePathPage />} />
+              <Route path="/curriculum" element={<CurriculumPage />} />
               <Route path="/shadowing" element={<ShadowingPracticePage />} />
               <Route path="/history" element={<HistoryPage />} />
               <Route path="/account" element={<AccountPage />} />
