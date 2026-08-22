@@ -73,7 +73,7 @@ export function PublicOnlyRoute() {
 
 export function AdminRoute() {
   const { user, loading, authReady, authMessage } = useAuth();
-  const { isAdmin, loading: adminLoading } = useAdminAccess(user);
+  const { isAdmin, loading: adminLoading, error: adminError } = useAdminAccess(user);
   const location = useLocation();
 
   if (loading || adminLoading) {
@@ -86,6 +86,10 @@ export function AdminRoute() {
 
   if (!user) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  }
+
+  if (adminError) {
+    return <FullScreenState message={`Admin service unavailable. ${adminError}`} />;
   }
 
   if (!isAdmin) {
