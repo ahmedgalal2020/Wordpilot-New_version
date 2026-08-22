@@ -3,28 +3,41 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Navigate, Route, Routes } from 'react-router-dom';
 import { Footer, Navbar } from './components/Layout';
 import { AdminRoute, ProtectedRoute, PublicOnlyRoute } from './components/RouteGuards';
 import LandingPage from './pages/LandingPage';
-import Dashboard from './pages/Dashboard';
-import AILab from './pages/AILab';
-import DictationWorkspace from './pages/DictationWorkspace';
 import AuthPage from './pages/AuthPage';
 import PricingPage from './pages/PricingPage';
-import AccountPage from './pages/AccountPage';
-import CertificatesPage from './pages/CertificatesPage';
-import LibraryPage from './pages/LibraryPage';
-import PracticePathPage from './pages/PracticePathPage';
-import CurriculumPage from './pages/CurriculumPage';
-import ShadowingPracticePage from './pages/ShadowingPracticePage';
-import HistoryPage from './pages/HistoryPage';
+import InfoPage from './pages/InfoPages';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
-import AdminDashboard from './pages/AdminDashboard';
-import InfoPage from './pages/InfoPages';
 import { DynamicTitle } from './components/DynamicTitle';
 import { SessionSecurityPrompt } from './components/SessionSecurityPrompt';
+
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const AILab = lazy(() => import('./pages/AILab'));
+const DictationWorkspace = lazy(() => import('./pages/DictationWorkspace'));
+const AccountPage = lazy(() => import('./pages/AccountPage'));
+const CertificatesPage = lazy(() => import('./pages/CertificatesPage'));
+const LibraryPage = lazy(() => import('./pages/LibraryPage'));
+const PracticePathPage = lazy(() => import('./pages/PracticePathPage'));
+const CurriculumPage = lazy(() => import('./pages/CurriculumPage'));
+const ShadowingPracticePage = lazy(() => import('./pages/ShadowingPracticePage'));
+const HistoryPage = lazy(() => import('./pages/HistoryPage'));
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+
+function PageLoadingState() {
+  return (
+    <main className="min-h-[60vh] flex items-center justify-center px-6">
+      <div className="inline-flex items-center gap-3 rounded-full bg-surface-container-low px-5 py-3 text-sm font-semibold text-on-surface-variant">
+        <span className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse"></span>
+        Loading workspace...
+      </div>
+    </main>
+  );
+}
 
 export default function App() {
   return (
@@ -34,36 +47,38 @@ export default function App() {
       <div className="min-h-screen flex flex-col">
         <Navbar />
         <div className="flex-grow">
-          <Routes>
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/pricing" element={<PricingPage />} />
-            <Route path="/privacy" element={<InfoPage />} />
-            <Route path="/terms" element={<InfoPage />} />
-            <Route path="/help" element={<InfoPage />} />
-            <Route path="/contact" element={<InfoPage />} />
-            <Route element={<PublicOnlyRoute />}>
-              <Route path="/login" element={<AuthPage />} />
-              <Route path="/signup" element={<AuthPage />} />
-              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-            </Route>
-            <Route path="/reset-password" element={<ResetPasswordPage />} />
-            <Route element={<ProtectedRoute />}>
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/ai-lab" element={<AILab />} />
-              <Route path="/workspace" element={<DictationWorkspace />} />
-              <Route path="/practice-path" element={<PracticePathPage />} />
-              <Route path="/curriculum" element={<CurriculumPage />} />
-              <Route path="/shadowing" element={<ShadowingPracticePage />} />
-              <Route path="/history" element={<HistoryPage />} />
-              <Route path="/account" element={<AccountPage />} />
-              <Route path="/certificates" element={<CertificatesPage />} />
-              <Route path="/library" element={<LibraryPage />} />
-            </Route>
-            <Route element={<AdminRoute />}>
-              <Route path="/admin" element={<AdminDashboard />} />
-            </Route>
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+          <Suspense fallback={<PageLoadingState />}>
+            <Routes>
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/pricing" element={<PricingPage />} />
+              <Route path="/privacy" element={<InfoPage />} />
+              <Route path="/terms" element={<InfoPage />} />
+              <Route path="/help" element={<InfoPage />} />
+              <Route path="/contact" element={<InfoPage />} />
+              <Route element={<PublicOnlyRoute />}>
+                <Route path="/login" element={<AuthPage />} />
+                <Route path="/signup" element={<AuthPage />} />
+                <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              </Route>
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
+              <Route element={<ProtectedRoute />}>
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/ai-lab" element={<AILab />} />
+                <Route path="/workspace" element={<DictationWorkspace />} />
+                <Route path="/practice-path" element={<PracticePathPage />} />
+                <Route path="/curriculum" element={<CurriculumPage />} />
+                <Route path="/shadowing" element={<ShadowingPracticePage />} />
+                <Route path="/history" element={<HistoryPage />} />
+                <Route path="/account" element={<AccountPage />} />
+                <Route path="/certificates" element={<CertificatesPage />} />
+                <Route path="/library" element={<LibraryPage />} />
+              </Route>
+              <Route element={<AdminRoute />}>
+                <Route path="/admin" element={<AdminDashboard />} />
+              </Route>
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
         </div>
         <Footer />
       </div>
