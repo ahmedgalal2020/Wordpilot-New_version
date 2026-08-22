@@ -4,7 +4,7 @@
 
 # WordPilot Setup
 
-This project is being upgraded from a UI prototype into a real application with authentication, user profiles, saved texts, AI history, and dictation session persistence.
+This project is being upgraded from a UI prototype into a real application with authentication, user profiles, saved texts, AI history, dictation session persistence, billing, and admin operations.
 
 ## Stack
 
@@ -12,6 +12,7 @@ This project is being upgraded from a UI prototype into a real application with 
 - Tailwind CSS v4
 - Supabase Auth
 - Supabase Postgres
+- Netlify Functions
 - Supabase Storage (planned next)
 
 ## Local Setup
@@ -21,14 +22,15 @@ This project is being upgraded from a UI prototype into a real application with 
 1. Install dependencies:
    `npm install`
 2. Copy `.env.example` to `.env.local`
-3. Fill in:
+3. Fill in the public Supabase values:
    `VITE_SUPABASE_URL`
    `VITE_SUPABASE_ANON_KEY`
+4. Fill in server-only values for API-backed features:
    `GEMINI_API_KEY`
    `STRIPE_SECRET_KEY`
    `SUPABASE_SERVICE_ROLE_KEY`
-4. Run the SQL in [schema.sql](/C:/Users/galal/Desktop/WORDPILOT%20New_version/supabase/schema.sql:1) inside your Supabase SQL editor
-5. Start the app:
+5. Run the SQL migrations in `supabase/migrations` inside your Supabase SQL editor if they have not already been applied.
+6. Start the app:
    `npm run dev`
 
 ## Implemented Foundation
@@ -45,10 +47,11 @@ This project is being upgraded from a UI prototype into a real application with 
 - Server-side billing sync and admin access checks
 - Security hardening migration for billing RLS
 - Idle session timeout with a keep-session prompt
+- Netlify Function API for production `/api/*` routes
 
 ## Before Testing Billing Or Admin
 
-- Apply the latest Supabase migrations, including `supabase/migrations/202605040001_security_hardening.sql`.
+- Apply the latest Supabase migrations.
 - Set `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `GEMINI_API_KEY`, and `APP_URL` in `.env.local`.
 - Optional: tune `VITE_IDLE_TIMEOUT_MINUTES` and `VITE_IDLE_WARNING_SECONDS` for stricter or more relaxed browser session timeout behavior.
 - Restart `npm run dev` after changing environment variables.
@@ -56,9 +59,21 @@ This project is being upgraded from a UI prototype into a real application with 
 ## Netlify Production
 
 - Production URL: `https://wordpilot.netlify.app/`
-- Netlify build command: `npm run build`
+- Netlify build command: `npm run lint && npm run build`
 - Netlify publish directory: `dist`
+- Production API routes are deployed from `netlify/functions/api.mts` and served from the same origin under `/api/*`.
+- Keep `VITE_API_BASE_URL` empty when the frontend and Netlify Function API are on the same site.
 - Client auth redirects use `VITE_APP_URL=https://wordpilot.netlify.app`.
-- SPA routing is handled by `netlify.toml` and `public/_redirects`.
-- The contact page uses Netlify Forms. Enable form detection in Netlify and configure notification recipients in the Netlify Forms UI.
-- API-backed features still require a deployed backend for the routes in `server.ts` (`/api/ai`, `/api/stripe`, `/api/billing`, and `/api/admin`). Set `VITE_API_BASE_URL` to that backend origin in Netlify, and set the backend environment variables: `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_EMAILS` or `ADMIN_USER_IDS`, `GEMINI_API_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY`, `BILLING_EMAIL_FROM`, `APP_URL=https://wordpilot.netlify.app`, `PUBLIC_APP_URL=https://wordpilot.netlify.app`, and `ALLOWED_ORIGINS=https://wordpilot.netlify.app`.
+- SPA routing and API rewrites are handled by `netlify.toml`.
+- Store `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `GEMINI_API_KEY`, `STRIPE_WEBHOOK_SECRET`, and `RESEND_API_KEY` as secret Netlify environment variables.
+- Public browser variables may keep the `VITE_` prefix only when they are intentionally safe to expose, such as `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `VITE_STRIPE_PUBLISHABLE_KEY`.
+- Do not use `VITE_GEMINI_API_KEY`; AI generation must go through the server-side `GEMINI_API_KEY` used by the Netlify Function.
+- Set `APP_URL=https://wordpilot.netlify.app`, `PUBLIC_APP_URL=https://wordpilot.netlify.app`, and `ALLOWED_ORIGINS=https://wordpilot.netlify.app` in Netlify.
+
+## Production Security Checklist
+
+- Rotate any token or service key that has been shared outside the secrets manager.
+- Revoke public execute permissions from Supabase helper functions that should not be callable by app users.
+- Complete Stripe webhook signature verification and subscription fulfillment before relying on paid subscriptions in production.
+- Protect the GitHub `main` branch with pull requests and required checks.
+- Keep the repository private if business logic or unreleased product details should not be public.
