@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Award, CalendarDays, Download, Medal, ScrollText } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { jsPDF } from 'jspdf';
 import { Certificate } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -23,6 +22,7 @@ export default function CertificatesPage() {
   const { user, profile } = useAuth();
   const [searchParams] = useSearchParams();
   const [certificates, setCertificates] = useState<Certificate[]>(FALLBACK_CERTIFICATES);
+  const [downloadingCertificateId, setDownloadingCertificateId] = useState<string | null>(null);
   const highlighted = searchParams.get('highlight');
 
   useEffect(() => {
@@ -58,144 +58,151 @@ export default function CertificatesPage() {
   const activeCertificate =
     certificates.find((certificate) => certificate.id === highlighted) ?? certificates[0];
 
-  function handleDownloadPdf(certificate: Certificate) {
-    const learnerName =
-      profile?.full_name?.trim() ||
-      user?.user_metadata.full_name?.trim() ||
-      user?.email?.split('@')[0] ||
-      'WordPilot Learner';
-    const issuedOn = new Date(certificate.issuedAt).toLocaleDateString('en-US', {
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-    });
-    const certificateCode = certificate.id.slice(0, 8).toUpperCase();
-    const doc = new jsPDF({
-      orientation: 'landscape',
-      unit: 'pt',
-      format: 'a4',
-    });
+  async function handleDownloadPdf(certificate: Certificate) {
+    setDownloadingCertificateId(certificate.id);
 
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-    const outerX = 28;
-    const outerY = 28;
-    const outerWidth = pageWidth - outerX * 2;
-    const outerHeight = pageHeight - outerY * 2;
-    const innerX = outerX + 18;
-    const innerY = outerY + 18;
-    const innerWidth = outerWidth - 36;
-    const primary: [number, number, number] = [0, 83, 219];
-    const textDark: [number, number, number] = [32, 49, 61];
-    const textMuted: [number, number, number] = [86, 109, 123];
-    const softBlue: [number, number, number] = [236, 244, 255];
+    try {
+      const { jsPDF } = await import('jspdf');
+      const learnerName =
+        profile?.full_name?.trim() ||
+        user?.user_metadata.full_name?.trim() ||
+        user?.email?.split('@')[0] ||
+        'WordPilot Learner';
+      const issuedOn = new Date(certificate.issuedAt).toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric',
+      });
+      const certificateCode = certificate.id.slice(0, 8).toUpperCase();
+      const doc = new jsPDF({
+        orientation: 'landscape',
+        unit: 'pt',
+        format: 'a4',
+      });
 
-    doc.setFillColor(247, 250, 252);
-    doc.rect(0, 0, pageWidth, pageHeight, 'F');
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const outerX = 28;
+      const outerY = 28;
+      const outerWidth = pageWidth - outerX * 2;
+      const outerHeight = pageHeight - outerY * 2;
+      const innerX = outerX + 18;
+      const innerY = outerY + 18;
+      const innerWidth = outerWidth - 36;
+      const primary: [number, number, number] = [0, 83, 219];
+      const textDark: [number, number, number] = [32, 49, 61];
+      const textMuted: [number, number, number] = [86, 109, 123];
+      const softBlue: [number, number, number] = [236, 244, 255];
 
-    doc.setDrawColor(...primary);
-    doc.setLineWidth(2.5);
-    doc.roundedRect(outerX, outerY, outerWidth, outerHeight, 26, 26, 'S');
+      doc.setFillColor(247, 250, 252);
+      doc.rect(0, 0, pageWidth, pageHeight, 'F');
 
-    doc.setDrawColor(218, 230, 244);
-    doc.setLineWidth(1);
-    doc.roundedRect(innerX, innerY, innerWidth, outerHeight - 36, 18, 18, 'S');
+      doc.setDrawColor(...primary);
+      doc.setLineWidth(2.5);
+      doc.roundedRect(outerX, outerY, outerWidth, outerHeight, 26, 26, 'S');
 
-    doc.setFillColor(...softBlue);
-    doc.circle(pageWidth - 120, pageHeight - 95, 54, 'F');
-    doc.setFillColor(225, 237, 255);
-    doc.circle(pageWidth - 120, pageHeight - 95, 34, 'F');
+      doc.setDrawColor(218, 230, 244);
+      doc.setLineWidth(1);
+      doc.roundedRect(innerX, innerY, innerWidth, outerHeight - 36, 18, 18, 'S');
 
-    doc.setTextColor(...primary);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(24);
-    doc.text('WordPilot', outerX + 30, outerY + 44);
-
-    doc.setFontSize(10);
-    doc.text('VERIFIED CERTIFICATE', outerX + 30, outerY + 72);
-
-    doc.setTextColor(...textDark);
-    doc.setFontSize(34);
-    doc.text('Certificate of Achievement', outerX + 30, outerY + 122);
-
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(15);
-    doc.setTextColor(...textMuted);
-    const introText = doc.splitTextToSize(
-      'This document certifies the learner below for an outstanding dictation performance recorded inside WordPilot.',
-      470,
-    );
-    doc.text(introText, outerX + 30, outerY + 154, { lineHeightFactor: 1.45 });
-
-    doc.setTextColor(...primary);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(30);
-    doc.text(learnerName, outerX + 30, outerY + 238);
-
-    doc.setTextColor(...textDark);
-    doc.setFontSize(20);
-    const achievementLines = doc.splitTextToSize(
-      `has successfully completed ${certificate.level} ${certificate.language} ${certificate.sessionTitle} with a final score of ${certificate.score}%.`,
-      600,
-    );
-    doc.text(achievementLines, outerX + 30, outerY + 274, { lineHeightFactor: 1.45 });
-
-    const cardTop = outerY + 330;
-    const gap = 14;
-    const cardWidth = (innerWidth - 30 - gap * 3) / 4;
-    const cardHeight = 92;
-
-    const metrics = [
-      { label: 'Score', value: `${certificate.score}%` },
-      { label: 'Level', value: certificate.level },
-      { label: 'Issued', value: issuedOn },
-      { label: 'Certificate ID', value: certificateCode },
-    ];
-
-    metrics.forEach((metric, index) => {
-      const x = outerX + 30 + index * (cardWidth + gap);
       doc.setFillColor(...softBlue);
-      doc.setDrawColor(219, 230, 245);
-      doc.roundedRect(x, cardTop, cardWidth, cardHeight, 16, 16, 'FD');
+      doc.circle(pageWidth - 120, pageHeight - 95, 54, 'F');
+      doc.setFillColor(225, 237, 255);
+      doc.circle(pageWidth - 120, pageHeight - 95, 34, 'F');
 
+      doc.setTextColor(...primary);
       doc.setFont('helvetica', 'bold');
+      doc.setFontSize(24);
+      doc.text('WordPilot', outerX + 30, outerY + 44);
+
       doc.setFontSize(10);
-      doc.setTextColor(...textMuted);
-      doc.text(metric.label.toUpperCase(), x + 18, cardTop + 25);
+      doc.text('VERIFIED CERTIFICATE', outerX + 30, outerY + 72);
 
-      doc.setFontSize(metric.label === 'Issued' ? 18 : 22);
       doc.setTextColor(...textDark);
-      const metricLines = doc.splitTextToSize(metric.value, cardWidth - 34);
-      doc.text(metricLines, x + 18, cardTop + 58);
-    });
+      doc.setFontSize(34);
+      doc.text('Certificate of Achievement', outerX + 30, outerY + 122);
 
-    doc.setFillColor(245, 249, 255);
-    doc.setDrawColor(219, 230, 245);
-    doc.roundedRect(outerX + 30, outerY + 448, 470, 88, 18, 18, 'FD');
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(13);
-    doc.setTextColor(...textMuted);
-    const noteLines = doc.splitTextToSize(
-      'Keep this certificate as a clean record of your achievement. It reflects your strongest verified result in the dictation workspace.',
-      420,
-    );
-    doc.text(noteLines, outerX + 50, outerY + 482, { lineHeightFactor: 1.5 });
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(15);
+      doc.setTextColor(...textMuted);
+      const introText = doc.splitTextToSize(
+        'This document certifies the learner below for an outstanding dictation performance recorded inside WordPilot.',
+        470,
+      );
+      doc.text(introText, outerX + 30, outerY + 154, { lineHeightFactor: 1.45 });
 
-    const signatureX = pageWidth - 270;
-    const signatureY = pageHeight - 112;
-    doc.setDrawColor(176, 191, 205);
-    doc.line(signatureX, signatureY, signatureX + 170, signatureY);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
-    doc.setTextColor(...textDark);
-    doc.text('WordPilot Verification', signatureX, signatureY + 18);
+      doc.setTextColor(...primary);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(30);
+      doc.text(learnerName, outerX + 30, outerY + 238);
 
-    const fileSafeTitle = `${certificate.level}-${certificate.language}-${certificate.sessionTitle}`
-      .toLowerCase()
-      .replaceAll(/[^a-z0-9]+/g, '-')
-      .replaceAll(/^-|-$/g, '');
+      doc.setTextColor(...textDark);
+      doc.setFontSize(20);
+      const achievementLines = doc.splitTextToSize(
+        `has successfully completed ${certificate.level} ${certificate.language} ${certificate.sessionTitle} with a final score of ${certificate.score}%.`,
+        600,
+      );
+      doc.text(achievementLines, outerX + 30, outerY + 274, { lineHeightFactor: 1.45 });
 
-    doc.save(`wordpilot-certificate-${fileSafeTitle || certificateCode}.pdf`);
+      const cardTop = outerY + 330;
+      const gap = 14;
+      const cardWidth = (innerWidth - 30 - gap * 3) / 4;
+      const cardHeight = 92;
+
+      const metrics = [
+        { label: 'Score', value: `${certificate.score}%` },
+        { label: 'Level', value: certificate.level },
+        { label: 'Issued', value: issuedOn },
+        { label: 'Certificate ID', value: certificateCode },
+      ];
+
+      metrics.forEach((metric, index) => {
+        const x = outerX + 30 + index * (cardWidth + gap);
+        doc.setFillColor(...softBlue);
+        doc.setDrawColor(219, 230, 245);
+        doc.roundedRect(x, cardTop, cardWidth, cardHeight, 16, 16, 'FD');
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.setTextColor(...textMuted);
+        doc.text(metric.label.toUpperCase(), x + 18, cardTop + 25);
+
+        doc.setFontSize(metric.label === 'Issued' ? 18 : 22);
+        doc.setTextColor(...textDark);
+        const metricLines = doc.splitTextToSize(metric.value, cardWidth - 34);
+        doc.text(metricLines, x + 18, cardTop + 58);
+      });
+
+      doc.setFillColor(245, 249, 255);
+      doc.setDrawColor(219, 230, 245);
+      doc.roundedRect(outerX + 30, outerY + 448, 470, 88, 18, 18, 'FD');
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(13);
+      doc.setTextColor(...textMuted);
+      const noteLines = doc.splitTextToSize(
+        'Keep this certificate as a clean record of your achievement. It reflects your strongest verified result in the dictation workspace.',
+        420,
+      );
+      doc.text(noteLines, outerX + 50, outerY + 482, { lineHeightFactor: 1.5 });
+
+      const signatureX = pageWidth - 270;
+      const signatureY = pageHeight - 112;
+      doc.setDrawColor(176, 191, 205);
+      doc.line(signatureX, signatureY, signatureX + 170, signatureY);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12);
+      doc.setTextColor(...textDark);
+      doc.text('WordPilot Verification', signatureX, signatureY + 18);
+
+      const fileSafeTitle = `${certificate.level}-${certificate.language}-${certificate.sessionTitle}`
+        .toLowerCase()
+        .replaceAll(/[^a-z0-9]+/g, '-')
+        .replaceAll(/^-|-$/g, '');
+
+      doc.save(`wordpilot-certificate-${fileSafeTitle || certificateCode}.pdf`);
+    } finally {
+      setDownloadingCertificateId(null);
+    }
   }
 
   return (
@@ -243,10 +250,11 @@ export default function CertificatesPage() {
             <button
               type="button"
               onClick={() => handleDownloadPdf(activeCertificate)}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/12 px-5 py-3 font-semibold text-on-primary transition hover:bg-white/18"
+              disabled={downloadingCertificateId === activeCertificate.id}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/20 bg-white/12 px-5 py-3 font-semibold text-on-primary transition hover:bg-white/18 disabled:cursor-wait disabled:opacity-70"
             >
               <Download className="w-4 h-4" />
-              Download PDF
+              {downloadingCertificateId === activeCertificate.id ? 'Preparing PDF...' : 'Download PDF'}
             </button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-10">
