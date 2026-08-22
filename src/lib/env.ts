@@ -10,7 +10,11 @@ export function getAppUrl() {
     return productionAppUrl;
   }
 
-  return 'https://wordpilot.netlify.app';
+  if (typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+
+  return 'https://wordpilot.itscope24.de';
 }
 
 export function getAppRedirectUrl(path = '/') {
