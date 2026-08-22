@@ -7,6 +7,7 @@ import { fetchApi } from '../lib/api';
 export function useAdminAccess(user: User | null) {
   const [databaseAdmin, setDatabaseAdmin] = useState(false);
   const [databaseCheckLoading, setDatabaseCheckLoading] = useState(true);
+  const [databaseError, setDatabaseError] = useState<string | null>(null);
   const supabaseReady = hasSupabaseEnv();
 
   const needsDatabaseCheck = Boolean(user && supabaseReady);
@@ -14,12 +15,14 @@ export function useAdminAccess(user: User | null) {
   useEffect(() => {
     if (!needsDatabaseCheck) {
       setDatabaseAdmin(false);
+      setDatabaseError(null);
       setDatabaseCheckLoading(false);
       return;
     }
 
     let active = true;
     setDatabaseCheckLoading(true);
+    setDatabaseError(null);
 
     async function loadAdminAccess() {
       if (!user) return;
@@ -31,6 +34,7 @@ export function useAdminAccess(user: User | null) {
         if (!accessToken) {
           if (active) {
             setDatabaseAdmin(false);
+            setDatabaseError(null);
             setDatabaseCheckLoading(false);
           }
           return;
@@ -42,15 +46,24 @@ export function useAdminAccess(user: User | null) {
           },
         });
         const contentType = response.headers.get('content-type') ?? '';
-        const payload = contentType.includes('application/json') ? await response.json().catch(() => null) : null;
+        const isJson = contentType.includes('application/json');
+        const payload = isJson ? await response.json().catch(() => null) : null;
 
         if (active) {
           setDatabaseAdmin(Boolean(response.ok && payload?.isAdmin === true));
+          setDatabaseError(
+            !isJson
+              ? 'Admin service is returning the website instead of API data. Check the Netlify Function deploy.'
+              : response.status >= 500
+                ? payload?.error ?? 'Admin service is temporarily unavailable.'
+                : null,
+          );
           setDatabaseCheckLoading(false);
         }
-      } catch {
+      } catch (error) {
         if (active) {
           setDatabaseAdmin(false);
+          setDatabaseError(error instanceof Error ? error.message : 'Admin data is not available.');
           setDatabaseCheckLoading(false);
         }
       }
@@ -66,5 +79,6 @@ export function useAdminAccess(user: User | null) {
   return {
     isAdmin: databaseAdmin,
     loading: needsDatabaseCheck && databaseCheckLoading,
+    error: databaseError,
   };
 }
