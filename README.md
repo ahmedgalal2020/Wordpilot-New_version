@@ -58,17 +58,18 @@ This project is being upgraded from a UI prototype into a real application with 
 
 ## Netlify Production
 
-- Production URL: `https://wordpilot.netlify.app/`
-- Netlify build command: `npm run lint && npm run build`
+- Production URL: `https://wordpilot.itscope24.de/`
+- Netlify fallback URL: `https://wordpilot.netlify.app/`
+- Netlify build command: `npm run build`
 - Netlify publish directory: `dist`
 - Production API routes are deployed from `netlify/functions/api.mts` and served from the same origin under `/api/*`.
 - Keep `VITE_API_BASE_URL` empty when the frontend and Netlify Function API are on the same site.
-- Client auth redirects use `VITE_APP_URL=https://wordpilot.netlify.app`.
+- Client auth redirects use `VITE_APP_URL=https://wordpilot.itscope24.de`.
 - SPA routing and API rewrites are handled by `netlify.toml`.
 - Store `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `GEMINI_API_KEY`, `STRIPE_WEBHOOK_SECRET`, and `RESEND_API_KEY` as secret Netlify environment variables.
 - Public browser variables may keep the `VITE_` prefix only when they are intentionally safe to expose, such as `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `VITE_STRIPE_PUBLISHABLE_KEY`.
 - Do not use `VITE_GEMINI_API_KEY`; AI generation must go through the server-side `GEMINI_API_KEY` used by the Netlify Function.
-- Set `APP_URL=https://wordpilot.netlify.app`, `PUBLIC_APP_URL=https://wordpilot.netlify.app`, and `ALLOWED_ORIGINS=https://wordpilot.netlify.app` in Netlify.
+- Set `APP_URL=https://wordpilot.itscope24.de`, `PUBLIC_APP_URL=https://wordpilot.itscope24.de`, and `ALLOWED_ORIGINS=https://wordpilot.itscope24.de` in Netlify.
 
 ## Production Security Checklist
 
