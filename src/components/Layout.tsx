@@ -190,13 +190,13 @@ export function Navbar() {
   }
 
   return (
-    <nav className="bg-surface fixed top-0 w-full z-50 border-b border-surface-container">
-      <div className="flex justify-between items-center h-16 px-4 sm:px-6 lg:px-8 max-w-[1440px] mx-auto gap-3">
+    <nav className="fixed top-0 z-50 w-full border-b border-surface-container bg-surface/95 backdrop-blur supports-[backdrop-filter]:bg-surface/90" aria-label="Primary navigation">
+      <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
         <Link to="/" className="shrink-0" aria-label="WordPilot home">
           <img src="/wordpilot-logo.png" alt="WordPilot" className="h-8 w-auto sm:h-9" />
         </Link>
 
-        <div className="hidden lg:flex items-center gap-6 xl:gap-8 font-headline font-semibold tracking-tight">
+        <div className="hidden items-center gap-1 rounded-full bg-surface-container-low px-1.5 py-1 font-headline text-sm font-semibold tracking-tight lg:flex xl:gap-2">
           {user && <NavLink to="/dashboard">Dashboard</NavLink>}
           {user && <NavLink to="/practice-path">Practice Path</NavLink>}
           {user && <NavLink to="/workspace">Exercises</NavLink>}
@@ -204,7 +204,6 @@ export function Navbar() {
           {user && <NavLink to="/ai-lab">AI Lab</NavLink>}
           <NavLink to="/pricing">Pricing</NavLink>
           {user && isAdmin && <NavLink to="/admin">Admin</NavLink>}
-          {user && <NavLink to="/account">Account</NavLink>}
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
@@ -217,7 +216,7 @@ export function Navbar() {
                   setHistoryOpen(false);
                   setAccountMenuOpen(false);
                 }}
-                className="inline-flex p-2 text-on-surface-variant hover:bg-surface-container rounded-lg transition-all"
+                className="inline-flex rounded-full p-2 text-on-surface-variant transition-all hover:bg-surface-container hover:text-primary"
                 aria-expanded={notificationsOpen}
                 aria-label="Open notifications"
               >
@@ -242,7 +241,7 @@ export function Navbar() {
                   setNotificationsOpen(false);
                   setAccountMenuOpen(false);
                 }}
-                className="inline-flex p-2 text-on-surface-variant hover:bg-surface-container rounded-lg transition-all"
+                className="inline-flex rounded-full p-2 text-on-surface-variant transition-all hover:bg-surface-container hover:text-primary"
                 aria-expanded={historyOpen}
                 aria-label="Open recent activity"
               >
@@ -279,14 +278,19 @@ export function Navbar() {
 
           {user ? (
             <>
-              <Link to="/workspace" className="hidden sm:inline-flex primary-gradient text-on-primary font-headline font-semibold px-4 lg:px-6 py-2 rounded-full scale-95 active:opacity-80 transition-transform duration-200 text-sm lg:text-base">
+              <Link to="/workspace" className="hidden rounded-full bg-primary px-4 py-2 font-headline text-sm font-semibold text-on-primary shadow-sm transition hover:bg-primary-dim active:opacity-80 sm:inline-flex lg:px-5">
                 Start New
               </Link>
               <div className="relative" ref={accountMenuRef}>
                 <button
                   type="button"
-                  onClick={() => setAccountMenuOpen((open) => !open)}
-                  className="inline-flex items-center gap-2 rounded-full bg-primary text-on-primary pl-1 pr-3 py-1 shadow-sm transition hover:bg-primary-dim"
+                  onClick={() => {
+                    setAccountMenuOpen((open) => !open);
+                    setMobileMenuOpen(false);
+                    setNotificationsOpen(false);
+                    setHistoryOpen(false);
+                  }}
+                  className="inline-flex items-center gap-2 rounded-full bg-primary py-1 pl-1 pr-3 text-on-primary shadow-sm transition hover:bg-primary-dim focus:outline-none focus:ring-2 focus:ring-primary/30 focus:ring-offset-2 focus:ring-offset-surface"
                   aria-expanded={accountMenuOpen}
                   aria-haspopup="menu"
                   aria-label="Open account menu"
@@ -339,9 +343,15 @@ export function Navbar() {
 
           <button
             type="button"
-            onClick={() => setMobileMenuOpen((open) => !open)}
-            className="lg:hidden inline-flex items-center justify-center rounded-xl p-2 text-on-surface hover:bg-surface-container transition-all"
+            onClick={() => {
+              setMobileMenuOpen((open) => !open);
+              setAccountMenuOpen(false);
+              setNotificationsOpen(false);
+              setHistoryOpen(false);
+            }}
+            className="inline-flex items-center justify-center rounded-full p-2 text-on-surface transition-all hover:bg-surface-container focus:outline-none focus:ring-2 focus:ring-primary/30 focus:ring-offset-2 focus:ring-offset-surface lg:hidden"
             aria-expanded={mobileMenuOpen}
+            aria-controls="mobile-navigation"
             aria-label="Toggle navigation menu"
           >
             {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -350,8 +360,8 @@ export function Navbar() {
       </div>
 
       {mobileMenuOpen && (
-        <div className="lg:hidden border-t border-surface-container bg-surface">
-          <div className="px-4 sm:px-6 py-4 max-w-[1440px] mx-auto flex flex-col gap-2">
+        <div id="mobile-navigation" className="border-t border-surface-container bg-surface/98 shadow-lg lg:hidden">
+          <div className="mx-auto flex max-h-[calc(100dvh-4rem)] max-w-[1440px] flex-col gap-2 overflow-y-auto px-4 py-4 sm:px-6">
             {user && <MobileNavLink to="/dashboard">Dashboard</MobileNavLink>}
             {user && <MobileNavLink to="/practice-path">Practice Path</MobileNavLink>}
             {user && <MobileNavLink to="/workspace">Exercises</MobileNavLink>}
@@ -437,9 +447,10 @@ function NavLink({ to, children }: { to: string; children: React.ReactNode }) {
   return (
     <Link
       to={to}
+      aria-current={isActive ? 'page' : undefined}
       className={cn(
-        'transition-colors',
-        isActive ? 'text-primary border-b-2 border-primary pb-1' : 'text-on-surface-variant hover:text-primary',
+        'inline-flex h-9 items-center rounded-full px-3 text-sm transition-colors xl:px-4',
+        isActive ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-container hover:text-primary',
       )}
     >
       {children}
@@ -454,9 +465,10 @@ function MobileNavLink({ to, children }: { to: string; children: React.ReactNode
   return (
     <Link
       to={to}
+      aria-current={isActive ? 'page' : undefined}
       className={cn(
         'rounded-2xl px-4 py-3 font-headline font-semibold transition-colors',
-        isActive ? 'bg-primary/10 text-primary' : 'text-on-surface-variant hover:bg-surface-container-low hover:text-primary',
+        isActive ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-container-low hover:text-primary',
       )}
     >
       {children}
@@ -484,3 +496,6 @@ export function Footer() {
     </footer>
   );
 }
+
+
+

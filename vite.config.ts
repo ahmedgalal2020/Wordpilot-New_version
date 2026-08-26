@@ -16,5 +16,24 @@ export default defineConfig(({ mode }) => {
       // Do not modify this unless we intentionally change the local editing workflow.
       hmr: process.env.DISABLE_HMR !== 'true',
     },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (!id.includes('node_modules')) return undefined;
+            if (id.includes('react') || id.includes('react-dom')) return 'vendor-react';
+            if (id.includes('@supabase')) return 'vendor-supabase';
+            if (id.includes('lucide-react')) return 'vendor-icons';
+            if (id.includes('motion')) return 'vendor-motion';
+            if (id.includes('jspdf')) return 'vendor-jspdf';
+            if (id.includes('html2canvas')) return 'vendor-html2canvas';
+            if (id.includes('canvas-confetti')) return 'vendor-confetti';
+            return undefined;
+          },
+        },
+      },
+    },
   };
 });
+
+

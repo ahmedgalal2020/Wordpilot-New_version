@@ -5,8 +5,12 @@ create table if not exists public.profiles (
   email text,
   full_name text,
   avatar_url text,
+  native_language text default 'English',
   target_language text default 'English',
   cefr_level text default 'B1',
+  goal_cefr_level text default 'B2',
+  onboarding_completed boolean not null default false,
+  onboarding_completed_at timestamptz,
   is_blocked boolean not null default false,
   blocked_reason text,
   blocked_at timestamptz,
@@ -227,6 +231,10 @@ alter table public.billing_invoices
   add column if not exists updated_at timestamptz not null default now();
 
 alter table public.profiles
+  add column if not exists native_language text default 'English',
+  add column if not exists goal_cefr_level text default 'B2',
+  add column if not exists onboarding_completed boolean not null default false,
+  add column if not exists onboarding_completed_at timestamptz,
   add column if not exists is_blocked boolean not null default false,
   add column if not exists blocked_reason text,
   add column if not exists blocked_at timestamptz,
@@ -247,6 +255,7 @@ on public.billing_invoices (stripe_checkout_session_id);
 create index if not exists admin_users_email_idx on public.admin_users (lower(email));
 create index if not exists admin_users_status_idx on public.admin_users (status);
 create index if not exists profiles_is_blocked_idx on public.profiles (is_blocked);
+create index if not exists profiles_onboarding_completed_idx on public.profiles (onboarding_completed);
 create index if not exists dictation_mistakes_user_created_idx on public.dictation_mistakes (user_id, created_at desc);
 create index if not exists dictation_mistakes_user_correct_word_idx on public.dictation_mistakes (user_id, lower(correct_word));
 create index if not exists dictation_mistakes_session_idx on public.dictation_mistakes (session_id);
@@ -277,16 +286,22 @@ begin
     email,
     full_name,
     avatar_url,
+    native_language,
     target_language,
-    cefr_level
+    cefr_level,
+    goal_cefr_level,
+    onboarding_completed
   )
   values (
     new.id,
     new.email,
     coalesce(new.raw_user_meta_data->>'full_name', ''),
     new.raw_user_meta_data->>'avatar_url',
-    'English',
-    'B1'
+    coalesce(nullif(new.raw_user_meta_data->>'native_language', ''), 'English'),
+    coalesce(nullif(new.raw_user_meta_data->>'target_language', ''), 'English'),
+    coalesce(nullif(new.raw_user_meta_data->>'cefr_level', ''), 'B1'),
+    coalesce(nullif(new.raw_user_meta_data->>'goal_cefr_level', ''), 'B2'),
+    false
   )
   on conflict (id) do update
   set
@@ -303,6 +318,10 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
+
+revoke execute on function public.handle_new_user() from public;
+revoke execute on function public.handle_new_user() from anon;
+revoke execute on function public.handle_new_user() from authenticated;
 
 insert into public.profiles (id, email, full_name, avatar_url)
 select

@@ -41,7 +41,15 @@ export function useEntitlements(user: User | null) {
     const monthStart = getMonthStartIso();
     const nextMonthStart = getNextMonthStartIso();
     try {
-      const [subscriptionResult, invoiceResult, usageEventsResult, generatedResult, savedTextsResult, sessionsResult] = await Promise.all([
+      const [
+        subscriptionResult,
+        invoiceResult,
+        usageEventsResult,
+        generatedResult,
+        savedTextsResult,
+        dictationSessionsResult,
+        shadowingSessionsResult,
+      ] = await Promise.all([
         supabase
           .from('user_subscriptions')
           .select('*')
@@ -69,6 +77,7 @@ export function useEntitlements(user: User | null) {
           .lt('created_at', nextMonthStart),
         supabase.from('saved_texts').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
         supabase.from('dictation_sessions').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+        supabase.from('shadowing_sessions').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
       ]);
 
       const aiGenerationsThisMonth = Math.max(usageEventsResult.count ?? 0, generatedResult.count ?? 0);
@@ -86,7 +95,7 @@ export function useEntitlements(user: User | null) {
           usage: {
             aiGenerationsThisMonth,
             savedTexts: savedTextsResult.count ?? 0,
-            savedSessions: sessionsResult.count ?? 0,
+            savedSessions: (dictationSessionsResult.count ?? 0) + (shadowingSessionsResult.count ?? 0),
           },
           resolved: true,
         }),
@@ -108,3 +117,4 @@ export function useEntitlements(user: User | null) {
 
   return { entitlements, loadingEntitlements, refreshEntitlements };
 }
+

@@ -255,21 +255,25 @@ function buildExerciseModel(exercise: CurriculumExercise) {
   const chunks = readStringArray(content.chunks);
   const theme = String(content.theme ?? 'practice');
   const language = String(content.language ?? inferLanguageFromExerciseId(exercise.id));
-  const prompt = String(content.prompt ?? `Complete the ${theme} task.`);
+  const targetSentence = readString(content.targetSentence);
+  const readingText = readString(content.readingText);
+  const basePrompt = readString(content.prompt) || `Complete the ${theme} task.`;
+  const prompt = isReadingExercise(exercise.type) && readingText ? readingText : basePrompt;
   const targetText = Array.isArray(exercise.correctAnswer)
-    ? String(exercise.correctAnswer[0] ?? chunks[0] ?? vocabulary[0] ?? prompt)
+    ? String(exercise.correctAnswer[0] ?? targetSentence ?? chunks[0] ?? vocabulary[0] ?? prompt)
     : typeof exercise.correctAnswer === 'string'
       ? exercise.correctAnswer
-      : String(chunks[0] ?? vocabulary[0] ?? prompt);
+      : String(targetSentence || chunks[0] || vocabulary[0] || prompt);
   const distractors = vocabulary.filter((word) => !targetText.toLowerCase().includes(word.toLowerCase())).slice(0, 3);
-  const choices = shuffleUnique([targetText, ...distractors, prompt].filter(Boolean)).slice(0, 4);
+  const choices = shuffleUnique([targetText, ...distractors, basePrompt].filter(Boolean)).slice(0, 4);
   const orderWords = shuffleUnique(targetText.split(/\s+/).filter(Boolean));
+  const audioText = isReadingExercise(exercise.type) ? targetSentence || targetText : targetText || targetSentence || prompt;
 
   return {
     language,
     prompt,
     targetText,
-    audioText: targetText || prompt,
+    audioText,
     choices,
     orderWords,
     vocabulary,
@@ -368,6 +372,10 @@ function wordAccuracy(expected: string, actual: string) {
   return Math.max(0, ((correct - missing - extra) / expectedWords.length) * 100);
 }
 
+function isReadingExercise(type: ExerciseType) {
+  return type === 'reading_main_idea' || type === 'reading_detail' || type === 'reading_true_false';
+}
+
 function isChoiceExercise(type: ExerciseType) {
   return [
     'vocabulary_match',
@@ -396,6 +404,10 @@ function readStringArray(value: unknown) {
   return Array.isArray(value) ? value.map(String) : [];
 }
 
+function readString(value: unknown) {
+  return typeof value === 'string' ? value : '';
+}
+
 function normalize(value: string) {
   return value.toLowerCase().normalize('NFKC').replace(/[^\p{L}\p{N}\s]/gu, '').trim();
 }
@@ -407,3 +419,5 @@ function shuffleUnique(values: string[]) {
 function inferLanguageFromExerciseId(id: string) {
   return id.startsWith('german') ? 'German' : 'English';
 }
+
+

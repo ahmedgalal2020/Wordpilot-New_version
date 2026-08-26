@@ -393,8 +393,8 @@ export default function AccountPage() {
       return;
     }
 
-    if (newPassword.length < 6) {
-      setPasswordStatus('Password must be at least 6 characters.');
+    if (newPassword.length < 8) {
+      setPasswordStatus('Password must be at least 8 characters.');
       return;
     }
 
@@ -804,14 +804,14 @@ export default function AccountPage() {
           </section>
 
           <section className="bg-surface-container rounded-[2rem] p-8 space-y-4">
-            <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary">Project Status</p>
-            <p className="font-semibold text-on-surface">Connected to Supabase</p>
+            <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary">Account Status</p>
+            <p className="font-semibold text-on-surface">Your workspace is ready</p>
             <p className="text-sm text-on-surface-variant">
-              {authMessage ?? 'Auth, profile sync, saved texts, and certificate flows are connected. Billing and certificate data will become fully live after running the updated schema.'}
+              {authMessage ?? 'Your profile, saved practice, certificates, and subscription details will stay synced with your account.'}
             </p>
             <Link to="/pricing" className="inline-flex items-center gap-2 text-primary font-bold text-sm hover:underline">
               <FileText className="w-4 h-4" />
-              Review plans
+              View plans
             </Link>
           </section>
         </aside>
@@ -901,3 +901,6 @@ function isActiveAccountSubscription(subscription: SubscriptionSummary) {
   const status = subscription.status.toLowerCase();
   return planName.includes('pro') && ['active', 'trialing', 'paid', 'complete', 'completed', 'succeeded'].includes(status);
 }
+
+
+

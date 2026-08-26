@@ -12,9 +12,7 @@ export async function fetchApi(path: string, init?: RequestInit) {
     return await fetch(url, init);
   } catch (error) {
     if (error instanceof TypeError) {
-      throw new Error(
-        `Could not reach the WordPilot API at ${url}. Make sure the backend server is running and VITE_API_BASE_URL points to it in production.`,
-      );
+      throw new Error('WordPilot could not connect to the service right now. Please try again in a moment.');
     }
 
     throw error;

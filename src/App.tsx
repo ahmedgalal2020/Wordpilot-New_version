@@ -7,15 +7,16 @@ import { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Navigate, Route, Routes } from 'react-router-dom';
 import { Footer, Navbar } from './components/Layout';
 import { AdminRoute, ProtectedRoute, PublicOnlyRoute } from './components/RouteGuards';
-import LandingPage from './pages/LandingPage';
-import AuthPage from './pages/AuthPage';
-import PricingPage from './pages/PricingPage';
-import InfoPage from './pages/InfoPages';
-import ForgotPasswordPage from './pages/ForgotPasswordPage';
-import ResetPasswordPage from './pages/ResetPasswordPage';
 import { DynamicTitle } from './components/DynamicTitle';
 import { SessionSecurityPrompt } from './components/SessionSecurityPrompt';
+import { LearningOnboardingPrompt } from './components/LearningOnboardingPrompt';
 
+const LandingPage = lazy(() => import('./pages/LandingPage'));
+const AuthPage = lazy(() => import('./pages/AuthPage'));
+const PricingPage = lazy(() => import('./pages/PricingPage'));
+const InfoPage = lazy(() => import('./pages/InfoPages'));
+const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
+const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const AILab = lazy(() => import('./pages/AILab'));
 const DictationWorkspace = lazy(() => import('./pages/DictationWorkspace'));
@@ -44,6 +45,7 @@ export default function App() {
     <Router>
       <DynamicTitle />
       <SessionSecurityPrompt />
+      <LearningOnboardingPrompt />
       <div className="min-h-screen flex flex-col">
         <Navbar />
         <div className="flex-grow">
@@ -85,3 +87,4 @@ export default function App() {
     </Router>
   );
 }
+

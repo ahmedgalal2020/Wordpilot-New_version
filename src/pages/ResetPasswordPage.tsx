@@ -36,8 +36,10 @@ export default function ResetPasswordPage() {
         const accessToken = hashParams.get('access_token');
         const refreshToken = hashParams.get('refresh_token');
         const recoveryType = hashParams.get('type');
-        const tokenHash = new URLSearchParams(window.location.search).get('token_hash');
-        const queryType = new URLSearchParams(window.location.search).get('type');
+        const searchParams = new URLSearchParams(window.location.search);
+        const tokenHash = searchParams.get('token_hash');
+        const code = searchParams.get('code');
+        const queryType = searchParams.get('type');
 
         if (accessToken && refreshToken && recoveryType === 'recovery') {
           const { error } = await supabase.auth.setSession({
@@ -49,7 +51,23 @@ export default function ResetPasswordPage() {
             throw error;
           }
 
-          window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`);
+          window.sessionStorage.setItem('wordpilot-recovery-flow', 'ready');
+          window.history.replaceState({}, document.title, window.location.pathname);
+          if (!active) return;
+          setRecoveryReady(true);
+          setNotice(null);
+          return;
+        }
+
+        if (code) {
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+
+          if (error) {
+            throw error;
+          }
+
+          window.sessionStorage.setItem('wordpilot-recovery-flow', 'ready');
+          window.history.replaceState({}, document.title, window.location.pathname);
           if (!active) return;
           setRecoveryReady(true);
           setNotice(null);
@@ -66,12 +84,13 @@ export default function ResetPasswordPage() {
             throw error;
           }
 
+          window.sessionStorage.setItem('wordpilot-recovery-flow', 'ready');
+          window.history.replaceState({}, document.title, window.location.pathname);
           if (!active) return;
           setRecoveryReady(true);
           setNotice(null);
           return;
         }
-
         if (session && recoveryFlag) {
           setRecoveryReady(true);
           setNotice(null);
@@ -81,7 +100,7 @@ export default function ResetPasswordPage() {
         setRecoveryReady(false);
         setNotice({
           kind: 'info',
-          message: 'Open this page from the reset link in your email so we can securely verify your request.',
+          message: 'Open this page from the password reset link in your email. If you already did, request a fresh link and open it in this same browser.',
         });
       } catch (error) {
         console.error('Failed to prepare recovery session', error);
@@ -117,8 +136,8 @@ export default function ResetPasswordPage() {
       return;
     }
 
-    if (password.trim().length < 6) {
-      setNotice({ kind: 'error', message: 'Password must be at least 6 characters.' });
+    if (password.trim().length < 8) {
+      setNotice({ kind: 'error', message: 'Password must be at least 8 characters.' });
       return;
     }
 
@@ -179,11 +198,11 @@ export default function ResetPasswordPage() {
 
             <button
               type="submit"
-              disabled={submitting || !authReady || !recoveryReady || preparingRecovery}
+              disabled={submitting || !authReady || preparingRecovery}
               className="w-full py-4 px-6 primary-gradient text-on-primary rounded-full font-headline font-bold tracking-tight shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-70 inline-flex items-center justify-center gap-2"
             >
               {(submitting || preparingRecovery) && <LoaderCircle className="w-4 h-4 animate-spin" />}
-              {preparingRecovery ? 'Preparing reset link...' : 'Save new password'}
+              {preparingRecovery ? 'Preparing reset link...' : recoveryReady ? 'Save new password' : 'Open reset link first'}
             </button>
           </form>
 
@@ -260,3 +279,6 @@ function NoticeCard({ notice }: { notice: Notice }) {
     </div>
   );
 }
+
+
+

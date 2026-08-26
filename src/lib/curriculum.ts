@@ -150,6 +150,163 @@ type LessonSeed = {
   words: string[];
   chunks: string[];
   pronunciation: string;
+  targetSentence: string;
+  readingText: string;
+};
+
+const ENGLISH_TARGET_SENTENCES: Record<string, string> = {
+  Introductions: 'Hello, my name is Sam and I am from Canada.',
+  Numbers: 'My phone number is three one two seven eight zero.',
+  Family: 'This is my sister and she lives with my father.',
+  'Daily routine': 'Every morning I wake up early and study English.',
+  Food: 'I would like coffee, bread, and a glass of water.',
+  City: 'The station is near the bank on this street.',
+  Home: 'The table is next to the window in my room.',
+  Shopping: 'This jacket is cheaper than that expensive one.',
+  Weather: 'Today is cold and windy, but it is not rainy.',
+  Transport: 'I need a ticket for the early train.',
+  Health: 'I feel tired and my head hurts today.',
+  Review: 'Can you repeat the question slowly, please?',
+  Plans: 'Tomorrow I want to visit my friend after work.',
+  Appointments: 'Are you free on Monday at three o clock?',
+  Travel: 'Last weekend I visited a hotel near the station.',
+  Work: 'She works in an office and sends emails every morning.',
+  'Digital life': 'Click here and send the message from your phone.',
+  Services: 'Could you help me complete this address form?',
+  Comparisons: 'This route is faster, but that ticket is cheaper.',
+  Stories: 'First I lost my map, then I found the hotel.',
+  Rules: 'You must be quiet and you cannot open that door.',
+  Opinions: 'I think this lesson is useful because it is practical.',
+  Emails: 'Thank you for your reply and best regards.',
+};
+
+const GERMAN_TARGET_SENTENCES: Record<string, string> = {
+  Vorstellungen: 'Hallo, ich heisse Sam und ich komme aus Kanada.',
+  Zahlen: 'Meine Telefonnummer ist drei eins zwei sieben acht null.',
+  Familie: 'Das ist meine Schwester und sie wohnt bei meinem Vater.',
+  Tagesroutine: 'Jeden Morgen stehe ich frueh auf und lerne Deutsch.',
+  Essen: 'Ich moechte Kaffee, Brot und ein Glas Wasser.',
+  Stadt: 'Der Bahnhof ist in der Naehe von der Bank.',
+  Zuhause: 'Der Tisch steht neben dem Fenster in meinem Zimmer.',
+  Einkaufen: 'Diese Jacke ist guenstiger als die teure Jacke.',
+  Wetter: 'Heute ist es kalt und windig, aber nicht regnerisch.',
+  Transport: 'Ich brauche eine Fahrkarte fuer den fruehen Zug.',
+  Gesundheit: 'Ich bin muede und mein Kopf tut heute weh.',
+  Wiederholung: 'Koennen Sie die Frage bitte langsam wiederholen?',
+  Plaene: 'Morgen moechte ich nach der Arbeit einen Freund treffen.',
+  Termine: 'Haben Sie am Montag um drei Uhr Zeit?',
+  Reisen: 'Am Wochenende bin ich zu einem Hotel am Bahnhof gefahren.',
+  Arbeit: 'Sie arbeitet im Buero und schreibt jeden Morgen E-Mails.',
+  'Digitales Leben': 'Klicken Sie hier und schicken Sie die Nachricht vom Handy.',
+  Aemter: 'Koennen Sie mir mit diesem Formular helfen?',
+  Vergleiche: 'Diese Verbindung ist schneller, aber die Fahrkarte ist guenstiger.',
+  Geschichten: 'Zuerst habe ich meine Karte verloren, danach habe ich das Hotel gefunden.',
+  Regeln: 'Man muss leise sein und darf diese Tuer nicht oeffnen.',
+  Meinungen: 'Ich finde diese Lektion nuetzlich, weil sie praktisch ist.',
+  'E-Mails': 'Vielen Dank fuer Ihre Antwort und freundliche Gruesse.',
+};
+
+const ENGLISH_READING_TEXTS: Record<string, string> = {
+  Introductions: 'Sam is new in class. He says his name, his country, and the language he wants to practise.',
+  Numbers: 'The teacher reads phone numbers slowly. Students listen, repeat, and write each number in order.',
+  Family: 'Mina shows a photo of her family. She names each person and says one simple detail.',
+  'Daily routine': 'A short routine helps learners speak clearly about mornings, work, study, and sleep.',
+  Food: 'At a small cafe, the learner orders food politely and checks the menu before paying.',
+  City: 'The learner asks for the station and follows short directions through the city.',
+  Home: 'The room has a bed, a table, and a chair. The learner describes where each thing is.',
+  Shopping: 'Two jackets have different prices and sizes. The learner asks how much each one costs.',
+  Weather: 'The weather report is simple: cold in the morning, windy later, and sunny in the afternoon.',
+  Transport: 'The learner buys a ticket, checks the stop, and asks what time the bus leaves.',
+  Health: 'At the clinic, the learner explains one symptom clearly and asks for simple advice.',
+  Review: 'The review brings together questions, answers, listening, speaking, and short writing.',
+  Plans: 'A friend suggests a plan for tomorrow. The learner says what they want to do and when.',
+  Appointments: 'The learner calls an office, asks for a time, and confirms the appointment politely.',
+  Travel: 'A short travel story explains where the learner went, what they saw, and when they came back.',
+  Work: 'The work day includes emails, a meeting, a task, and a short break.',
+  'Digital life': 'The learner follows simple screen instructions and sends a message from a phone.',
+  Services: 'At a public office, the learner asks for a form and checks the address and signature.',
+  Comparisons: 'Two options are useful in different ways. The learner compares price, size, and speed.',
+  Stories: 'A simple story has a beginning, a problem, and a clear ending.',
+  Rules: 'The notice explains what people must do and what they cannot do in the room.',
+  Opinions: 'The learner gives a simple opinion and adds one clear reason with because.',
+  Emails: 'A polite email has a greeting, a short request, a thank you, and a closing line.',
+};
+
+const GERMAN_READING_TEXTS: Record<string, string> = {
+  Vorstellungen: 'Sam ist neu im Kurs. Er sagt seinen Namen, seine Herkunft und welche Sprache er ueben moechte.',
+  Zahlen: 'Die Lehrerin liest Telefonnummern langsam vor. Die Lernenden hoeren zu, wiederholen und schreiben die Zahlen in der richtigen Reihenfolge.',
+  Familie: 'Mina zeigt ein Foto von ihrer Familie. Sie nennt jede Person und sagt ein einfaches Detail.',
+  Tagesroutine: 'Eine kurze Routine hilft Lernenden, klar ueber Morgen, Arbeit, Lernen und Schlaf zu sprechen.',
+  Essen: 'In einem kleinen Cafe bestellt der Lerner hoeflich Essen und schaut vor dem Bezahlen in die Speisekarte.',
+  Stadt: 'Der Lerner fragt nach dem Bahnhof und folgt kurzen Wegbeschreibungen in der Stadt.',
+  Zuhause: 'Im Zimmer gibt es ein Bett, einen Tisch und einen Stuhl. Der Lerner beschreibt, wo die Dinge stehen.',
+  Einkaufen: 'Zwei Jacken haben verschiedene Preise und Groessen. Der Lerner fragt, wie viel sie kosten.',
+  Wetter: 'Der Wetterbericht ist einfach: morgens kalt, spaeter windig und am Nachmittag sonnig.',
+  Transport: 'Der Lerner kauft eine Fahrkarte, prueft die Haltestelle und fragt, wann der Bus faehrt.',
+  Gesundheit: 'In der Praxis beschreibt der Lerner eine Beschwerde klar und bittet um einfachen Rat.',
+  Wiederholung: 'Die Wiederholung verbindet Fragen, Antworten, Hoeren, Sprechen und kurzes Schreiben.',
+  Plaene: 'Ein Freund schlaegt einen Plan fuer morgen vor. Der Lerner sagt, was er machen moechte und wann.',
+  Termine: 'Der Lerner ruft in einem Buero an, fragt nach einer Uhrzeit und bestaetigt den Termin hoeflich.',
+  Reisen: 'Eine kurze Reisegeschichte erklaert, wohin der Lerner gefahren ist, was er gesehen hat und wann er zurueckgekommen ist.',
+  Arbeit: 'Der Arbeitstag enthaelt E-Mails, eine Besprechung, eine Aufgabe und eine kurze Pause.',
+  'Digitales Leben': 'Der Lerner folgt einfachen Anweisungen auf dem Bildschirm und schickt eine Nachricht vom Handy.',
+  Aemter: 'Auf dem Amt fragt der Lerner nach einem Formular und prueft Adresse und Unterschrift.',
+  Vergleiche: 'Zwei Moeglichkeiten sind auf verschiedene Weise nuetzlich. Der Lerner vergleicht Preis, Groesse und Tempo.',
+  Geschichten: 'Eine einfache Geschichte hat einen Anfang, ein Problem und ein klares Ende.',
+  Regeln: 'Der Hinweis erklaert, was man tun muss und was man im Raum nicht tun darf.',
+  Meinungen: 'Der Lerner sagt eine einfache Meinung und nennt mit weil einen klaren Grund.',
+  'E-Mails': 'Eine hoefliche E-Mail hat eine Anrede, eine kurze Bitte, einen Dank und eine Schlusszeile.',
+};
+
+const GERMAN_GLOSSES: Record<string, string> = {
+  hello: 'hallo', name: 'Name', from: 'aus/von', country: 'Land', language: 'Sprache', teacher: 'Lehrer/Lehrerin',
+  one: 'eins', two: 'zwei', three: 'drei', age: 'Alter', phone: 'Telefon/Handy', number: 'Nummer',
+  mother: 'Mutter', father: 'Vater', sister: 'Schwester', brother: 'Bruder', child: 'Kind', family: 'Familie',
+  wake: 'aufstehen', eat: 'essen', go: 'gehen', study: 'lernen', work: 'arbeiten', sleep: 'schlafen',
+  water: 'Wasser', coffee: 'Kaffee', bread: 'Brot', rice: 'Reis', apple: 'Apfel', menu: 'Speisekarte',
+  street: 'Strasse', station: 'Bahnhof', bank: 'Bank', school: 'Schule', shop: 'Laden', park: 'Park',
+  room: 'Zimmer', table: 'Tisch', chair: 'Stuhl', door: 'Tuer', window: 'Fenster', bed: 'Bett',
+  price: 'Preis', cheap: 'guenstig', expensive: 'teuer', size: 'Groesse', cash: 'bar', card: 'Karte',
+  sunny: 'sonnig', rainy: 'regnerisch', cold: 'kalt', hot: 'heiss', windy: 'windig', cloudy: 'bewoelkt',
+  ticket: 'Fahrkarte', bus: 'Bus', train: 'Zug', late: 'spaet', early: 'frueh', stop: 'Haltestelle',
+  head: 'Kopf', stomach: 'Bauch', pain: 'Schmerz', tired: 'muede', doctor: 'Arzt/Aerztin', medicine: 'Medizin',
+  review: 'Wiederholung', question: 'Frage', answer: 'Antwort', listen: 'hoeren', speak: 'sprechen', write: 'schreiben',
+  tomorrow: 'morgen', plan: 'Plan', visit: 'besuchen', meet: 'treffen', call: 'anrufen', later: 'spaeter',
+  monday: 'Montag', tuesday: 'Dienstag', time: 'Uhrzeit', appointment: 'Termin', free: 'frei', busy: 'besetzt',
+  travel: 'Reise', hotel: 'Hotel', map: 'Karte', arrive: 'ankommen', leave: 'abfahren',
+  job: 'Beruf', office: 'Buero', meeting: 'Besprechung', email: 'E-Mail', task: 'Aufgabe', break: 'Pause',
+  screen: 'Bildschirm', password: 'Passwort', message: 'Nachricht', online: 'online', app: 'App',
+  form: 'Formular', address: 'Adresse', help: 'Hilfe', document: 'Unterlage', signature: 'Unterschrift',
+  better: 'besser', cheaper: 'guenstiger', faster: 'schneller', slower: 'langsamer', bigger: 'groesser', smaller: 'kleiner',
+  went: 'gegangen', saw: 'gesehen', bought: 'gekauft', found: 'gefunden', lost: 'verloren', came: 'gekommen',
+  must: 'muessen', can: 'koennen', rule: 'Regel', allowed: 'erlaubt', quiet: 'leise', safe: 'sicher',
+  think: 'denken', because: 'weil', favorite: 'Lieblings-', opinion: 'Meinung', reason: 'Grund', agree: 'zustimmen',
+  dear: 'Sehr geehrte/lieber', thanks: 'danke', reply: 'Antwort', request: 'Bitte', regards: 'Gruesse', checkpoint: 'Kontrollpunkt', progress: 'Fortschritt', practice: 'Uebung', mistake: 'Fehler', ready: 'bereit',
+};
+
+const ENGLISH_GLOSSES: Record<string, string> = {
+  hallo: 'hello', name: 'name', kommen: 'come', land: 'country', sprache: 'language', kurs: 'course',
+  eins: 'one', zwei: 'two', drei: 'three', alter: 'age', telefon: 'telephone', nummer: 'number',
+  mutter: 'mother', vater: 'father', schwester: 'sister', bruder: 'brother', kind: 'child', familie: 'family',
+  aufstehen: 'get up', essen: 'eat', gehen: 'go', lernen: 'study/learn', arbeiten: 'work', schlafen: 'sleep',
+  wasser: 'water', kaffee: 'coffee', brot: 'bread', reis: 'rice', apfel: 'apple', speisekarte: 'menu',
+  strasse: 'street', bahnhof: 'station', bank: 'bank', schule: 'school', laden: 'shop', park: 'park',
+  zimmer: 'room', tisch: 'table', stuhl: 'chair', tuer: 'door', fenster: 'window', bett: 'bed',
+  preis: 'price', billig: 'cheap', teuer: 'expensive', groesse: 'size', bar: 'cash', karte: 'card/map',
+  sonnig: 'sunny', regnerisch: 'rainy', kalt: 'cold', warm: 'warm', windig: 'windy', bewoelkt: 'cloudy',
+  fahrkarte: 'ticket', bus: 'bus', zug: 'train', spaet: 'late', frueh: 'early', haltestelle: 'stop',
+  kopf: 'head', bauch: 'stomach', schmerz: 'pain', muede: 'tired', arzt: 'doctor', medizin: 'medicine',
+  wiederholung: 'review', frage: 'question', antwort: 'answer', hoeren: 'listen', sprechen: 'speak', schreiben: 'write',
+  morgen: 'tomorrow/morning', plan: 'plan', besuchen: 'visit', treffen: 'meet', anrufen: 'call', spaeter: 'later',
+  montag: 'Monday', dienstag: 'Tuesday', uhrzeit: 'time', termin: 'appointment', frei: 'free', besetzt: 'busy',
+  reise: 'trip', hotel: 'hotel', ankommen: 'arrive', abfahren: 'depart', beruf: 'job', buero: 'office',
+  besprechung: 'meeting', 'e-mail': 'email', aufgabe: 'task', pause: 'break', handy: 'mobile phone', bildschirm: 'screen', passwort: 'password', nachricht: 'message', online: 'online', app: 'app',
+  formular: 'form', adresse: 'address', amt: 'public office', hilfe: 'help', unterlage: 'document', unterschrift: 'signature',
+  besser: 'better', guenstiger: 'cheaper', schneller: 'faster', langsamer: 'slower', groesser: 'bigger', kleiner: 'smaller',
+  gegangen: 'went', gesehen: 'saw', gekauft: 'bought', gefunden: 'found', verloren: 'lost', gekommen: 'came',
+  muessen: 'must', duerfen: 'may/be allowed to', regel: 'rule', erlaubt: 'allowed', leise: 'quiet', sicher: 'safe',
+  denken: 'think', weil: 'because', lieblings: 'favorite', meinung: 'opinion', grund: 'reason', zustimmen: 'agree',
+  danke: 'thanks', bitte: 'please/request', pruefung: 'test', fortschritt: 'progress', uebung: 'practice', fehler: 'mistake', bereit: 'ready', grueße: 'regards', gruesse: 'regards',
 };
 
 const ENGLISH_A1_1: LessonSeed[] = [
@@ -334,11 +491,13 @@ function buildExercise(baseId: string, seed: LessonSeed, step: (typeof LESSON_JO
     type: step.defaultType,
     skill: step.skill,
     title: step.title,
-    instruction: getInstruction(step.skill, seed),
+    instruction: getInstruction(step.skill, seed, language),
     content: {
       language,
       theme: seed.theme,
       prompt: seed.canDo,
+      targetSentence: seed.targetSentence,
+      readingText: seed.readingText,
       vocabulary: seed.words,
       chunks: seed.chunks,
       pronunciation: seed.pronunciation,
@@ -371,37 +530,87 @@ function getRubric(skill: CurriculumSkill): ScoringRubric {
   return { taskCompletion: 40, grammar: 20, vocabulary: 20, accuracy: 20 };
 }
 
-function getInstruction(skill: CurriculumSkill, seed: LessonSeed) {
-  const shared = `Use the ${seed.theme} lesson goal: ${seed.canDo}`;
-  if (skill === 'dictation') return `Type the target sentence exactly. ${shared}`;
-  if (skill === 'writing') return `Write your own short response. Do not copy the model sentence. ${shared}`;
-  if (skill === 'speaking') return `Answer aloud with the target vocabulary and a complete sentence. ${shared}`;
-  if (skill === 'pronunciation') return `Repeat and record the target sounds: ${seed.pronunciation}.`;
-  if (skill === 'reading') return `Answer comprehension questions about the main idea and details. ${shared}`;
-  if (skill === 'listening') return `Listen for meaning, details, and speaker intention. ${shared}`;
+function getInstruction(skill: CurriculumSkill, seed: LessonSeed, language: CurriculumLanguage) {
+  if (language === 'German') return getGermanInstruction(skill, seed);
+
+  const shared = `Lesson goal: ${seed.canDo}`;
+  if (skill === 'dictation') return `Listen, then type the target sentence exactly. ${shared}`;
+  if (skill === 'writing') return `Write your own short response using the lesson vocabulary. ${shared}`;
+  if (skill === 'speaking') return `Answer aloud with a complete sentence and the target vocabulary. ${shared}`;
+  if (skill === 'pronunciation') return `Repeat the model sentence and focus on: ${seed.pronunciation}.`;
+  if (skill === 'reading') return `Read the short text, then choose the answer that best matches its meaning. ${shared}`;
+  if (skill === 'listening') return `Listen for the target sentence, key details, and speaker intention. ${shared}`;
+  return shared;
+}
+
+function getGermanInstruction(skill: CurriculumSkill, seed: LessonSeed) {
+  const shared = `Lernziel: ${seed.canDo}`;
+  if (skill === 'dictation') return `Hoere zu und tippe den Zielsatz genau ab. ${shared}`;
+  if (skill === 'writing') return `Schreibe eine kurze eigene Antwort mit dem Wortschatz der Lektion. ${shared}`;
+  if (skill === 'speaking') return `Antworte laut mit einem ganzen Satz und dem Zielwortschatz. ${shared}`;
+  if (skill === 'pronunciation') return `Sprich den Modellsatz nach und achte auf: ${seed.pronunciation}.`;
+  if (skill === 'reading') return `Lies den kurzen Text und waehle die Antwort, die am besten passt. ${shared}`;
+  if (skill === 'listening') return `Hoere auf den Zielsatz, wichtige Details und die Absicht der sprechenden Person. ${shared}`;
   return shared;
 }
 
 function getCorrectAnswer(type: ExerciseType, seed: LessonSeed) {
-  if (type === 'sentence_order') return seed.chunks[0];
+  if (type === 'sentence_order') return seed.targetSentence;
   if (type === 'vocabulary_match') return seed.words.slice(0, 4);
-  if (type === 'dictation_sentence') return `${seed.chunks[0]} ${seed.words[0]}.`;
+  if (type === 'dictation_sentence') return seed.targetSentence;
   if (type === 'grammar_choice') return seed.grammarFocus;
   return undefined;
 }
 
 function englishSeed(theme: string, objective: string, canDo: string, grammarFocus: string, words: string[], chunks: string[], pronunciation: string): LessonSeed {
-  return { theme, objective, canDo, grammarFocus, words, chunks, pronunciation };
+  return {
+    theme,
+    objective,
+    canDo,
+    grammarFocus,
+    words,
+    chunks,
+    pronunciation,
+    targetSentence: getEnglishTargetSentence(theme),
+    readingText: getEnglishReadingText(theme),
+  };
 }
 
 function germanSeed(theme: string, objective: string, canDo: string, grammarFocus: string, words: string[], chunks: string[], pronunciation: string): LessonSeed {
-  return { theme, objective, canDo, grammarFocus, words, chunks, pronunciation };
+  return {
+    theme,
+    objective,
+    canDo,
+    grammarFocus,
+    words,
+    chunks,
+    pronunciation,
+    targetSentence: getGermanTargetSentence(theme),
+    readingText: getGermanReadingText(theme),
+  };
 }
 
 function germanGloss(word: string) {
-  return `German gloss for ${word}`;
+  return GERMAN_GLOSSES[word.toLowerCase()] ?? `German: ${word}`;
 }
 
 function englishGloss(word: string) {
-  return `English gloss for ${word}`;
+  return ENGLISH_GLOSSES[word.toLowerCase()] ?? `English: ${word}`;
 }
+
+function getEnglishTargetSentence(theme: string) {
+  return ENGLISH_TARGET_SENTENCES[theme] ?? 'I can practise this lesson with clear words and short sentences.';
+}
+
+function getGermanTargetSentence(theme: string) {
+  return GERMAN_TARGET_SENTENCES[theme] ?? 'Ich kann diese Lektion mit klaren Woertern und kurzen Saetzen ueben.';
+}
+
+function getEnglishReadingText(theme: string) {
+  return ENGLISH_READING_TEXTS[theme] ?? getEnglishTargetSentence(theme);
+}
+
+function getGermanReadingText(theme: string) {
+  return GERMAN_READING_TEXTS[theme] ?? getGermanTargetSentence(theme);
+}
+

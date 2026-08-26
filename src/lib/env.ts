@@ -39,3 +39,4 @@ export function hasGeminiEnv() {
 export const clientEnv = {
   ...requiredClientEnv,
 };
+

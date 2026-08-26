@@ -8,8 +8,12 @@ type UserProfile = {
   email: string | null;
   full_name: string | null;
   avatar_url: string | null;
+  native_language: string | null;
   target_language: string | null;
   cefr_level: string | null;
+  goal_cefr_level: string | null;
+  onboarding_completed: boolean | null;
+  onboarding_completed_at: string | null;
   is_blocked: boolean;
   blocked_reason: string | null;
   blocked_at: string | null;
@@ -169,8 +173,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         email: currentUser.email ?? null,
         full_name: currentUser.user_metadata.full_name ?? null,
         avatar_url: currentUser.user_metadata.avatar_url ?? null,
+        native_language: null,
         target_language: null,
         cefr_level: null,
+        goal_cefr_level: null,
+        onboarding_completed: null,
+        onboarding_completed_at: null,
         is_blocked: false,
         blocked_reason: null,
         blocked_at: null,
@@ -564,8 +572,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       email: user.email ?? profile?.email ?? null,
       full_name: input.full_name ?? profile?.full_name ?? null,
       avatar_url: input.avatar_url ?? profile?.avatar_url ?? null,
+      native_language: input.native_language ?? profile?.native_language ?? null,
       target_language: input.target_language ?? profile?.target_language ?? null,
       cefr_level: input.cefr_level ?? profile?.cefr_level ?? null,
+      goal_cefr_level: input.goal_cefr_level ?? profile?.goal_cefr_level ?? null,
+      onboarding_completed: input.onboarding_completed ?? profile?.onboarding_completed ?? null,
+      onboarding_completed_at: input.onboarding_completed_at ?? profile?.onboarding_completed_at ?? null,
       updated_at: new Date().toISOString(),
     };
 

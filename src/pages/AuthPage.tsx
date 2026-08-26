@@ -45,8 +45,8 @@ export default function AuthPage() {
       return 'Enter a valid email address.';
     }
 
-    if (password.trim().length < 6) {
-      return 'Password must be at least 6 characters.';
+    if (password.trim().length < 8) {
+      return 'Password must be at least 8 characters.';
     }
 
     if (!isLogin) {
@@ -386,3 +386,5 @@ function SocialButton({
     </button>
   );
 }
+
+

@@ -19,7 +19,7 @@ import { ChatMessage } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { hasGeminiEnv, hasSupabaseEnv } from '../lib/env';
-import { formatMonthlyResetDate, formatUsage, getMonthStartIso, getNextMonthStartIso, isLimitReached } from '../lib/entitlements';
+import { formatMonthlyResetDate, formatUsage, isLimitReached } from '../lib/entitlements';
 import { useEntitlements } from '../hooks/useEntitlements';
 import { fetchApi } from '../lib/api';
 
@@ -45,6 +45,13 @@ type LabSettings = {
 };
 
 type GenerationMode = 'generate' | 'refine' | 'regenerate';
+
+type AiGenerationRequest = {
+  mode: GenerationMode;
+  settings: LabSettings;
+  userPrompt: string;
+  currentText: string;
+};
 
 const LEVEL_OPTIONS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 const LANGUAGE_OPTIONS = ['English', 'German', 'Spanish', 'Italian', 'French'];
@@ -123,7 +130,7 @@ export default function AILab() {
   const entitlementsReady = entitlements.resolved && !loadingEntitlements;
   const generationLimitReached = entitlementsReady && isLimitReached(entitlements.usage.aiGenerationsThisMonth, entitlements.limits.aiGenerationsMonthly);
   const savedTextLimitReached = entitlementsReady && isLimitReached(entitlements.usage.savedTexts, entitlements.limits.savedTexts);
-  const canGenerate = draftPrompt.trim().length > 0 && !generating && !generationLimitReached;
+  const canGenerate = draftPrompt.trim().length > 0 && !generating && entitlementsReady && Boolean(session?.access_token) && !generationLimitReached;
   const monthlyResetLabel = formatMonthlyResetDate(entitlements.currentPeriodEnd);
   const activeGeneration = useMemo(
     () => history.find((item) => item.id === activeGenerationId) ?? history[0] ?? FALLBACK_GENERATION,
@@ -215,6 +222,11 @@ export default function AILab() {
       return;
     }
 
+    if (!entitlementsReady) {
+      setStatus('Checking your AI usage allowance. Try again in a moment.');
+      return;
+    }
+
     if (generationLimitReached) {
       setStatus(`You used all ${entitlements.limits.aiGenerationsMonthly} free AI generations for this month. Upgrade to WordPilot Pro or wait until ${monthlyResetLabel}.`);
       return;
@@ -239,6 +251,16 @@ export default function AILab() {
 
     if (!basePrompt) {
       setStatus('Describe the text you want to generate first.');
+      return;
+    }
+
+    if (!entitlementsReady) {
+      setStatus('Checking your AI usage allowance. Try again in a moment.');
+      return;
+    }
+
+    if (!session?.access_token) {
+      setStatus('Sign in again before using AI generation.');
       return;
     }
 
@@ -273,19 +295,19 @@ export default function AILab() {
     );
 
     try {
-      const prompt = buildGeminiPrompt({
+      const aiRequest: AiGenerationRequest = {
         mode,
         settings,
         userPrompt: basePrompt,
         currentText: generatedText,
-      });
+      };
 
       const generation = geminiReady
-        ? await generateWithGemini(prompt, session?.access_token)
+        ? await generateWithGemini(aiRequest, session.access_token)
         : {
-            content: createLocalPracticeText({ mode, settings, userPrompt: basePrompt, currentText: generatedText }),
+            content: createLocalPracticeText(aiRequest),
             usedFallback: true,
-            fallbackReason: 'Gemini API key is missing.',
+            fallbackReason: 'Cloud AI is disabled for this environment; this local draft still follows your account limits.',
           };
 
       const content = sanitizeGeneratedText(generation.content, settings);
@@ -385,16 +407,6 @@ export default function AILab() {
       return fallbackRecord;
     }
 
-    await recordUsageEvent('ai_generation', {
-      generated_text_id: data.id,
-      mode: 'ai_lab',
-      title: input.title,
-      level: input.level,
-      language: input.language,
-      skill_type: settings.skillType,
-      category: input.category,
-    });
-
     return {
       id: data.id,
       title: data.title,
@@ -406,22 +418,6 @@ export default function AILab() {
       createdAtLabel: formatRelativeTime(data.created_at),
       createdAtValue: data.created_at,
     };
-  }
-
-  async function recordUsageEvent(featureKey: string, metadata: Record<string, string>) {
-    if (!user || !supabaseReady) {
-      return;
-    }
-
-    await supabase.from('usage_events').insert({
-      user_id: user.id,
-      feature_key: featureKey,
-      event_type: 'used',
-      quantity: 1,
-      period_start: getMonthStartIso(),
-      period_end: getNextMonthStartIso(),
-      metadata,
-    });
   }
 
   async function saveToLibrary() {
@@ -690,7 +686,7 @@ export default function AILab() {
                   <button
                     type="button"
                     onClick={() => void generateText('refine')}
-                    disabled={!draftPrompt.trim() || !generatedText.trim() || generating || generationLimitReached}
+                    disabled={!draftPrompt.trim() || !generatedText.trim() || generating || !entitlementsReady || generationLimitReached}
                     className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl border border-surface-container bg-surface-container-lowest text-on-surface font-semibold hover:bg-surface-container transition-all disabled:opacity-60"
                   >
                     <Edit3 className="w-4 h-4" />
@@ -745,13 +741,13 @@ export default function AILab() {
                   icon={<Edit3 className="w-4 h-4" />}
                   label="Refine via Chat"
                   onClick={() => void generateText('refine')}
-                  disabled={!draftPrompt.trim() || !generatedText.trim() || generating || generationLimitReached}
+                  disabled={!draftPrompt.trim() || !generatedText.trim() || generating || !entitlementsReady || generationLimitReached}
                 />
                 <ControlButton
                   icon={generating ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                   label="Regenerate"
                   onClick={() => void generateText('regenerate')}
-                  disabled={!(activeGeneration?.prompt || draftPrompt.trim()) || generating || generationLimitReached}
+                  disabled={!(activeGeneration?.prompt || draftPrompt.trim()) || generating || !entitlementsReady || generationLimitReached}
                 />
                 <ControlButton
                   icon={<Bookmark className="w-4 h-4" />}
@@ -773,7 +769,7 @@ export default function AILab() {
                 <button
                   type="button"
                   onClick={() => void saveGeneratedSnapshot()}
-                  disabled={saving || !draftPrompt.trim() || generationLimitReached}
+                  disabled={saving || !draftPrompt.trim() || !entitlementsReady || generationLimitReached}
                   className="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline disabled:opacity-60"
                 >
                   {saving ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <Bookmark className="w-4 h-4" />}
@@ -939,14 +935,7 @@ ${userPrompt}
 Create a new practice text for WordPilot.`;
 }
 
-async function generateWithGemini(prompt: string, accessToken?: string) {
-  if (!accessToken) {
-    return {
-      content: createLocalPracticeTextFromPrompt(prompt),
-      usedFallback: true,
-      fallbackReason: 'Sign in again before using cloud AI generation.',
-    };
-  }
+async function generateWithGemini(request: AiGenerationRequest, accessToken: string) {
 
   const maxAttempts = 3;
   let lastError: unknown;
@@ -959,12 +948,14 @@ async function generateWithGemini(prompt: string, accessToken?: string) {
           Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify(request),
       });
       const payload = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(payload.error ?? 'Unable to generate text.');
+        const error = new Error(payload.error ?? 'Unable to generate text.') as Error & { status?: number };
+        error.status = response.status;
+        throw error;
       }
 
       return {
@@ -974,7 +965,10 @@ async function generateWithGemini(prompt: string, accessToken?: string) {
       };
     } catch (error) {
       lastError = error;
-      if (!isRetryableGeneratorError(error) || attempt === maxAttempts) {
+      if (!isRetryableGeneratorError(error)) {
+        throw error;
+      }
+      if (attempt === maxAttempts) {
         break;
       }
       await wait(700 * attempt);
@@ -982,7 +976,7 @@ async function generateWithGemini(prompt: string, accessToken?: string) {
   }
 
   return {
-    content: createLocalPracticeTextFromPrompt(prompt),
+    content: createLocalPracticeText(request),
     usedFallback: true,
     fallbackReason: formatGeneratorError(lastError),
   };
@@ -1034,8 +1028,17 @@ function createLocalPracticeTextFromPrompt(prompt: string) {
 }
 
 function isRetryableGeneratorError(error: unknown) {
+  const status = typeof error === 'object' && error !== null && 'status' in error ? Number((error as { status?: number }).status) : 0;
+  if ([400, 401, 402, 403, 413].includes(status)) {
+    return false;
+  }
+
   const text = getErrorText(error).toLowerCase();
-  return text.includes('503') || text.includes('unavailable') || text.includes('overloaded') || text.includes('rate');
+  if (text.includes('usage') || text.includes('limit') || text.includes('authentication') || text.includes('sign in')) {
+    return false;
+  }
+
+  return status === 429 || status >= 500 || text.includes('503') || text.includes('unavailable') || text.includes('overloaded') || text.includes('rate');
 }
 
 function formatGeneratorError(error: unknown) {
@@ -1313,3 +1316,6 @@ function slugify(value: string) {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
 }
+
+
+
