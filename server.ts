@@ -5,6 +5,15 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer as createViteServer } from 'vite';
+import {
+  getAllowedOrigins,
+  getBearerToken,
+  getRequestOrigin,
+  getStripeSecretKey,
+  getSupabaseServerConfig,
+} from './server/config/runtime';
+import { createRateLimiter } from './server/middleware/rateLimit';
+import { createCorsHeaders, createOriginGuard, createSecurityHeaders } from './server/middleware/security';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -24,15 +33,17 @@ type AuthenticatedUser = {
 
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
-app.use(securityHeaders);
-app.use(corsHeaders);
-app.use(rejectUntrustedOrigin);
-const standardLimiter = createRateLimiter({ windowMs: 60_000, max: 120 });
-const sensitiveLimiter = createRateLimiter({ windowMs: 60_000, max: 20 });
-const aiLimiter = createRateLimiter({ windowMs: 60_000, max: 8 });
+app.use(createSecurityHeaders({ isProduction }));
+app.use(createCorsHeaders({ getAllowedOrigins }));
+app.use(createOriginGuard({ getAllowedOrigins }));
+const limiterOptions = { getToken: getBearerToken };
+const standardLimiter = createRateLimiter({ windowMs: 60_000, max: 120, keyPrefix: 'api', ...limiterOptions });
+const sensitiveLimiter = createRateLimiter({ windowMs: 60_000, max: 20, keyPrefix: 'sensitive', ...limiterOptions });
+const aiLimiter = createRateLimiter({ windowMs: 60_000, max: 8, keyPrefix: 'ai', ...limiterOptions });
 app.use('/api', standardLimiter);
 app.use('/api/admin', sensitiveLimiter);
 app.use('/api/billing', sensitiveLimiter);
+app.use('/api/support', sensitiveLimiter);
 app.use('/api/stripe', sensitiveLimiter);
 app.use('/api/ai', aiLimiter);
 app.use('/api/shadowing', aiLimiter);
@@ -259,6 +270,66 @@ app.post('/api/billing/send-receipt', async (req, res) => {
   }
 
   return res.json({ sent: true, id: emailPayload.id });
+});
+
+app.post('/api/support/request', async (req, res) => {
+  const { name, email, issueType, message } = req.body as {
+    name?: string;
+    email?: string;
+    issueType?: string;
+    message?: string;
+  };
+
+  const cleanEmail = email?.trim();
+  const cleanMessage = message?.trim();
+  const cleanName = name?.trim() || 'WordPilot user';
+  const cleanIssueType = issueType?.trim() || 'Support request';
+
+  if (!cleanEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+    return res.status(400).json({ error: 'A valid account email is required.' });
+  }
+
+  if (!cleanMessage || cleanMessage.length < 10) {
+    return res.status(400).json({ error: 'Please include a support message with at least 10 characters.' });
+  }
+
+  if (cleanMessage.length > 4000) {
+    return res.status(413).json({ error: 'Support messages must be 4000 characters or less.' });
+  }
+
+  const resendApiKey = process.env.RESEND_API_KEY?.trim();
+  if (!resendApiKey) {
+    return res.status(503).json({ error: 'Support email is not configured yet.' });
+  }
+
+  const recipient = process.env.SUPPORT_EMAIL_TO?.trim() || 'support@wordpilot.app';
+  const emailResponse = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${resendApiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: process.env.SUPPORT_EMAIL_FROM?.trim() || process.env.BILLING_EMAIL_FROM?.trim() || 'WordPilot <onboarding@resend.dev>',
+      to: recipient,
+      reply_to: cleanEmail,
+      subject: `WordPilot support: ${cleanIssueType}`,
+      html: buildSupportRequestEmailHtml({
+        name: cleanName,
+        email: cleanEmail,
+        issueType: cleanIssueType,
+        message: cleanMessage,
+      }),
+    }),
+  });
+
+  const emailPayload = await emailResponse.json().catch(() => null);
+  if (!emailResponse.ok) {
+    const message = emailPayload?.message ?? 'Unable to send the support request.';
+    return res.status(emailResponse.status).json({ error: message });
+  }
+
+  return res.json({ sent: true });
 });
 
 
@@ -1128,138 +1199,6 @@ app.listen(port, host, () => {
   console.log(`WordPilot running at ${publicUrl}`);
 });
 
-function securityHeaders(_req: express.Request, res: express.Response, next: express.NextFunction) {
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Permissions-Policy', 'camera=(), microphone=(self), geolocation=(), payment=()');
-  res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
-  res.setHeader('Content-Security-Policy', buildContentSecurityPolicy());
-  next();
-}
-
-function corsHeaders(req: express.Request, res: express.Response, next: express.NextFunction) {
-  const origin = req.headers.origin?.replace(/\/$/, '');
-
-  if (origin && getAllowedOrigins(req).includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Authorization,Content-Type');
-    res.setHeader('Access-Control-Max-Age', '86400');
-    res.setHeader('Vary', 'Origin');
-  }
-
-  if (req.method === 'OPTIONS') {
-    res.status(origin && !getAllowedOrigins(req).includes(origin) ? 403 : 204).end();
-    return;
-  }
-
-  next();
-}
-
-function buildContentSecurityPolicy() {
-  const directives = [
-    "default-src 'self'",
-    "base-uri 'self'",
-    "frame-ancestors 'none'",
-    "object-src 'none'",
-    "form-action 'self'",
-    "script-src 'self' 'unsafe-inline'",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "img-src 'self' data: https:",
-    "font-src 'self' data: https://fonts.gstatic.com",
-    "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://api.resend.com https://generativelanguage.googleapis.com",
-    "frame-src https://www.youtube.com https://www.youtube-nocookie.com",
-    "media-src 'self' blob: https:",
-  ];
-
-  if (!isProduction) {
-    directives[9] = "connect-src 'self' ws: http: https:";
-  }
-
-  return directives.join('; ');
-}
-
-function rejectUntrustedOrigin(req: express.Request, res: express.Response, next: express.NextFunction) {
-  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
-    next();
-    return;
-  }
-
-  const origin = req.headers.origin;
-  if (!origin) {
-    next();
-    return;
-  }
-
-  if (!getAllowedOrigins(req).includes(origin)) {
-    res.status(403).json({ error: 'Request origin is not allowed.' });
-    return;
-  }
-
-  next();
-}
-
-function getAllowedOrigins(req: express.Request) {
-  const configured = [
-    process.env.APP_URL,
-    process.env.PUBLIC_APP_URL,
-    process.env.SITE_URL,
-    ...(process.env.ALLOWED_ORIGINS ?? '').split(','),
-  ]
-    .map((value) => value?.trim().replace(/\/$/, ''))
-    .filter(Boolean) as string[];
-
-  const requestOrigin = getRequestOrigin(req);
-  return Array.from(new Set([...configured, requestOrigin]));
-}
-
-function createRateLimiter({ windowMs, max }: { windowMs: number; max: number }) {
-  const hits = new Map<string, { count: number; resetAt: number }>();
-
-  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    const now = Date.now();
-    const key = `${req.ip}:${getBearerToken(req) ?? 'anonymous'}:${req.path}`;
-    const current = hits.get(key);
-
-    if (!current || current.resetAt <= now) {
-      hits.set(key, { count: 1, resetAt: now + windowMs });
-      next();
-      return;
-    }
-
-    current.count += 1;
-    if (current.count > max) {
-      res.setHeader('Retry-After', Math.ceil((current.resetAt - now) / 1000).toString());
-      res.status(429).json({ error: 'Too many requests. Please try again shortly.' });
-      return;
-    }
-
-    next();
-  };
-}
-
-function getRequestOrigin(req: express.Request) {
-  const configuredOrigin = process.env.APP_URL?.trim();
-  if (configuredOrigin) {
-    return configuredOrigin.replace(/\/$/, '');
-  }
-
-  const protocol = req.headers['x-forwarded-proto']?.toString() ?? req.protocol;
-  const host = req.headers['x-forwarded-host']?.toString() ?? req.headers.host;
-  return `${protocol}://${host}`;
-}
-
-function getStripeSecretKey() {
-  return process.env.STRIPE_SECRET_KEY?.trim();
-}
-
-function getSupabaseServerConfig() {
-  const supabaseUrl = process.env.SUPABASE_URL?.trim() || process.env.VITE_SUPABASE_URL?.trim();
-  const anonKey = process.env.SUPABASE_ANON_KEY?.trim() || process.env.VITE_SUPABASE_ANON_KEY?.trim();
-  return { supabaseUrl, anonKey };
-}
-
 async function getAuthenticatedUserContext(req: express.Request) {
   const { supabaseUrl, anonKey } = getSupabaseServerConfig();
   if (!supabaseUrl || !anonKey) {
@@ -1391,7 +1330,7 @@ type ShadowingEvaluationBody = {
 };
 
 async function evaluateShadowingAudio(body: ShadowingEvaluationBody) {
-  const geminiApiKey = (process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY)?.trim();
+  const geminiApiKey = process.env.GEMINI_API_KEY?.trim();
   if (!geminiApiKey) {
     return { ok: false as const, status: 503, code: 'AI_NOT_CONFIGURED', error: 'GEMINI_API_KEY is not configured.' };
   }
@@ -1551,12 +1490,6 @@ function toIsoLanguage(language: string) {
   };
   return map[normalized] ?? normalized.slice(0, 2);
 }
-function getBearerToken(req: express.Request) {
-  const header = req.headers.authorization ?? '';
-  const [scheme, token] = header.split(' ');
-  return scheme?.toLowerCase() === 'bearer' && token ? token : null;
-}
-
 function canManagePrivilegedAdminActions(admin: { role?: string }) {
   const role = String(admin.role ?? '').toLowerCase();
   return role === 'owner' || role === 'bootstrap';
@@ -1635,7 +1568,7 @@ async function syncCheckoutToSupabase(userId: string, checkout: ReturnType<typeo
     return {
       synced: false,
       skipped: true,
-      reason: 'SUPABASE_SERVICE_ROLE_KEY is not configured. Client fallback will be used.',
+      reason: 'SUPABASE_SERVICE_ROLE_KEY is not configured. Server-side billing sync was skipped.',
     };
   }
 
@@ -3154,7 +3087,39 @@ function buildReceiptEmailHtml({
   `;
 }
 
+function buildSupportRequestEmailHtml({
+  name,
+  email,
+  issueType,
+  message,
+}: {
+  name: string;
+  email: string;
+  issueType: string;
+  message: string;
+}) {
+  return `
+    <div style="font-family:Arial,sans-serif;background:#f6f7fb;padding:32px;color:#172026;">
+      <div style="max-width:640px;margin:0 auto;background:#ffffff;border-radius:20px;padding:28px;border:1px solid #e5e8ef;">
+        <p style="margin:0 0 10px;font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#1d4ed8;">Support request</p>
+        <h1 style="margin:0 0 14px;font-size:24px;line-height:1.2;">${escapeHtml(issueType)}</h1>
+        <div style="background:#f1f5ff;border-radius:16px;padding:18px;margin:0 0 20px;">
+          <p style="margin:0 0 8px;font-size:14px;"><strong>Name:</strong> ${escapeHtml(name)}</p>
+          <p style="margin:0;font-size:14px;"><strong>Email:</strong> ${escapeHtml(email)}</p>
+        </div>
+        <p style="white-space:pre-wrap;margin:0;font-size:14px;line-height:1.7;color:#334155;">${escapeHtml(message)}</p>
+      </div>
+    </div>
+  `;
+}
 
-
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 

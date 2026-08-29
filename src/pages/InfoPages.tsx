@@ -2,6 +2,7 @@ import type { FormEvent, ReactNode } from 'react';
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { CheckCircle, LifeBuoy, LockKeyhole, Mail, ScrollText, Send } from 'lucide-react';
+import { fetchApi } from '../lib/api';
 
 type InfoSection = {
   title: string;
@@ -365,32 +366,23 @@ function ContactForm() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = event.currentTarget;
-    const formData = new FormData(form);
-    const body = new URLSearchParams();
-
-    formData.forEach((value, key) => {
-      if (typeof value === 'string') {
-        body.append(key, value);
-      }
-    });
-
     setSubmitState('submitting');
     setSubmitMessage(null);
 
     try {
-      const response = await fetch('/__forms.html', {
+      const response = await fetchApi('/api/support/request', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: body.toString(),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, issueType, message }),
       });
+      const payload = await response.json().catch(() => null);
 
       if (!response.ok) {
-        throw new Error('Unable to send the support request.');
+        throw new Error(payload?.error ?? 'Unable to send the support request.');
       }
 
       setSubmitState('sent');
-      setSubmitMessage('Support request sent. We will review it from the Netlify submissions inbox.');
+      setSubmitMessage('Support request sent. We will review it and reply by email.');
       setName('');
       setEmail('');
       setIssueType(issueTypes[0]);
@@ -410,13 +402,7 @@ function ContactForm() {
         </p>
       </div>
 
-      <form name="contact" method="POST" data-netlify="true" netlify-honeypot="bot-field" onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <input type="hidden" name="form-name" value="contact" />
-        <p className="hidden">
-          <label>
-            Do not fill this out: <input name="bot-field" tabIndex={-1} />
-          </label>
-        </p>
+      <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Field label="Your name">
           <input
             name="name"

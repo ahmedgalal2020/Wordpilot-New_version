@@ -56,7 +56,7 @@ export function useAdminAccess(user: User | null) {
           setDatabaseAdmin(Boolean(response.ok && payload?.isAdmin === true));
           setDatabaseError(
             !isJson
-              ? 'Admin service is returning the website instead of API data. Check the Netlify Function deploy.'
+              ? 'Admin service is returning the website instead of API data. Check the Node API server.'
               : response.status >= 500
                 ? payload?.error ?? 'Admin service is temporarily unavailable.'
                 : null,

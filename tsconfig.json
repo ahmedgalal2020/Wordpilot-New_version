@@ -26,9 +26,9 @@
   },
   "include": [
     "src",
+    "server",
     "server.ts",
-    "vite.config.ts",
-    "netlify/functions/**/*.mts"
+    "vite.config.ts"
   ],
   "exclude": [
     "dist",

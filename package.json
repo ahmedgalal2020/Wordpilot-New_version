@@ -1,5 +1,5 @@
 {
-  "name": "react-example",
+  "name": "wordpilot",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -13,7 +13,10 @@
     "preview": "tsx server.ts",
     "preview:vite": "vite preview --host 0.0.0.0",
     "clean": "node --eval \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test:api-routes": "tsx scripts/api-route-smoke.ts",
+    "test:dictation": "tsx scripts/dictation-analysis-smoke.ts",
+    "test": "npm run test:api-routes && npm run test:dictation"
   },
   "dependencies": {
     "@hallelx/youtube-transcript": "^0.2.0",
