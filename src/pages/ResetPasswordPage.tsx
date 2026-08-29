@@ -2,6 +2,8 @@ import React from 'react';
 import { AlertCircle, CheckCircle2, Eye, EyeOff, LoaderCircle } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useI18n } from '../i18n';
+import { LanguageSwitch } from '../components/LanguageSwitch';
 import { supabase } from '../lib/supabase';
 
 type Notice = {
@@ -12,6 +14,8 @@ type Notice = {
 export default function ResetPasswordPage() {
   const navigate = useNavigate();
   const { session, changePassword, authReady, authMessage } = useAuth();
+  const { language } = useI18n();
+  const copy = resetPasswordCopy[language];
   const [password, setPassword] = React.useState('');
   const [confirmPassword, setConfirmPassword] = React.useState('');
   const [showPassword, setShowPassword] = React.useState(false);
@@ -100,7 +104,7 @@ export default function ResetPasswordPage() {
         setRecoveryReady(false);
         setNotice({
           kind: 'info',
-          message: 'Open this page from the password reset link in your email. If you already did, request a fresh link and open it in this same browser.',
+          message: copy.openFromEmail,
         });
       } catch (error) {
         console.error('Failed to prepare recovery session', error);
@@ -108,7 +112,7 @@ export default function ResetPasswordPage() {
         setRecoveryReady(false);
         setNotice({
           kind: 'error',
-          message: 'This password reset link is invalid or expired. Request a fresh reset email and try again.',
+          message: copy.invalidLink,
         });
       } finally {
         if (active) {
@@ -131,18 +135,18 @@ export default function ResetPasswordPage() {
     if (!recoveryReady) {
       setNotice({
         kind: 'error',
-        message: 'This reset session is missing or expired. Request a new password reset email and try again.',
+        message: copy.missingSession,
       });
       return;
     }
 
     if (password.trim().length < 8) {
-      setNotice({ kind: 'error', message: 'Password must be at least 8 characters.' });
+      setNotice({ kind: 'error', message: copy.passwordLength });
       return;
     }
 
     if (password !== confirmPassword) {
-      setNotice({ kind: 'error', message: 'Password confirmation does not match.' });
+      setNotice({ kind: 'error', message: copy.passwordMatch });
       return;
     }
 
@@ -156,12 +160,15 @@ export default function ResetPasswordPage() {
     }
 
     window.sessionStorage.removeItem('wordpilot-recovery-flow');
-    setNotice({ kind: 'success', message: result.message ?? 'Password updated successfully.' });
+    setNotice({ kind: 'success', message: result.message ?? copy.updated });
     window.setTimeout(() => navigate('/login', { replace: true }), 1200);
   }
 
   return (
     <main className="flex-grow flex items-center justify-center px-6 py-12 relative overflow-hidden">
+      <div className="absolute right-4 top-4 z-20 sm:right-6 sm:top-6">
+        <LanguageSwitch />
+      </div>
       <div className="absolute top-0 left-0 w-full h-full pointer-events-none opacity-20">
         <div className="absolute -top-24 -left-24 w-96 h-96 bg-primary-container rounded-full blur-3xl"></div>
         <div className="absolute top-1/2 -right-48 w-80 h-80 bg-tertiary-container rounded-full blur-3xl"></div>
@@ -170,15 +177,15 @@ export default function ResetPasswordPage() {
       <div className="max-w-md w-full relative z-10">
         <div className="bg-surface-container-lowest rounded-[2.5rem] whisper-shadow overflow-hidden p-10 flex flex-col gap-8">
           <div className="text-left space-y-2">
-            <h1 className="font-headline font-extrabold text-3xl text-on-surface tracking-tight">Create a new password</h1>
+            <h1 className="font-headline font-extrabold text-3xl text-on-surface tracking-tight">{copy.title}</h1>
             <p className="text-on-surface-variant">
-              Set a new password for your account after confirming ownership from your email link.
+              {copy.subtitle}
             </p>
           </div>
 
           <form className="space-y-6" onSubmit={handleSubmit}>
             <PasswordField
-              label="New Password"
+              label={copy.newPassword}
               value={password}
               onChange={setPassword}
               visible={showPassword}
@@ -186,7 +193,7 @@ export default function ResetPasswordPage() {
               autoComplete="new-password"
             />
             <PasswordField
-              label="Confirm Password"
+              label={copy.confirmPassword}
               value={confirmPassword}
               onChange={setConfirmPassword}
               visible={showConfirmPassword}
@@ -202,15 +209,15 @@ export default function ResetPasswordPage() {
               className="w-full py-4 px-6 primary-gradient text-on-primary rounded-full font-headline font-bold tracking-tight shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-70 inline-flex items-center justify-center gap-2"
             >
               {(submitting || preparingRecovery) && <LoaderCircle className="w-4 h-4 animate-spin" />}
-              {preparingRecovery ? 'Preparing reset link...' : recoveryReady ? 'Save new password' : 'Open reset link first'}
+              {preparingRecovery ? copy.preparing : recoveryReady ? copy.save : copy.openFirst}
             </button>
           </form>
 
           <div className="pt-2 text-center">
             <p className="text-sm text-on-surface-variant">
-              Back to
+              {copy.backTo}
               <Link to="/login" className="text-primary font-semibold hover:underline ml-1">
-                log in
+                {copy.login}
               </Link>
             </p>
           </div>
@@ -259,6 +266,43 @@ function PasswordField({
     </div>
   );
 }
+
+const resetPasswordCopy = {
+  en: {
+    title: 'Create a new password',
+    subtitle: 'Set a new password for your account after confirming ownership from your email link.',
+    newPassword: 'New Password',
+    confirmPassword: 'Confirm Password',
+    preparing: 'Preparing reset link...',
+    save: 'Save new password',
+    openFirst: 'Open reset link first',
+    backTo: 'Back to',
+    login: 'log in',
+    openFromEmail: 'Open this page from the password reset link in your email. If you already did, request a fresh link and open it in this same browser.',
+    invalidLink: 'This password reset link is invalid or expired. Request a fresh reset email and try again.',
+    missingSession: 'This reset session is missing or expired. Request a new password reset email and try again.',
+    passwordLength: 'Password must be at least 8 characters.',
+    passwordMatch: 'Password confirmation does not match.',
+    updated: 'Password updated successfully.',
+  },
+  de: {
+    title: 'Neues Passwort erstellen',
+    subtitle: 'Lege ein neues Passwort fest, nachdem du den Link aus deiner E-Mail geöffnet hast.',
+    newPassword: 'Neues Passwort',
+    confirmPassword: 'Passwort bestätigen',
+    preparing: 'Reset-Link wird geprüft...',
+    save: 'Neues Passwort speichern',
+    openFirst: 'Reset-Link zuerst öffnen',
+    backTo: 'Zurück zum',
+    login: 'Login',
+    openFromEmail: 'Öffne diese Seite über den Passwort-Reset-Link aus deiner E-Mail. Falls du das schon getan hast, fordere einen neuen Link an und öffne ihn im selben Browser.',
+    invalidLink: 'Dieser Passwort-Reset-Link ist ungültig oder abgelaufen. Fordere eine neue E-Mail an und versuche es erneut.',
+    missingSession: 'Diese Reset-Sitzung fehlt oder ist abgelaufen. Fordere eine neue Passwort-Reset-E-Mail an.',
+    passwordLength: 'Das Passwort muss mindestens 8 Zeichen lang sein.',
+    passwordMatch: 'Die Passwortbestätigung stimmt nicht überein.',
+    updated: 'Passwort erfolgreich aktualisiert.',
+  },
+};
 
 function NoticeCard({ notice }: { notice: Notice }) {
   const styles =

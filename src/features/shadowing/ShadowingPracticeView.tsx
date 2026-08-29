@@ -1,4 +1,5 @@
 import { cn } from '../../lib/utils';
+import { useI18n } from '../../i18n';
 import { LessonSetupSection } from './sections/LessonSetupSection';
 import { PracticeSection } from './sections/PracticeSection';
 import { PracticeSidebar } from './sections/PracticeSidebar';
@@ -7,6 +8,8 @@ import { VideoProgressSection } from './sections/VideoProgressSection';
 import type { ShadowingPracticeController } from './useShadowingPractice';
 
 export function ShadowingPracticeView({ workspace }: { workspace: ShadowingPracticeController }) {
+  const { language } = useI18n();
+  const copy = shadowingPageCopy[language];
   const {
     activeWordIndex,
     averageScore,
@@ -63,12 +66,12 @@ export function ShadowingPracticeView({ workspace }: { workspace: ShadowingPract
   } = workspace;
 
   return (
-    <main className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-12 pt-24 sm:pt-28 min-h-screen">
+    <main className="wp-shell min-h-screen py-10 pt-24 sm:py-12 sm:pt-28">
       <header className="mb-10 sm:mb-12">
-        <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary mb-3">Shadowing Practice</p>
-        <h1 className="font-headline font-extrabold text-3xl sm:text-4xl tracking-tight text-on-surface">Listen, repeat, level up</h1>
+        <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary mb-3">{copy.eyebrow}</p>
+        <h1 className="font-headline font-extrabold text-3xl sm:text-4xl tracking-tight text-on-surface">{copy.title}</h1>
         <p className="text-on-surface-variant mt-3 max-w-2xl">
-          Turn any YouTube lesson into sentence-by-sentence speaking practice with progress, retries, and a complete performance report.
+          {copy.intro}
         </p>
       </header>
 
@@ -163,4 +166,17 @@ export function ShadowingPracticeView({ workspace }: { workspace: ShadowingPract
     </main>
   );
 }
+
+const shadowingPageCopy = {
+  en: {
+    eyebrow: 'Shadowing Practice',
+    title: 'Listen, repeat, level up',
+    intro: 'Turn any YouTube lesson into sentence-by-sentence speaking practice with progress, retries, and a complete performance report.',
+  },
+  de: {
+    eyebrow: 'Shadowing-Training',
+    title: 'Hören, nachsprechen, sicherer werden',
+    intro: 'Verwandle jede YouTube-Lektion in Satz-für-Satz-Sprechtraining mit Fortschritt, Wiederholungen und vollständigem Leistungsbericht.',
+  },
+};
 

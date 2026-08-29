@@ -1,5 +1,6 @@
 import { CheckCircle, LoaderCircle, Settings } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useI18n } from '../../../i18n';
 import type { CefrLevel, LearningLanguage } from '../../../lib/learning';
 
 const LEVELS: CefrLevel[] = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
@@ -21,11 +22,11 @@ export function PathLevelPanel({
   onSelect: (level: CefrLevel) => void;
   onSave: () => void;
 }) {
-  const isGerman = language === 'German';
-  const copy = isGerman
+  const { language: interfaceLanguage, translateLanguageName } = useI18n();
+  const copy = interfaceLanguage === 'de'
     ? {
         eyebrow: 'Aktiver Lernweg',
-        title: `Deutsch ${selectedLevel}`,
+        title: `${translateLanguageName(language)} ${selectedLevel}`,
         body: 'Dieser Plan basiert auf deiner gewählten Lernsprache. Ändere hier nur dein Niveau.',
         levelLabel: 'Niveau wählen',
         saved: 'Gespeichert',
@@ -35,7 +36,7 @@ export function PathLevelPanel({
       }
     : {
         eyebrow: 'Active path',
-        title: `${language} ${selectedLevel}`,
+        title: `${translateLanguageName(language)} ${selectedLevel}`,
         body: 'This plan is based on the language you selected during setup. Change only the level here.',
         levelLabel: 'Choose level',
         saved: 'Saved',

@@ -33,9 +33,12 @@ export type ExerciseResult = {
 type ExerciseRendererProps = {
   exercise: CurriculumExercise;
   onComplete: (result: ExerciseResult) => void;
+  onNext?: () => void;
+  hasNext?: boolean;
+  autoAdvanceOnPass?: boolean;
 };
 
-export function ExerciseRenderer({ exercise, onComplete }: ExerciseRendererProps) {
+export function ExerciseRenderer({ exercise, onComplete, onNext, hasNext = false, autoAdvanceOnPass = true }: ExerciseRendererProps) {
   const [selected, setSelected] = useState<string>('');
   const [orderedWords, setOrderedWords] = useState<string[]>([]);
   const [textResponse, setTextResponse] = useState('');
@@ -43,6 +46,7 @@ export function ExerciseRenderer({ exercise, onComplete }: ExerciseRendererProps
   const [selfChecks, setSelfChecks] = useState<Record<string, boolean>>({});
   const [lastResult, setLastResult] = useState<ExerciseResult | null>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const autoAdvanceTimerRef = useRef<number | null>(null);
   const speechWindow = typeof window !== 'undefined' ? (window as unknown as SpeechWindow) : null;
   const speechRecognitionAvailable = Boolean(speechWindow?.SpeechRecognition || speechWindow?.webkitSpeechRecognition);
 
@@ -55,6 +59,7 @@ export function ExerciseRenderer({ exercise, onComplete }: ExerciseRendererProps
   const needsOrdering = exercise.type === 'sentence_order';
 
   useEffect(() => {
+    clearAutoAdvanceTimer();
     setSelected('');
     setOrderedWords([]);
     setTextResponse('');
@@ -63,6 +68,8 @@ export function ExerciseRenderer({ exercise, onComplete }: ExerciseRendererProps
     setLastResult(null);
     stopRecognition();
   }, [exercise.id]);
+
+  useEffect(() => () => clearAutoAdvanceTimer(), []);
 
   function speak(text: string) {
     if (!('speechSynthesis' in window)) {
@@ -112,6 +119,18 @@ export function ExerciseRenderer({ exercise, onComplete }: ExerciseRendererProps
     const result = scoreExercise(exercise, model, response);
     setLastResult(result);
     onComplete(result);
+
+    if (result.passed && hasNext && autoAdvanceOnPass && onNext) {
+      clearAutoAdvanceTimer();
+      autoAdvanceTimerRef.current = window.setTimeout(onNext, 1100);
+    }
+  }
+
+  function clearAutoAdvanceTimer() {
+    if (autoAdvanceTimerRef.current !== null) {
+      window.clearTimeout(autoAdvanceTimerRef.current);
+      autoAdvanceTimerRef.current = null;
+    }
   }
 
   function buildResponse() {
@@ -240,11 +259,32 @@ export function ExerciseRenderer({ exercise, onComplete }: ExerciseRendererProps
           Grade exercise
         </button>
         {lastResult && (
-          <div className="rounded-2xl bg-surface-container-low px-4 py-3 text-sm text-on-surface">
-            <span className="font-headline font-black text-primary">{lastResult.score}%</span> {lastResult.feedback}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className={cn(
+              'inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm text-on-surface',
+              lastResult.passed ? 'bg-primary/10' : 'bg-surface-container-low',
+            )}>
+              {lastResult.passed && <CheckCircle className="h-4 w-4 text-primary" />}
+              <span><span className="font-headline font-black text-primary">{lastResult.score}%</span> {lastResult.feedback}</span>
+            </div>
+            {hasNext && onNext && (
+              <button
+                type="button"
+                onClick={() => {
+                  clearAutoAdvanceTimer();
+                  onNext();
+                }}
+                className="inline-flex items-center justify-center rounded-full bg-surface-container-low px-5 py-3 text-sm font-bold text-on-surface hover:bg-surface-container"
+              >
+                Next exercise
+              </button>
+            )}
           </div>
         )}
       </div>
+      {lastResult?.passed && hasNext && autoAdvanceOnPass && (
+        <p className="mt-3 text-xs font-semibold text-primary">Correct. Moving to the next exercise...</p>
+      )}
     </div>
   );
 }

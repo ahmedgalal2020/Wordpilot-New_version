@@ -9,6 +9,7 @@ export function DictationPracticePanel({ workspace }: { workspace: DictationWork
   const {
     skillMode,
     isPlaying,
+    isAwaitingManualAdvance,
     inputText,
     activeInputRange,
     overlayRef,
@@ -32,6 +33,7 @@ export function DictationPracticePanel({ workspace }: { workspace: DictationWork
     entitlements,
     saveStatus,
   } = workspace;
+  const hasTypedAttempt = inputText.trim().length > 0;
 
   return (
         <div className="lg:col-span-8 space-y-6">
@@ -40,7 +42,7 @@ export function DictationPracticePanel({ workspace }: { workspace: DictationWork
               <h3 className="text-sm font-bold text-on-surface uppercase tracking-widest">2. {skillMode.inputLabel}</h3>
               <div className="flex items-center gap-2 text-xs font-bold text-on-surface-variant">
                 <span className={cn('w-2 h-2 rounded-full', isPlaying ? 'bg-primary animate-pulse' : 'bg-outline-variant')}></span>
-                {isPlaying ? 'PLAYING' : 'READY'}
+                {isAwaitingManualAdvance ? 'WAITING' : isPlaying ? 'PLAYING' : 'READY'}
               </div>
             </div>
 
@@ -83,7 +85,7 @@ export function DictationPracticePanel({ workspace }: { workspace: DictationWork
                 )}
               </div>
               <div className="flex flex-wrap gap-x-1.5 gap-y-3 text-lg md:text-xl font-medium leading-relaxed">
-                {comparisonItems.length > 0 ? (
+                {hasTypedAttempt && comparisonItems.length > 0 ? (
                   comparisonItems.map((item) => (
                     <button
                       key={item.id}
@@ -94,16 +96,19 @@ export function DictationPracticePanel({ workspace }: { workspace: DictationWork
                         item.status === 'correct' && 'text-on-surface',
                         item.status === 'wrong' && 'bg-error-container/20 text-error border-b-2 border-error cursor-pointer',
                         item.status === 'extra' && 'bg-error-container/20 text-error border-b-2 border-error cursor-pointer',
+                        item.status === 'missing' && 'bg-error-container/25 text-error border border-error/25 border-dashed cursor-pointer opacity-80',
                       )}
                       title={
                         item.status === 'correct'
                           ? 'Correct'
                           : item.targetWord
                             ? `Expected: ${item.targetWord}`
-                            : 'Extra word'
+                            : item.status === 'missing'
+                              ? 'Missing word'
+                              : 'Extra word'
                       }
                     >
-                      {item.inputWord}
+                      {item.status === 'missing' ? '[' + item.inputWord + ']' : item.inputWord}
                     </button>
                   ))
                 ) : (
@@ -123,7 +128,7 @@ export function DictationPracticePanel({ workspace }: { workspace: DictationWork
                 </div>
               </div>
 
-              {mistakeRows.length > 0 ? (
+              {hasTypedAttempt && mistakeRows.length > 0 ? (
                 <div className="overflow-hidden rounded-2xl border border-outline-variant/10 bg-surface-container-lowest">
                   <div className="hidden md:grid grid-cols-[56px_minmax(0,1.2fr)_minmax(0,1.2fr)_120px_96px] gap-4 border-b border-outline-variant/10 px-4 lg:px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
                     <span>#</span>
@@ -201,7 +206,7 @@ export function DictationPracticePanel({ workspace }: { workspace: DictationWork
                 </div>
               ) : (
                 <div className="rounded-2xl border border-outline-variant/10 bg-surface-container-lowest px-5 py-6 text-sm text-on-surface-variant">
-                  No mistakes yet. Keep typing and any wrong or extra words will be listed here automatically.
+                  No mistakes yet. Start typing and WordPilot will list wrong, missing, and extra words without exposing the hidden source too early.
                 </div>
               )}
             </div>

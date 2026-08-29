@@ -1,4 +1,4 @@
-import { FastForward, Pause, Play, Rewind, RotateCcw, SkipBack, SkipForward, Volume2 } from 'lucide-react';
+import { FastForward, Pause, Play, Rewind, RotateCcw, SkipBack, SkipForward, Square, Volume2 } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import { PlayerButton } from '../components';
 import type { DictationWorkspaceController } from '../useDictationWorkspace';
@@ -7,11 +7,13 @@ export function DictationPlayerControls({ workspace }: { workspace: DictationWor
   const {
     isPlaying,
     isPaused,
+    isAwaitingManualAdvance,
     currentWordIndex,
     sourceWordRanges,
     seekWords,
     restartSpeaking,
     pauseSpeaking,
+    stopSpeaking,
     resumeSpeaking,
     startSpeaking,
     advanceOnSpace,
@@ -33,21 +35,31 @@ export function DictationPlayerControls({ workspace }: { workspace: DictationWor
             type="button"
             onClick={restartSpeaking}
             className="cursor-pointer shrink-0 h-14 w-14 sm:h-16 sm:w-16 rounded-full font-bold flex items-center justify-center transition-all bg-surface-container-lowest text-on-surface hover:bg-surface-container border border-outline-variant/10 shadow-sm"
-            title="Restart"
+            title="Restart from the first word"
           >
             <RotateCcw className="w-5 h-5" />
           </button>
 
           <button
             type="button"
-            onClick={() => (isPlaying ? pauseSpeaking() : isPaused ? resumeSpeaking() : startSpeaking())}
+            onClick={() => (isPlaying ? pauseSpeaking() : isPaused ? resumeSpeaking() : startSpeaking(Math.max(currentWordIndex, 0)))}
             className={cn(
               'cursor-pointer shrink-0 h-14 w-14 sm:h-16 sm:w-16 rounded-full font-bold flex items-center justify-center transition-all',
               isPlaying ? 'bg-error text-white' : 'bg-primary text-on-primary shadow-lg shadow-primary/20',
             )}
-            title={isPlaying ? 'Pause' : isPaused ? 'Resume' : 'Play'}
+            title={isPlaying ? 'Pause' : isPaused ? 'Resume' : 'Play from cursor'}
           >
             {isPlaying ? <Pause className="w-5 h-5" /> : isPaused ? <Play className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+          </button>
+
+          <button
+            type="button"
+            onClick={stopSpeaking}
+            disabled={!isPlaying && !isPaused && currentWordIndex < 0}
+            className="cursor-pointer shrink-0 h-14 w-14 sm:h-16 sm:w-16 rounded-full font-bold flex items-center justify-center transition-all bg-surface-container-lowest text-on-surface hover:bg-surface-container border border-outline-variant/10 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
+            title="Stop and clear cursor"
+          >
+            <Square className="w-4 h-4" />
           </button>
         </div>
       </div>
@@ -60,11 +72,13 @@ export function DictationPlayerControls({ workspace }: { workspace: DictationWor
         </p>
       </div>
       <p className="mt-2 text-center text-[11px] font-medium text-on-surface-variant">
-        {isPlaying
-          ? `Playing from word ${currentWordIndex + 1}`
-          : isPaused && currentWordIndex >= 0
-            ? `Paused at word ${currentWordIndex + 1}`
-            : 'Ready to start dictation'}
+        {isAwaitingManualAdvance
+          ? `Waiting for Space after word ${currentWordIndex + 1}`
+          : isPlaying
+            ? `Playing from word ${currentWordIndex + 1}`
+            : isPaused && currentWordIndex >= 0
+              ? `Paused at word ${currentWordIndex + 1}`
+              : 'Ready to start dictation'}
       </p>
 
       <label className="flex items-center justify-between gap-4 bg-surface-container-highest/30 p-3 rounded-xl border border-primary/10">

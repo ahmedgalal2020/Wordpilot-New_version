@@ -21,6 +21,8 @@ export function useAdminAccess(user: User | null) {
     }
 
     let active = true;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 10_000);
     setDatabaseCheckLoading(true);
     setDatabaseError(null);
 
@@ -41,6 +43,7 @@ export function useAdminAccess(user: User | null) {
         }
 
         const response = await fetchApi('/api/admin/access', {
+          signal: controller.signal,
           headers: {
             Authorization: `Bearer ${accessToken}`,
           },
@@ -63,7 +66,13 @@ export function useAdminAccess(user: User | null) {
       } catch (error) {
         if (active) {
           setDatabaseAdmin(false);
-          setDatabaseError(error instanceof Error ? error.message : 'Admin data is not available.');
+          setDatabaseError(
+            error instanceof DOMException && error.name === 'AbortError'
+              ? 'Admin access check took too long. Refresh the page or restart the local server.'
+              : error instanceof Error
+                ? error.message
+                : 'Admin data is not available.',
+          );
           setDatabaseCheckLoading(false);
         }
       }
@@ -73,6 +82,8 @@ export function useAdminAccess(user: User | null) {
 
     return () => {
       active = false;
+      window.clearTimeout(timeout);
+      controller.abort();
     };
   }, [needsDatabaseCheck, user]);
 

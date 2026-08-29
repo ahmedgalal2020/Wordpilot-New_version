@@ -1,8 +1,10 @@
 import { LoaderCircle, ShieldCheck } from 'lucide-react';
 import React from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useI18n } from '../i18n';
 
 export function SessionSecurityPrompt() {
+  const { t } = useI18n();
   const {
     user,
     sessionSecurity: { idleWarningVisible, secondsUntilSignOut, continueSession, signOutNow },
@@ -37,9 +39,9 @@ export function SessionSecurityPrompt() {
             <ShieldCheck className="h-6 w-6" />
           </div>
           <div>
-            <h2 className="font-headline text-xl font-black text-on-surface">Are you still here?</h2>
+            <h2 className="font-headline text-xl font-black text-on-surface">{t('session.title')}</h2>
             <p className="mt-2 text-sm leading-6 text-on-surface-variant">
-              For account security, WordPilot will sign you out after inactivity. Continue within {countdown} to keep this session active.
+              {t('session.body', { countdown })}
             </p>
           </div>
         </div>
@@ -51,7 +53,7 @@ export function SessionSecurityPrompt() {
             disabled={working !== null}
             className="rounded-full bg-surface-container px-5 py-3 text-sm font-bold text-on-surface transition hover:bg-surface-container-high disabled:opacity-70"
           >
-            {working === 'signout' ? 'Signing out...' : 'Sign out'}
+            {working === 'signout' ? t('session.signingOut') : t('session.signOut')}
           </button>
           <button
             type="button"
@@ -60,7 +62,7 @@ export function SessionSecurityPrompt() {
             className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-bold text-on-primary transition hover:bg-primary-dim disabled:opacity-70"
           >
             {working === 'continue' && <LoaderCircle className="h-4 w-4 animate-spin" />}
-            Continue session
+            {t('session.continue')}
           </button>
         </div>
       </div>

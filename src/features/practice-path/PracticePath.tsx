@@ -9,7 +9,7 @@ export function PracticePath() {
   const path = usePracticePath();
 
   return (
-    <main className="mx-auto min-h-screen max-w-[1440px] px-4 py-10 pt-24 sm:px-6 sm:py-12 sm:pt-28 lg:px-8">
+    <main className="wp-shell min-h-screen py-10 pt-24 sm:py-12 sm:pt-28">
       <header className="mb-10 sm:mb-12">
         <p className="mb-3 text-[0.6875rem] font-bold uppercase tracking-widest text-primary">{path.pathCopy.pageEyebrow}</p>
         <h1 className="font-headline text-3xl font-extrabold tracking-tight text-on-surface sm:text-4xl">{path.pathCopy.title}</h1>

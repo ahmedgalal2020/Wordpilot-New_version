@@ -22,6 +22,7 @@ import { hasGeminiEnv, hasSupabaseEnv } from '../lib/env';
 import { formatMonthlyResetDate, formatUsage, isLimitReached } from '../lib/entitlements';
 import { useEntitlements } from '../hooks/useEntitlements';
 import { fetchApi } from '../lib/api';
+import { useI18n } from '../i18n';
 
 type GenerationRecord = {
   id: string;
@@ -105,6 +106,8 @@ export default function AILab() {
   const navigate = useNavigate();
   const location = useLocation();
   const { session, user, profile } = useAuth();
+  const { language: interfaceLanguage, translateLanguageName } = useI18n();
+  const copy = aiLabCopy[interfaceLanguage];
   const incomingState = location.state as { language?: string; level?: string; skillType?: string; fromPracticePath?: boolean } | null;
   const [settings, setSettings] = useState<LabSettings>({
     ...FALLBACK_SETTINGS,
@@ -177,7 +180,7 @@ export default function AILab() {
         level: item.level ?? profile?.cefr_level ?? FALLBACK_SETTINGS.level,
         category: inferCategoryFromPrompt(item.prompt ?? ''),
         language: inferLanguageFromPrompt(item.prompt ?? '', profile?.target_language ?? FALLBACK_SETTINGS.language),
-        createdAtLabel: formatRelativeTime(item.created_at),
+        createdAtLabel: formatRelativeTime(item.created_at, interfaceLanguage),
         createdAtValue: item.created_at,
       }));
 
@@ -202,10 +205,10 @@ export default function AILab() {
     }));
     setMessages([
       INITIAL_MESSAGES[0],
-      { id: `user-${generation.id}`, role: 'user', content: generation.prompt || 'Open previous generation' },
-      { id: `assistant-${generation.id}`, role: 'assistant', content: `Ready. "${generation.title}" has been loaded into the editor.` },
+      { id: `user-${generation.id}`, role: 'user', content: generation.prompt || copy.openPreviousGeneration },
+      { id: `assistant-${generation.id}`, role: 'assistant', content: copy.loadedIntoEditor(generation.title) },
     ]);
-    setStatus(`Loaded "${generation.title}" from your generation history.`);
+    setStatus(copy.loadedStatus(generation.title));
   }
 
   function resetComposer() {
@@ -214,7 +217,7 @@ export default function AILab() {
     setGeneratedTitle(FALLBACK_GENERATION.title);
     setGeneratedText(FALLBACK_GENERATION.content);
     setActiveGenerationId(FALLBACK_GENERATION.id);
-    setStatus('New AI draft started. Describe the exact text you want to generate.');
+    setStatus(copy.newDraftStarted);
   }
 
   async function startNewTextGeneration() {
@@ -223,12 +226,12 @@ export default function AILab() {
     }
 
     if (!entitlementsReady) {
-      setStatus('Checking your AI usage allowance. Try again in a moment.');
+      setStatus(copy.checkingAllowance);
       return;
     }
 
     if (generationLimitReached) {
-      setStatus(`You used all ${entitlements.limits.aiGenerationsMonthly} free AI generations for this month. Upgrade to WordPilot Pro or wait until ${monthlyResetLabel}.`);
+      setStatus(copy.limitReached(formatUsage(entitlements.usage.aiGenerationsThisMonth, entitlements.limits.aiGenerationsMonthly), monthlyResetLabel));
       return;
     }
 
@@ -240,7 +243,7 @@ export default function AILab() {
 
   function updateSetting(key: keyof LabSettings, value: string) {
     setSettings((current) => ({ ...current, [key]: value }));
-    setStatus(`${toTitleCase(key)} set to ${value}. The next generation will use this setting.`);
+    setStatus(copy.settingUpdated(labelLabOption(key, interfaceLanguage), labelLabOption(value, interfaceLanguage)));
   }
 
   async function generateText(mode: GenerationMode, promptOverride?: string) {
@@ -250,33 +253,33 @@ export default function AILab() {
         : (promptOverride ?? draftPrompt).trim();
 
     if (!basePrompt) {
-      setStatus('Describe the text you want to generate first.');
+      setStatus(copy.describeFirst);
       return;
     }
 
     if (!entitlementsReady) {
-      setStatus('Checking your AI usage allowance. Try again in a moment.');
+      setStatus(copy.checkingAllowance);
       return;
     }
 
     if (!session?.access_token) {
-      setStatus('Sign in again before using AI generation.');
+      setStatus(copy.signInAgain);
       return;
     }
 
     if (generationLimitReached) {
-      setStatus(`You used all ${entitlements.limits.aiGenerationsMonthly} free AI generations for this month. Upgrade to WordPilot Pro or wait until ${monthlyResetLabel}.`);
+      setStatus(copy.limitReached(formatUsage(entitlements.usage.aiGenerationsThisMonth, entitlements.limits.aiGenerationsMonthly), monthlyResetLabel));
       return;
     }
 
     const userMessage =
       mode === 'refine'
-        ? `Refine the current draft with this instruction: ${basePrompt}`
+        ? copy.refineUserMessage(basePrompt)
         : basePrompt;
 
     const nextMessages: ChatMessage[] =
       mode === 'regenerate'
-        ? [...messages, { id: crypto.randomUUID(), role: 'assistant', content: 'Regenerating the text with the same request and current settings...' }]
+        ? [...messages, { id: crypto.randomUUID(), role: 'assistant', content: copy.regeneratingMessage }]
         : [...messages, { id: crypto.randomUUID(), role: 'user', content: userMessage }];
 
     if (mode !== 'regenerate') {
@@ -289,9 +292,9 @@ export default function AILab() {
     setStatus(
       geminiReady
         ? mode === 'refine'
-          ? 'Refining the draft with Gemini...'
-          : 'Generating a fresh text with Gemini...'
-        : 'Cloud AI is not configured, so I am creating a local practice draft instead.',
+          ? copy.refining
+          : copy.generating
+        : copy.localDraft,
     );
 
     try {
@@ -307,12 +310,12 @@ export default function AILab() {
         : {
             content: createLocalPracticeText(aiRequest),
             usedFallback: true,
-            fallbackReason: 'Cloud AI is disabled for this environment; this local draft still follows your account limits.',
+            fallbackReason: copy.cloudDisabledReason,
           };
 
       const content = sanitizeGeneratedText(generation.content, settings);
       if (!content) {
-        throw new Error('The generator returned an empty response.');
+        throw new Error(copy.emptyResponse);
       }
 
       const title = extractTitle(content, settings.category);
@@ -329,10 +332,10 @@ export default function AILab() {
         id: crypto.randomUUID(),
         role: 'assistant',
         content: generation.usedFallback
-          ? `Done. I created "${title}" with the local draft engine because the cloud generator was not available. You can edit it, save it, or start practice now.`
+          ? copy.createdWithFallback(title)
           : mode === 'refine'
-            ? `Done. I refined "${title}" and updated the editor.`
-            : `Done. I created "${title}" and saved it to your generation history.`,
+            ? copy.refinedMessage(title)
+            : copy.createdMessage(title),
       };
 
       setMessages((current) => [...current, assistantMessage]);
@@ -341,8 +344,8 @@ export default function AILab() {
       setDraftPrompt(basePrompt);
       setStatus(
         generation.usedFallback
-          ? `"${title}" is ready. ${generation.fallbackReason ? formatGeneratorError(generation.fallbackReason) : 'Local fallback was used.'}`
-          : `"${title}" is ready.`,
+          ? copy.readyWithReason(title, generation.fallbackReason ? formatGeneratorError(generation.fallbackReason, interfaceLanguage) : copy.localFallbackUsed)
+          : copy.ready(title),
       );
 
       if (record) {
@@ -351,14 +354,14 @@ export default function AILab() {
         void refreshEntitlements();
       }
     } catch (error) {
-      const message = formatGeneratorError(error);
+      const message = formatGeneratorError(error, interfaceLanguage);
       setStatus(message);
       setMessages((current) => [
         ...current,
         {
           id: crypto.randomUUID(),
           role: 'assistant',
-          content: `I could not complete that request. ${message}`,
+          content: copy.couldNotComplete(message),
         },
       ]);
     } finally {
@@ -382,7 +385,7 @@ export default function AILab() {
       level: input.level,
       category: input.category,
       language: input.language,
-      createdAtLabel: 'Just now',
+      createdAtLabel: copy.justNow,
       createdAtValue: new Date().toISOString(),
     };
 
@@ -403,7 +406,7 @@ export default function AILab() {
       .single();
 
     if (error || !data) {
-      setStatus(error?.message ?? 'The text was generated, but history could not be saved.');
+      setStatus(error?.message ?? copy.historyNotSaved);
       return fallbackRecord;
     }
 
@@ -415,24 +418,24 @@ export default function AILab() {
       level: data.level ?? input.level,
       category: input.category,
       language: input.language,
-      createdAtLabel: formatRelativeTime(data.created_at),
+      createdAtLabel: formatRelativeTime(data.created_at, interfaceLanguage),
       createdAtValue: data.created_at,
     };
   }
 
   async function saveToLibrary() {
     if (!user) {
-      setStatus('You need to sign in before saving texts to your library.');
+      setStatus(copy.signInToSave);
       return;
     }
 
     if (!supabaseReady) {
-      setStatus('Add Supabase env values before saving to your library.');
+      setStatus(copy.supabaseBeforeSave);
       return;
     }
 
     if (savedTextLimitReached) {
-      setStatus('Your free library limit is full. Upgrade to WordPilot Pro for unlimited saved texts.');
+      setStatus(copy.libraryLimitFull);
       return;
     }
 
@@ -448,7 +451,7 @@ export default function AILab() {
     });
 
     setSavingToLibrary(false);
-    setStatus(error ? error.message : `"${generatedTitle}" was saved to your library.`);
+    setStatus(error ? error.message : copy.savedToLibrary(generatedTitle));
     if (!error) {
       void refreshEntitlements();
     }
@@ -456,12 +459,12 @@ export default function AILab() {
 
   async function saveGeneratedSnapshot() {
     if (!draftPrompt.trim()) {
-      setStatus('Generate or load a text first.');
+      setStatus(copy.generateOrLoadFirst);
       return;
     }
 
     if (generationLimitReached) {
-      setStatus(`You used all ${entitlements.limits.aiGenerationsMonthly} free AI generation saves for this month. Upgrade to WordPilot Pro or wait until ${monthlyResetLabel}.`);
+      setStatus(copy.saveLimitReached(formatUsage(entitlements.usage.aiGenerationsThisMonth, entitlements.limits.aiGenerationsMonthly), monthlyResetLabel));
       return;
     }
 
@@ -479,7 +482,7 @@ export default function AILab() {
     if (result) {
       setHistory((current) => [result, ...current.filter((item) => item.id !== result.id)]);
       setActiveGenerationId(result.id);
-      setStatus('Current AI draft snapshot saved.');
+      setStatus(copy.snapshotSaved);
       void refreshEntitlements();
     }
   }
@@ -487,9 +490,9 @@ export default function AILab() {
   async function handleShare() {
     try {
       await navigator.clipboard.writeText(generatedText);
-      setStatus('Generated text copied to clipboard.');
+      setStatus(copy.copied);
     } catch {
-      setStatus('Clipboard access is not available in this browser.');
+      setStatus(copy.clipboardUnavailable);
     }
   }
 
@@ -501,10 +504,15 @@ export default function AILab() {
     anchor.download = `${slugify(generatedTitle || 'ai-lab-text')}.txt`;
     anchor.click();
     URL.revokeObjectURL(url);
-    setStatus('Text file downloaded.');
+    setStatus(copy.downloaded);
   }
 
   function startPracticeNow() {
+    if (!generatedText.trim()) {
+      setStatus(copy.generateBeforePractice);
+      return;
+    }
+
     navigate('/workspace', {
       state: {
         sourceText: stripTitleFromPracticeText(generatedText),
@@ -512,28 +520,28 @@ export default function AILab() {
         language: settings.language,
         cefrLevel: settings.level,
         practiceCategory: settings.skillType,
+        entryPoint: 'ai-lab',
       },
     });
   }
 
   return (
-    <main className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 lg:py-12 pt-24 sm:pt-28">
+    <main className="wp-shell py-8 pt-24 sm:py-10 sm:pt-28 lg:py-12">
       {entitlementsReady && generationLimitReached && !entitlements.isPro && (
         <section className="mb-6 rounded-[1.5rem] border border-error/20 bg-error-container/25 p-5 sm:p-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <p className="text-[0.6875rem] font-bold uppercase tracking-widest text-error">Monthly limit reached</p>
-              <h1 className="mt-2 font-headline text-2xl font-black text-on-surface">Your free AI Lab generations are used up.</h1>
+              <p className="text-[0.6875rem] font-bold uppercase tracking-widest text-error">{copy.limitTitle}</p>
+              <h1 className="mt-2 font-headline text-2xl font-black text-on-surface">{copy.limitHeading}</h1>
               <p className="mt-2 max-w-3xl text-sm font-medium leading-6 text-on-surface-variant">
-                You have used {formatUsage(entitlements.usage.aiGenerationsThisMonth, entitlements.limits.aiGenerationsMonthly)} AI generations for this month.
-                Your free allowance resets on {monthlyResetLabel}. WordPilot Pro unlocks unlimited generation immediately.
+                {copy.limitBody(formatUsage(entitlements.usage.aiGenerationsThisMonth, entitlements.limits.aiGenerationsMonthly), monthlyResetLabel)}
               </p>
             </div>
             <Link
               to="/pricing"
               className="inline-flex shrink-0 items-center justify-center rounded-full bg-primary px-6 py-3 text-sm font-bold text-on-primary transition hover:bg-primary-dim"
             >
-              Upgrade to WordPilot Pro
+              {copy.upgradePro}
             </Link>
           </div>
         </section>
@@ -543,11 +551,11 @@ export default function AILab() {
           <div className="p-5 sm:p-6 border-b border-surface-container">
             <div className="flex items-center justify-between gap-4 mb-5">
               <div>
-                <h2 className="font-headline font-bold text-lg text-on-surface">AI Lab</h2>
-                <p className="text-xs text-on-surface-variant mt-1">Custom generation workspace</p>
+                 <h2 className="font-headline font-bold text-lg text-on-surface">{copy.labTitle}</h2>
+                 <p className="text-xs text-on-surface-variant mt-1">{copy.labSubtitle}</p>
               </div>
               <span className="bg-primary-container text-on-primary-container text-[10px] font-bold px-2.5 py-1 rounded-full tracking-wider uppercase">
-                {loadingEntitlements ? 'Checking' : entitlements.isPro ? 'Pro' : 'Free'}
+                 {loadingEntitlements ? copy.checking : entitlements.isPro ? 'Pro' : copy.free}
               </span>
             </div>
 
@@ -558,30 +566,30 @@ export default function AILab() {
               className="w-full py-3 px-4 rounded-2xl bg-surface-container-lowest text-on-surface font-semibold flex items-center justify-center gap-2 border border-surface-container hover:bg-surface-container transition-colors text-sm whisper-shadow disabled:opacity-60"
             >
               {generating ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-              {generating ? 'Generating...' : 'New Text Generation'}
+               {generating ? copy.generatingShort : copy.newGeneration}
             </button>
             <div className="mt-4 rounded-2xl bg-surface-container-lowest border border-surface-container p-4 text-xs">
               <div className="flex items-center justify-between gap-3">
-                <span className="font-bold text-on-surface">AI generations</span>
+                 <span className="font-bold text-on-surface">{copy.aiGenerations}</span>
                 <span className="font-mono text-primary">
                   {loadingEntitlements
-                    ? 'checking'
+                     ? copy.checkingLower
                     : formatUsage(entitlements.usage.aiGenerationsThisMonth, entitlements.limits.aiGenerationsMonthly)}
                 </span>
               </div>
               <div className="mt-2 flex items-center justify-between gap-3">
-                <span className="font-bold text-on-surface">Saved texts</span>
+                 <span className="font-bold text-on-surface">{copy.savedTexts}</span>
                 <span className="font-mono text-primary">
-                  {loadingEntitlements ? 'checking' : formatUsage(entitlements.usage.savedTexts, entitlements.limits.savedTexts)}
+                   {loadingEntitlements ? copy.checkingLower : formatUsage(entitlements.usage.savedTexts, entitlements.limits.savedTexts)}
                 </span>
               </div>
               {!entitlements.isPro && (
                 <div className="mt-3 space-y-2">
                   <p className="text-[11px] font-medium leading-5 text-on-surface-variant">
-                    Monthly reset: {monthlyResetLabel}
+                     {copy.monthlyReset(monthlyResetLabel)}
                   </p>
                   <Link to="/pricing" className="inline-flex text-primary font-bold hover:underline">
-                    Upgrade for unlimited access
+                     {copy.upgradeUnlimited}
                   </Link>
                 </div>
               )}
@@ -589,25 +597,25 @@ export default function AILab() {
           </div>
 
           <div className="p-5 sm:p-6 space-y-4 border-b border-surface-container">
-            <SidebarSelect label="Level" value={settings.level} options={LEVEL_OPTIONS} onChange={(value) => updateSetting('level', value)} />
-            <SidebarSelect label="Language" value={settings.language} options={LANGUAGE_OPTIONS} onChange={(value) => updateSetting('language', value)} />
-            <SidebarSelect label="Skill Type" value={settings.skillType} options={SKILL_OPTIONS} onChange={(value) => updateSetting('skillType', value)} />
-            <SidebarSelect label="Category" value={settings.category} options={CATEGORY_OPTIONS} onChange={(value) => updateSetting('category', value)} />
-            <SidebarSelect label="Tone" value={settings.tone} options={TONE_OPTIONS} onChange={(value) => updateSetting('tone', value)} />
-            <SidebarSelect label="Length" value={settings.length} options={LENGTH_OPTIONS} onChange={(value) => updateSetting('length', value)} />
+             <SidebarSelect label={copy.level} value={settings.level} options={LEVEL_OPTIONS} onChange={(value) => updateSetting('level', value)} />
+             <SidebarSelect label={copy.language} value={settings.language} options={LANGUAGE_OPTIONS} optionLabel={translateLanguageName} onChange={(value) => updateSetting('language', value)} />
+             <SidebarSelect label={copy.skillType} value={settings.skillType} options={SKILL_OPTIONS} optionLabel={(value) => labelLabOption(value, interfaceLanguage)} onChange={(value) => updateSetting('skillType', value)} />
+             <SidebarSelect label={copy.category} value={settings.category} options={CATEGORY_OPTIONS} optionLabel={(value) => labelLabOption(value, interfaceLanguage)} onChange={(value) => updateSetting('category', value)} />
+             <SidebarSelect label={copy.tone} value={settings.tone} options={TONE_OPTIONS} optionLabel={(value) => labelLabOption(value, interfaceLanguage)} onChange={(value) => updateSetting('tone', value)} />
+             <SidebarSelect label={copy.length} value={settings.length} options={LENGTH_OPTIONS} optionLabel={(value) => labelLabOption(value, interfaceLanguage)} onChange={(value) => updateSetting('length', value)} />
             <button
               type="button"
               onClick={resetComposer}
               className="w-full text-xs font-bold text-primary hover:underline disabled:opacity-60"
               disabled={generating}
             >
-              Clear current draft
+               {copy.clearDraft}
             </button>
           </div>
 
           <div className="mx-4 mb-5 mt-5 rounded-2xl border border-surface-container bg-surface-container-lowest px-3 py-4 sm:mx-5">
             <div className="flex items-center justify-between gap-3 mb-4 px-2">
-              <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Past Generations</p>
+               <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">{copy.pastGenerations}</p>
               {loadingHistory && <LoaderCircle className="w-4 h-4 animate-spin text-primary" />}
             </div>
             <div className="max-h-[300px] space-y-2 overflow-y-auto pr-1">
@@ -629,8 +637,8 @@ export default function AILab() {
           <section className="bg-surface-container-lowest rounded-[2rem] border border-outline-variant/10 whisper-shadow overflow-hidden flex flex-col min-h-[720px]">
             <div className="p-5 sm:p-6 border-b border-surface-container flex items-start justify-between gap-4">
               <div>
-                <h1 className="font-headline font-bold text-xl text-on-surface">AI Workspace</h1>
-                <p className="text-sm text-on-surface-variant mt-1">Talk to the generator, refine prompts, and keep your history attached to your account.</p>
+                 <h1 className="font-headline font-bold text-xl text-on-surface">{copy.workspaceTitle}</h1>
+                 <p className="text-sm text-on-surface-variant mt-1">{copy.workspaceSubtitle}</p>
               </div>
             </div>
 
@@ -664,14 +672,14 @@ export default function AILab() {
                 value={draftPrompt}
                 onChange={(event) => setDraftPrompt(event.target.value)}
                 className="w-full min-h-[120px] bg-surface-container-lowest border border-surface-container rounded-2xl py-4 px-5 text-sm focus:ring-2 focus:ring-primary/10 focus:border-primary outline-none resize-y shadow-sm placeholder:text-on-surface-variant/50"
-                placeholder="Describe the text you want. Example: Generate a C1 German text about cybersecurity policy with formal tone and practical vocabulary for interviews."
+                 placeholder={copy.promptPlaceholder}
               />
 
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <p className="text-xs text-on-surface-variant">
                   {geminiReady
-                    ? 'Gemini is ready. Your prompts will use the selected level, language, category, tone, and length.'
-                    : 'Cloud AI is not configured. The local draft engine will keep generation, editing, and practice flow available.'}
+                     ? copy.geminiReady
+                     : copy.geminiMissing}
                 </p>
                 <div className="flex flex-wrap gap-2">
                   <button
@@ -681,7 +689,7 @@ export default function AILab() {
                     className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-primary text-on-primary font-bold hover:bg-primary-dim transition-all disabled:opacity-60"
                   >
                     {generating ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                    Generate
+                     {copy.generate}
                   </button>
                   <button
                     type="button"
@@ -690,7 +698,7 @@ export default function AILab() {
                     className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl border border-surface-container bg-surface-container-lowest text-on-surface font-semibold hover:bg-surface-container transition-all disabled:opacity-60"
                   >
                     <Edit3 className="w-4 h-4" />
-                    Refine via Chat
+                     {copy.refine}
                   </button>
                 </div>
               </div>
@@ -702,7 +710,7 @@ export default function AILab() {
               <div>
                 <div className="flex items-center gap-3">
                   <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                  <h2 className="font-headline font-bold text-lg text-on-surface">Generated Text</h2>
+                   <h2 className="font-headline font-bold text-lg text-on-surface">{copy.generatedText}</h2>
                 </div>
                 <p className="text-sm text-on-surface-variant mt-2">{generatedTitle}</p>
               </div>
@@ -718,11 +726,11 @@ export default function AILab() {
 
             <div className="px-5 sm:px-6 py-4 border-b border-surface-container bg-surface-container-low/40">
               <div className="flex flex-wrap gap-2">
-                <InfoPill icon={<Sparkles className="w-3.5 h-3.5" />} label={`${settings.level} level`} />
-                <InfoPill icon={<Bot className="w-3.5 h-3.5" />} label={settings.language} />
-                <InfoPill icon={<Keyboard className="w-3.5 h-3.5" />} label={settings.skillType} />
-                <InfoPill icon={<Edit3 className="w-3.5 h-3.5" />} label={settings.tone} />
-                <InfoPill icon={<Bookmark className="w-3.5 h-3.5" />} label={settings.category} />
+                 <InfoPill icon={<Sparkles className="w-3.5 h-3.5" />} label={copy.levelPill(settings.level)} />
+                 <InfoPill icon={<Bot className="w-3.5 h-3.5" />} label={translateLanguageName(settings.language)} />
+                 <InfoPill icon={<Keyboard className="w-3.5 h-3.5" />} label={labelLabOption(settings.skillType, interfaceLanguage)} />
+                 <InfoPill icon={<Edit3 className="w-3.5 h-3.5" />} label={labelLabOption(settings.tone, interfaceLanguage)} />
+                 <InfoPill icon={<Bookmark className="w-3.5 h-3.5" />} label={labelLabOption(settings.category, interfaceLanguage)} />
               </div>
             </div>
 
@@ -739,29 +747,30 @@ export default function AILab() {
               <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                 <ControlButton
                   icon={<Edit3 className="w-4 h-4" />}
-                  label="Refine via Chat"
+                   label={copy.refine}
                   onClick={() => void generateText('refine')}
                   disabled={!draftPrompt.trim() || !generatedText.trim() || generating || !entitlementsReady || generationLimitReached}
                 />
                 <ControlButton
                   icon={generating ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                  label="Regenerate"
+                   label={copy.regenerate}
                   onClick={() => void generateText('regenerate')}
                   disabled={!(activeGeneration?.prompt || draftPrompt.trim()) || generating || !entitlementsReady || generationLimitReached}
                 />
                 <ControlButton
                   icon={<Bookmark className="w-4 h-4" />}
-                  label={savingToLibrary ? 'Saving...' : 'Save to My Texts'}
+                   label={savingToLibrary ? copy.saving : copy.saveToTexts}
                   onClick={() => void saveToLibrary()}
                   disabled={savingToLibrary || !supabaseReady || !user || savedTextLimitReached}
                 />
                 <button
                   type="button"
                   onClick={startPracticeNow}
-                  className="inline-flex h-11 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-primary px-4 text-sm font-bold text-on-primary shadow-sm shadow-primary/10 transition-all hover:bg-primary-dim active:scale-95"
+                  disabled={!generatedText.trim()}
+                  className="inline-flex h-11 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-primary px-4 text-sm font-bold text-on-primary shadow-sm shadow-primary/10 transition-all hover:bg-primary-dim active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Keyboard className="w-4 h-4" />
-                  Start Practice Now
+                   {copy.startPractice}
                 </button>
               </div>
 
@@ -773,7 +782,7 @@ export default function AILab() {
                   className="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline disabled:opacity-60"
                 >
                   {saving ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <Bookmark className="w-4 h-4" />}
-                  Save current draft snapshot
+                   {copy.saveSnapshot}
                 </button>
                 {status && <p className="text-sm text-on-surface-variant">{status}</p>}
               </div>
@@ -789,11 +798,13 @@ function SidebarSelect({
   label,
   value,
   options,
+  optionLabel,
   onChange,
 }: {
   label: string;
   value: string;
   options: string[];
+  optionLabel?: (value: string) => string;
   onChange: (value: string) => void;
 }) {
   return (
@@ -806,7 +817,7 @@ function SidebarSelect({
       >
         {options.map((option) => (
           <option key={option} value={option}>
-            {option}
+            {optionLabel ? optionLabel(option) : option}
           </option>
         ))}
       </select>
@@ -1041,23 +1052,24 @@ function isRetryableGeneratorError(error: unknown) {
   return status === 429 || status >= 500 || text.includes('503') || text.includes('unavailable') || text.includes('overloaded') || text.includes('rate');
 }
 
-function formatGeneratorError(error: unknown) {
+function formatGeneratorError(error: unknown, interfaceLanguage: 'en' | 'de' = 'en') {
   const text = getErrorText(error);
   const lowerText = text.toLowerCase();
+  const copy = aiLabCopy[interfaceLanguage];
 
   if (lowerText.includes('503') || lowerText.includes('unavailable') || lowerText.includes('high demand')) {
-    return 'The cloud generator is busy right now, so I used the local draft engine instead.';
+    return copy.generatorBusy;
   }
 
   if (lowerText.includes('api key')) {
-    return 'The Gemini API key is missing or invalid, so I used the local draft engine instead.';
+    return copy.apiKeyProblem;
   }
 
   if (lowerText.includes('quota') || lowerText.includes('rate')) {
-    return 'The cloud generator hit a temporary usage limit, so I used the local draft engine instead.';
+    return copy.quotaProblem;
   }
 
-  return text || 'The generator could not finish the request.';
+  return text || copy.generatorFailed;
 }
 
 function getErrorText(error: unknown) {
@@ -1243,25 +1255,26 @@ function formatWordRange(length: string) {
   return `${range.min}-${range.max} words`;
 }
 
-function formatRelativeTime(value: string) {
+function formatRelativeTime(value: string, interfaceLanguage: 'en' | 'de' = 'en') {
   const now = Date.now();
   const date = new Date(value).getTime();
   const diffMinutes = Math.max(0, Math.round((now - date) / 60000));
+  const copy = aiLabCopy[interfaceLanguage];
 
   if (diffMinutes < 1) {
-    return 'Just now';
+    return copy.justNow;
   }
 
   if (diffMinutes < 60) {
-    return `${diffMinutes} mins ago`;
+    return copy.minutesAgo(diffMinutes);
   }
 
   const diffHours = Math.round(diffMinutes / 60);
   if (diffHours < 24) {
-    return `${diffHours}h ago`;
+    return copy.hoursAgo(diffHours);
   }
 
-  return new Date(value).toLocaleDateString('en-US', {
+  return new Date(value).toLocaleDateString(interfaceLanguage === 'de' ? 'de-DE' : 'en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -1316,6 +1329,202 @@ function slugify(value: string) {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
 }
+
+function labelLabOption(value: string, interfaceLanguage: 'en' | 'de') {
+  if (interfaceLanguage === 'en') return value;
+
+  const labels: Record<string, string> = {
+    Dictation: 'Diktat',
+    Reading: 'Lesen',
+    Listening: 'Hören',
+    Writing: 'Schreiben',
+    Academic: 'Akademisch',
+    Business: 'Business',
+    History: 'Geschichte',
+    Literature: 'Literatur',
+    Science: 'Wissenschaft',
+    Technology: 'Technologie',
+    Professional: 'Professionell',
+    Neutral: 'Neutral',
+    Journalistic: 'Journalistisch',
+    Short: 'Kurz',
+    Medium: 'Mittel',
+    Long: 'Lang',
+    level: 'Niveau',
+    language: 'Sprache',
+    skillType: 'Fertigkeit',
+    category: 'Kategorie',
+    tone: 'Ton',
+    length: 'Länge',
+  };
+
+  return labels[value] ?? value;
+}
+
+const aiLabCopy = {
+  en: {
+    limitTitle: 'Monthly limit reached',
+    limitHeading: 'Your free AI Lab generations are used up.',
+    limitBody: (usage: string, reset: string) => `You have used ${usage} AI generations for this month. Your free allowance resets on ${reset}. WordPilot Pro unlocks unlimited generation immediately.`,
+    upgradePro: 'Upgrade to WordPilot Pro',
+    labTitle: 'AI Lab',
+    labSubtitle: 'Custom generation workspace',
+    checking: 'Checking',
+    checkingLower: 'checking',
+    free: 'Free',
+    generatingShort: 'Generating...',
+    newGeneration: 'New Text Generation',
+    aiGenerations: 'AI generations',
+    savedTexts: 'Saved texts',
+    monthlyReset: (date: string) => `Monthly reset: ${date}`,
+    upgradeUnlimited: 'Upgrade for unlimited access',
+    level: 'Level',
+    language: 'Language',
+    skillType: 'Skill Type',
+    category: 'Category',
+    tone: 'Tone',
+    length: 'Length',
+    clearDraft: 'Clear current draft',
+    pastGenerations: 'Past Generations',
+    workspaceTitle: 'AI Workspace',
+    workspaceSubtitle: 'Talk to the generator, refine prompts, and keep your history attached to your account.',
+    promptPlaceholder: 'Describe the text you want. Example: Generate a C1 German text about cybersecurity policy with formal tone and practical vocabulary for interviews.',
+    geminiReady: 'Gemini is ready. Your prompts will use the selected level, language, category, tone, and length.',
+    geminiMissing: 'Cloud AI is not configured. The local draft engine will keep generation, editing, and practice flow available.',
+    generate: 'Generate',
+    refine: 'Refine via Chat',
+    generatedText: 'Generated Text',
+    levelPill: (level: string) => `${level} level`,
+    regenerate: 'Regenerate',
+    saving: 'Saving...',
+    saveToTexts: 'Save to My Texts',
+    startPractice: 'Start Practice Now',
+    saveSnapshot: 'Save current draft snapshot',
+    openPreviousGeneration: 'Open previous generation',
+    loadedIntoEditor: (title: string) => `Ready. "${title}" has been loaded into the editor.`,
+    loadedStatus: (title: string) => `Loaded "${title}" from your generation history.`,
+    newDraftStarted: 'New AI draft started. Describe the exact text you want to generate.',
+    checkingAllowance: 'Checking your AI usage allowance. Try again in a moment.',
+    limitReached: (_usage: string, reset: string) => `You used all free AI generations for this month. Upgrade to WordPilot Pro or wait until ${reset}.`,
+    settingUpdated: (key: string, value: string) => `${key} set to ${value}. The next generation will use this setting.`,
+    describeFirst: 'Describe the text you want to generate first.',
+    signInAgain: 'Sign in again before using AI generation.',
+    refineUserMessage: (prompt: string) => `Refine the current draft with this instruction: ${prompt}`,
+    regeneratingMessage: 'Regenerating the text with the same request and current settings...',
+    refining: 'Refining the draft with Gemini...',
+    generating: 'Generating a fresh text with Gemini...',
+    localDraft: 'Cloud AI is not configured, so I am creating a local practice draft instead.',
+    cloudDisabledReason: 'Cloud AI is disabled for this environment; this local draft still follows your account limits.',
+    emptyResponse: 'The generator returned an empty response.',
+    createdWithFallback: (title: string) => `Done. I created "${title}" with the local draft engine because the cloud generator was not available. You can edit it, save it, or start practice now.`,
+    refinedMessage: (title: string) => `Done. I refined "${title}" and updated the editor.`,
+    createdMessage: (title: string) => `Done. I created "${title}" and saved it to your generation history.`,
+    readyWithReason: (title: string, reason: string) => `"${title}" is ready. ${reason}`,
+    ready: (title: string) => `"${title}" is ready.`,
+    localFallbackUsed: 'Local fallback was used.',
+    couldNotComplete: (message: string) => `I could not complete that request. ${message}`,
+    justNow: 'Just now',
+    historyNotSaved: 'The text was generated, but history could not be saved.',
+    signInToSave: 'You need to sign in before saving texts to your library.',
+    supabaseBeforeSave: 'Add Supabase env values before saving to your library.',
+    libraryLimitFull: 'Your free library limit is full. Upgrade to WordPilot Pro for unlimited saved texts.',
+    savedToLibrary: (title: string) => `"${title}" was saved to your library.`,
+    generateOrLoadFirst: 'Generate or load a text first.',
+    saveLimitReached: (_usage: string, reset: string) => `You used all free AI generation saves for this month. Upgrade to WordPilot Pro or wait until ${reset}.`,
+    snapshotSaved: 'Current AI draft snapshot saved.',
+    copied: 'Generated text copied to clipboard.',
+    clipboardUnavailable: 'Clipboard access is not available in this browser.',
+    downloaded: 'Text file downloaded.',
+    generateBeforePractice: 'Generate or paste a practice text before starting.',
+    generatorBusy: 'The cloud generator is busy right now, so I used the local draft engine instead.',
+    apiKeyProblem: 'The Gemini API key is missing or invalid, so I used the local draft engine instead.',
+    quotaProblem: 'The cloud generator hit a temporary usage limit, so I used the local draft engine instead.',
+    generatorFailed: 'The generator could not finish the request.',
+    minutesAgo: (value: number) => `${value} mins ago`,
+    hoursAgo: (value: number) => `${value}h ago`,
+  },
+  de: {
+    limitTitle: 'Monatslimit erreicht',
+    limitHeading: 'Deine kostenlosen KI-Lab-Generierungen sind aufgebraucht.',
+    limitBody: (usage: string, reset: string) => `Du hast diesen Monat ${usage} KI-Generierungen genutzt. Dein kostenloses Kontingent wird am ${reset} zurückgesetzt. WordPilot Pro schaltet sofort unbegrenzte Generierung frei.`,
+    upgradePro: 'Auf WordPilot Pro upgraden',
+    labTitle: 'KI-Lab',
+    labSubtitle: 'Arbeitsbereich für eigene Übungstexte',
+    checking: 'Prüfung',
+    checkingLower: 'prüfen',
+    free: 'Free',
+    generatingShort: 'Generierung...',
+    newGeneration: 'Neuen Text erstellen',
+    aiGenerations: 'KI-Generierungen',
+    savedTexts: 'Gespeicherte Texte',
+    monthlyReset: (date: string) => `Monatsreset: ${date}`,
+    upgradeUnlimited: 'Unbegrenzten Zugriff freischalten',
+    level: 'Niveau',
+    language: 'Sprache',
+    skillType: 'Fertigkeit',
+    category: 'Kategorie',
+    tone: 'Ton',
+    length: 'Länge',
+    clearDraft: 'Aktuellen Entwurf leeren',
+    pastGenerations: 'Frühere Generierungen',
+    workspaceTitle: 'KI-Arbeitsbereich',
+    workspaceSubtitle: 'Sprich mit dem Generator, verfeinere Prompts und behalte deinen Verlauf im Konto.',
+    promptPlaceholder: 'Beschreibe den gewünschten Text. Beispiel: Erstelle einen C1-Text auf Deutsch über Cybersicherheitspolitik mit formellem Ton und praktischem Wortschatz für Interviews.',
+    geminiReady: 'Gemini ist bereit. Prompts nutzen Niveau, Sprache, Kategorie, Ton und Länge.',
+    geminiMissing: 'Cloud-KI ist nicht konfiguriert. Der lokale Entwurfsgenerator hält Generierung, Bearbeitung und Übungsfluss verfügbar.',
+    generate: 'Generieren',
+    refine: 'Per Chat verfeinern',
+    generatedText: 'Generierter Text',
+    levelPill: (level: string) => `${level}-Niveau`,
+    regenerate: 'Neu generieren',
+    saving: 'Speichern...',
+    saveToTexts: 'In meine Texte speichern',
+    startPractice: 'Jetzt üben',
+    saveSnapshot: 'Aktuellen Entwurf speichern',
+    openPreviousGeneration: 'Frühere Generierung öffnen',
+    loadedIntoEditor: (title: string) => `Bereit. "${title}" wurde in den Editor geladen.`,
+    loadedStatus: (title: string) => `"${title}" wurde aus deinem Verlauf geladen.`,
+    newDraftStarted: 'Neuer KI-Entwurf gestartet. Beschreibe genau, welchen Text du generieren möchtest.',
+    checkingAllowance: 'Dein KI-Kontingent wird geprüft. Versuche es gleich erneut.',
+    limitReached: (_usage: string, reset: string) => `Du hast alle kostenlosen KI-Generierungen für diesen Monat genutzt. Upgrade auf WordPilot Pro oder warte bis ${reset}.`,
+    settingUpdated: (key: string, value: string) => `${key} wurde auf ${value} gesetzt. Die nächste Generierung nutzt diese Einstellung.`,
+    describeFirst: 'Beschreibe zuerst, welchen Text du generieren möchtest.',
+    signInAgain: 'Melde dich erneut an, bevor du KI-Generierung nutzt.',
+    refineUserMessage: (prompt: string) => `Aktuellen Entwurf mit dieser Anweisung verfeinern: ${prompt}`,
+    regeneratingMessage: 'Der Text wird mit derselben Anfrage und den aktuellen Einstellungen neu generiert...',
+    refining: 'Der Entwurf wird mit Gemini verfeinert...',
+    generating: 'Ein neuer Text wird mit Gemini generiert...',
+    localDraft: 'Cloud-KI ist nicht konfiguriert, deshalb erstelle ich einen lokalen Übungsentwurf.',
+    cloudDisabledReason: 'Cloud-KI ist in dieser Umgebung deaktiviert; dieser lokale Entwurf folgt trotzdem deinen Kontolimits.',
+    emptyResponse: 'Der Generator hat eine leere Antwort geliefert.',
+    createdWithFallback: (title: string) => `Fertig. Ich habe "${title}" lokal erstellt, weil der Cloud-Generator nicht verfügbar war. Du kannst ihn bearbeiten, speichern oder direkt üben.`,
+    refinedMessage: (title: string) => `Fertig. Ich habe "${title}" verfeinert und den Editor aktualisiert.`,
+    createdMessage: (title: string) => `Fertig. Ich habe "${title}" erstellt und im Verlauf gespeichert.`,
+    readyWithReason: (title: string, reason: string) => `"${title}" ist bereit. ${reason}`,
+    ready: (title: string) => `"${title}" ist bereit.`,
+    localFallbackUsed: 'Lokaler Fallback wurde genutzt.',
+    couldNotComplete: (message: string) => `Die Anfrage konnte nicht abgeschlossen werden. ${message}`,
+    justNow: 'Gerade eben',
+    historyNotSaved: 'Der Text wurde generiert, aber der Verlauf konnte nicht gespeichert werden.',
+    signInToSave: 'Melde dich an, bevor du Texte in deiner Bibliothek speicherst.',
+    supabaseBeforeSave: 'Füge Supabase-Umgebungswerte hinzu, bevor du in die Bibliothek speicherst.',
+    libraryLimitFull: 'Dein kostenloses Bibliothekslimit ist voll. WordPilot Pro schaltet unbegrenzt gespeicherte Texte frei.',
+    savedToLibrary: (title: string) => `"${title}" wurde in deiner Bibliothek gespeichert.`,
+    generateOrLoadFirst: 'Generiere oder lade zuerst einen Text.',
+    saveLimitReached: (_usage: string, reset: string) => `Du hast alle kostenlosen KI-Speicherungen für diesen Monat genutzt. Upgrade auf WordPilot Pro oder warte bis ${reset}.`,
+    snapshotSaved: 'Aktueller KI-Entwurf wurde gespeichert.',
+    copied: 'Generierter Text wurde in die Zwischenablage kopiert.',
+    clipboardUnavailable: 'Zwischenablage ist in diesem Browser nicht verfügbar.',
+    downloaded: 'Textdatei wurde heruntergeladen.',
+    generateBeforePractice: 'Generiere oder füge einen Übungstext ein, bevor du startest.',
+    generatorBusy: 'Der Cloud-Generator ist gerade ausgelastet, deshalb wurde der lokale Entwurfsgenerator genutzt.',
+    apiKeyProblem: 'Der Gemini-API-Schlüssel fehlt oder ist ungültig, deshalb wurde der lokale Entwurfsgenerator genutzt.',
+    quotaProblem: 'Der Cloud-Generator hat ein temporäres Nutzungslimit erreicht, deshalb wurde der lokale Entwurfsgenerator genutzt.',
+    generatorFailed: 'Der Generator konnte die Anfrage nicht abschließen.',
+    minutesAgo: (value: number) => `vor ${value} Min.`,
+    hoursAgo: (value: number) => `vor ${value} Std.`,
+  },
+};
 
 
 

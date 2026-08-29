@@ -56,6 +56,18 @@
 }
 
 @layer utilities {
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
   .whisper-shadow {
     box-shadow: 0px 12px 32px rgba(42, 52, 57, 0.06);
   }
@@ -67,5 +79,24 @@
 
   .primary-gradient {
     background: linear-gradient(135deg, #0053db 0%, #0048c1 100%);
+  }
+
+  .wp-shell {
+    width: 100%;
+    max-width: 1440px;
+    margin-inline: auto;
+    padding-inline: 1rem;
+  }
+
+  @media (min-width: 640px) {
+    .wp-shell {
+      padding-inline: 1.5rem;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .wp-shell {
+      padding-inline: 2rem;
+    }
   }
 }

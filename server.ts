@@ -413,12 +413,20 @@ app.get('/api/admin/overview', async (req, res) => {
     savedTextsCount,
     certificatesCount,
     subscriptionsCount,
+    shadowingSessionsCount,
+    shadowingAttemptsCount,
+    aiUsageCount,
+    onboardingCompleteRows,
+    incompleteProfilesRows,
     activeSubscriptionsRows,
     paidInvoicesCount,
     recentUsers,
     recentInvoices,
     invoiceRevenue,
     recentSessions,
+    recentShadowingSessions,
+    usageEventsResult,
+    userPlanRows,
     billingProfiles,
     authUsersResult,
   ] = await Promise.all([
@@ -427,6 +435,17 @@ app.get('/api/admin/overview', async (req, res) => {
     supabaseCount(supabaseUrl, serviceRoleKey, 'saved_texts'),
     supabaseCount(supabaseUrl, serviceRoleKey, 'certificates'),
     supabaseCount(supabaseUrl, serviceRoleKey, 'user_subscriptions'),
+    supabaseCount(supabaseUrl, serviceRoleKey, 'shadowing_sessions'),
+    supabaseCount(supabaseUrl, serviceRoleKey, 'shadowing_attempts'),
+    supabaseCount(supabaseUrl, serviceRoleKey, 'usage_events', 'feature_key=eq.ai_generation'),
+    supabaseRest(supabaseUrl, serviceRoleKey, 'profiles', {
+      method: 'GET',
+      query: 'select=id&onboarding_completed=eq.true&limit=1000',
+    }),
+    supabaseRest(supabaseUrl, serviceRoleKey, 'profiles', {
+      method: 'GET',
+      query: 'select=id,email,full_name,target_language,cefr_level&or=(target_language.is.null,cefr_level.is.null,onboarding_completed.is.false)&limit=50',
+    }),
     supabaseRest(supabaseUrl, serviceRoleKey, 'user_subscriptions', {
       method: 'GET',
       query: 'select=user_id&status=in.(active,trialing,paid,complete,completed,succeeded)&limit=1000',
@@ -448,6 +467,19 @@ app.get('/api/admin/overview', async (req, res) => {
     supabaseRest(supabaseUrl, serviceRoleKey, 'dictation_sessions', {
       method: 'GET',
       query: 'select=id,user_id,title,language,accuracy,created_at&order=created_at.desc&limit=10',
+    }),
+    supabaseRest(supabaseUrl, serviceRoleKey, 'shadowing_sessions', {
+      method: 'GET',
+      query: 'select=id,user_id,title,language,cefr_level,average_score,best_score,completed_segments,total_segments,status,updated_at&order=updated_at.desc&limit=10',
+    }),
+    supabaseRest(supabaseUrl, serviceRoleKey, 'usage_events', {
+      method: 'GET',
+      query: 'select=id,user_id,feature_key,event_type,quantity,metadata,created_at&order=created_at.desc&limit=1000',
+    }),
+    supabaseRest(supabaseUrl, serviceRoleKey, 'user_subscriptions', {
+      method: 'GET',
+      query:
+        'select=user_id,plan_name,status,billing_cycle,amount_cents,currency,current_period_end,cancel_at_period_end,updated_at&order=updated_at.desc&limit=1000',
     }),
     supabaseRest(supabaseUrl, serviceRoleKey, 'profiles', {
       method: 'GET',
@@ -473,10 +505,18 @@ app.get('/api/admin/overview', async (req, res) => {
   const optionalWarnings = [
     certificatesCount,
     subscriptionsCount,
+    shadowingSessionsCount,
+    shadowingAttemptsCount,
+    aiUsageCount,
+    onboardingCompleteRows,
+    incompleteProfilesRows,
     activeSubscriptionsRows,
     paidInvoicesCount,
     recentInvoices,
     invoiceRevenue,
+    recentShadowingSessions,
+    usageEventsResult,
+    userPlanRows,
   ]
     .filter((result) => !result.ok)
     .map((result) => result.error)
@@ -491,6 +531,7 @@ app.get('/api/admin/overview', async (req, res) => {
   const profileById = new Map(
     (Array.isArray(billingProfiles.data) ? billingProfiles.data : []).map((profile: any) => [profile.id, profile]),
   );
+  const planByUserId = buildUserPlanMap(Array.isArray(userPlanRows.data) ? userPlanRows.data : []);
   const now = Date.now();
   const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000;
   const dayStart = getLocalDayStart(new Date());
@@ -512,7 +553,10 @@ app.get('/api/admin/overview', async (req, res) => {
     const timestamp = getInvoicePaidTimestamp(invoice);
     return timestamp >= yesterdayStart && timestamp < todayStart;
   });
-  const revenueChart = buildRevenueChart(paidRevenueInvoices);
+  const revenueCharts = buildRevenueCharts(paidRevenueInvoices);
+  const revenuePeriods = buildRevenuePeriods(paidRevenueInvoices);
+  const usageEvents = Array.isArray(usageEventsResult.data) ? usageEventsResult.data : [];
+  const aiUsageSummary = buildAiUsageSummary(usageEvents);
   const recentPayers = {
     today: buildPayerRows(paidToday, profileById),
     yesterday: buildPayerRows(paidYesterday, profileById),
@@ -523,6 +567,7 @@ app.get('/api/admin/overview', async (req, res) => {
     const authUser = authUsersById.get(profile.id) as any;
     return {
       ...profile,
+      plan: planByUserId.get(profile.id) ?? buildFreePlanSummary(),
       is_blocked: isAuthUserBlocked(authUser),
       blocked_reason: authUser?.user_metadata?.blocked_reason ?? authUser?.app_metadata?.blocked_reason ?? null,
       blocked_at: authUser?.banned_until ?? null,
@@ -555,6 +600,11 @@ app.get('/api/admin/overview', async (req, res) => {
       sessions: sessionsCount.count,
       savedTexts: savedTextsCount.count,
       certificates: certificatesCount.count,
+      shadowingSessions: shadowingSessionsCount.count,
+      shadowingAttempts: shadowingAttemptsCount.count,
+      aiGenerations: aiUsageCount.count,
+      onboardingCompleted: Array.isArray(onboardingCompleteRows.data) ? onboardingCompleteRows.data.length : 0,
+      incompleteProfiles: Array.isArray(incompleteProfilesRows.data) ? incompleteProfilesRows.data.length : 0,
     },
     billingSummary: {
       today: {
@@ -565,15 +615,226 @@ app.get('/api/admin/overview', async (req, res) => {
         paidInvoices: paidYesterday.length,
         revenueCents: paidYesterday.reduce((sum, invoice) => sum + Number(invoice.amount_cents ?? 0), 0),
       },
-      last30Days: revenueChart,
+      periods: revenuePeriods,
+      charts: revenueCharts,
+      last30Days: revenueCharts.daily,
       recentPayers,
     },
+    aiUsageSummary,
     userSearch,
     recentUsers: recentProfiles,
     recentInvoices: recentInvoices.data ?? [],
     recentSessions: recentSessions.data ?? [],
+    recentShadowingSessions: recentShadowingSessions.data ?? [],
+    recentUsageEvents: usageEvents.slice(0, 10),
+    incompleteProfiles: incompleteProfilesRows.data ?? [],
     adminUsers,
     warnings: optionalWarnings,
+  });
+});
+
+app.get('/api/admin/users/:userId', async (req, res) => {
+  const adminContext = await getAdminRequestContext(req, res);
+  if (!adminContext) return;
+
+  const targetUserId = req.params.userId;
+  const [
+    authUser,
+    profileResult,
+    subscriptionsResult,
+    invoicesResult,
+    usageEventsResult,
+    dictationSessionsResult,
+    dictationMistakesResult,
+    shadowingSessionsResult,
+    shadowingAttemptsResult,
+    practiceProgressResult,
+    placementResultsResult,
+    lessonProgressResult,
+    exerciseAttemptsResult,
+    reviewQueueResult,
+    savedTextsResult,
+    generatedTextsResult,
+    certificatesResult,
+  ] = await Promise.all([
+    fetchAuthUser(adminContext.supabaseUrl, adminContext.serviceRoleKey, targetUserId),
+    supabaseRest(adminContext.supabaseUrl, adminContext.serviceRoleKey, 'profiles', {
+      method: 'GET',
+      query:
+        `select=id,email,full_name,avatar_url,native_language,target_language,cefr_level,goal_cefr_level,onboarding_completed,onboarding_completed_at,is_blocked,blocked_reason,blocked_at,created_at,updated_at&id=eq.${encodeURIComponent(targetUserId)}&limit=1`,
+    }),
+    supabaseRest(adminContext.supabaseUrl, adminContext.serviceRoleKey, 'user_subscriptions', {
+      method: 'GET',
+      query:
+        `select=id,plan_name,status,billing_cycle,amount_cents,currency,payment_status,stripe_customer_id,stripe_subscription_id,current_period_start,current_period_end,renewal_date,cancel_at_period_end,canceled_at,trial_end,created_at,updated_at&user_id=eq.${encodeURIComponent(targetUserId)}&order=updated_at.desc&limit=20`,
+    }),
+    supabaseRest(adminContext.supabaseUrl, adminContext.serviceRoleKey, 'billing_invoices', {
+      method: 'GET',
+      query:
+        `select=id,label,amount_cents,currency,status,payment_status,issued_at,paid_at,hosted_invoice_url,invoice_pdf_url,stripe_invoice_id,stripe_checkout_session_id&user_id=eq.${encodeURIComponent(targetUserId)}&order=issued_at.desc&limit=50`,
+    }),
+    supabaseRest(adminContext.supabaseUrl, adminContext.serviceRoleKey, 'usage_events', {
+      method: 'GET',
+      query:
+        `select=id,feature_key,event_type,quantity,period_start,period_end,metadata,created_at&user_id=eq.${encodeURIComponent(targetUserId)}&order=created_at.desc&limit=200`,
+    }),
+    supabaseRest(adminContext.supabaseUrl, adminContext.serviceRoleKey, 'dictation_sessions', {
+      method: 'GET',
+      query:
+        `select=id,title,language,cefr_level,accuracy,status,created_at,updated_at&user_id=eq.${encodeURIComponent(targetUserId)}&order=created_at.desc&limit=25`,
+    }),
+    supabaseRest(adminContext.supabaseUrl, adminContext.serviceRoleKey, 'dictation_mistakes', {
+      method: 'GET',
+      query:
+        `select=id,written_word,correct_word,status,language,cefr_level,created_at&user_id=eq.${encodeURIComponent(targetUserId)}&order=created_at.desc&limit=100`,
+    }),
+    supabaseRest(adminContext.supabaseUrl, adminContext.serviceRoleKey, 'shadowing_sessions', {
+      method: 'GET',
+      query:
+        `select=id,video_id,video_url,title,language,cefr_level,total_segments,completed_segments,average_score,best_score,difficult_sentences,missed_words,status,created_at,updated_at&user_id=eq.${encodeURIComponent(targetUserId)}&order=updated_at.desc&limit=25`,
+    }),
+    supabaseRest(adminContext.supabaseUrl, adminContext.serviceRoleKey, 'shadowing_attempts', {
+      method: 'GET',
+      query:
+        `select=id,session_id,segment_index,target_text,transcript,score,passed,missing_words,incorrect_words,engine,model,created_at&user_id=eq.${encodeURIComponent(targetUserId)}&order=created_at.desc&limit=100`,
+    }),
+    supabaseRest(adminContext.supabaseUrl, adminContext.serviceRoleKey, 'practice_progress', {
+      method: 'GET',
+      query:
+        `select=id,language,cefr_level,lesson_id,exercise_id,status,started_at,completed_at,updated_at&user_id=eq.${encodeURIComponent(targetUserId)}&order=updated_at.desc&limit=100`,
+    }),
+    supabaseRest(adminContext.supabaseUrl, adminContext.serviceRoleKey, 'curriculum_placement_results', {
+      method: 'GET',
+      query:
+        `select=id,language,recommended_level_number,cefr_level,cefr_sub_level,score,skill_scores,created_at&user_id=eq.${encodeURIComponent(targetUserId)}&order=created_at.desc&limit=10`,
+    }),
+    supabaseRest(adminContext.supabaseUrl, adminContext.serviceRoleKey, 'curriculum_lesson_progress', {
+      method: 'GET',
+      query:
+        `select=id,language,level_number,lesson_id,status,overall_score,skill_scores,started_at,passed_at,updated_at&user_id=eq.${encodeURIComponent(targetUserId)}&order=updated_at.desc&limit=50`,
+    }),
+    supabaseRest(adminContext.supabaseUrl, adminContext.serviceRoleKey, 'curriculum_exercise_attempts', {
+      method: 'GET',
+      query:
+        `select=id,language,level_number,lesson_id,exercise_id,exercise_type,skill,score,created_at&user_id=eq.${encodeURIComponent(targetUserId)}&order=created_at.desc&limit=100`,
+    }),
+    supabaseRest(adminContext.supabaseUrl, adminContext.serviceRoleKey, 'curriculum_review_queue', {
+      method: 'GET',
+      query:
+        `select=id,language,level_number,lesson_id,item_type,item_key,reason,due_at,status,updated_at&user_id=eq.${encodeURIComponent(targetUserId)}&order=due_at.asc&limit=50`,
+    }),
+    supabaseRest(adminContext.supabaseUrl, adminContext.serviceRoleKey, 'saved_texts', {
+      method: 'GET',
+      query:
+        `select=id,title,level,category,source,created_at&user_id=eq.${encodeURIComponent(targetUserId)}&order=created_at.desc&limit=25`,
+    }),
+    supabaseRest(adminContext.supabaseUrl, adminContext.serviceRoleKey, 'generated_texts', {
+      method: 'GET',
+      query:
+        `select=id,title,level,created_at&user_id=eq.${encodeURIComponent(targetUserId)}&order=created_at.desc&limit=25`,
+    }),
+    supabaseRest(adminContext.supabaseUrl, adminContext.serviceRoleKey, 'certificates', {
+      method: 'GET',
+      query:
+        `select=id,title,score,language,cefr_level,issued_at,created_at&user_id=eq.${encodeURIComponent(targetUserId)}&order=issued_at.desc&limit=25`,
+    }),
+  ]);
+
+  if (!authUser.ok) {
+    return res.status(authUser.status).json({ error: authUser.error });
+  }
+
+  const criticalError = [profileResult].find((result) => !result.ok);
+  if (criticalError && !criticalError.ok) {
+    return res.status(criticalError.status ?? 500).json({ error: criticalError.error });
+  }
+
+  const subscriptions = Array.isArray(subscriptionsResult.data) ? subscriptionsResult.data : [];
+  const invoices = Array.isArray(invoicesResult.data) ? invoicesResult.data : [];
+  const usageEvents = Array.isArray(usageEventsResult.data) ? usageEventsResult.data : [];
+  const dictationSessions = Array.isArray(dictationSessionsResult.data) ? dictationSessionsResult.data : [];
+  const shadowingSessions = Array.isArray(shadowingSessionsResult.data) ? shadowingSessionsResult.data : [];
+  const lessonProgress = Array.isArray(lessonProgressResult.data) ? lessonProgressResult.data : [];
+  const exerciseAttempts = Array.isArray(exerciseAttemptsResult.data) ? exerciseAttemptsResult.data : [];
+  const paidInvoices = invoices.filter(isPaidRevenueInvoice);
+  const plan = buildUserPlanMap(subscriptions).get(targetUserId) ?? buildFreePlanSummary();
+  const aiUsageSummary = buildAiUsageSummary(usageEvents);
+
+  return res.json({
+    generatedAt: new Date().toISOString(),
+    user: {
+      auth: {
+        id: authUser.user?.id ?? targetUserId,
+        email: authUser.user?.email ?? null,
+        createdAt: authUser.user?.created_at ?? null,
+        lastSignInAt: authUser.user?.last_sign_in_at ?? null,
+        providers: authUser.user?.app_metadata?.providers ?? [],
+        blocked: isAuthUserBlocked(authUser.user),
+      },
+      profile: profileResult.data?.[0] ?? null,
+      plan,
+    },
+    metrics: {
+      revenueCents: paidInvoices.reduce((sum, invoice) => sum + Number(invoice.amount_cents ?? 0), 0),
+      paidInvoices: paidInvoices.length,
+      subscriptions: subscriptions.length,
+      aiGenerations: aiUsageSummary.allTime.generations,
+      aiEstimatedCostCents: aiUsageSummary.allTime.estimatedCostCents,
+      dictationSessions: dictationSessions.length,
+      dictationAverageScore: getAverageFromRows(dictationSessions, 'accuracy'),
+      shadowingSessions: shadowingSessions.length,
+      shadowingAverageScore: getAverageFromRows(shadowingSessions, 'average_score'),
+      curriculumLessons: lessonProgress.length,
+      curriculumPassedLessons: lessonProgress.filter((row: any) => row.status === 'passed').length,
+      exerciseAttempts: exerciseAttempts.length,
+      savedTexts: Array.isArray(savedTextsResult.data) ? savedTextsResult.data.length : 0,
+      generatedTexts: Array.isArray(generatedTextsResult.data) ? generatedTextsResult.data.length : 0,
+      certificates: Array.isArray(certificatesResult.data) ? certificatesResult.data.length : 0,
+    },
+    billing: {
+      subscriptions,
+      invoices,
+      periods: buildRevenuePeriods(paidInvoices),
+      charts: buildRevenueCharts(paidInvoices),
+    },
+    aiUsage: {
+      summary: aiUsageSummary,
+      events: usageEvents.slice(0, 50),
+    },
+    learning: {
+      dictationSessions,
+      dictationMistakes: dictationMistakesResult.data ?? [],
+      shadowingSessions,
+      shadowingAttempts: shadowingAttemptsResult.data ?? [],
+      practiceProgress: practiceProgressResult.data ?? [],
+      placementResults: placementResultsResult.data ?? [],
+      lessonProgress,
+      exerciseAttempts,
+      reviewQueue: reviewQueueResult.data ?? [],
+      savedTexts: savedTextsResult.data ?? [],
+      generatedTexts: generatedTextsResult.data ?? [],
+      certificates: certificatesResult.data ?? [],
+    },
+    warnings: [
+      subscriptionsResult,
+      invoicesResult,
+      usageEventsResult,
+      dictationSessionsResult,
+      dictationMistakesResult,
+      shadowingSessionsResult,
+      shadowingAttemptsResult,
+      practiceProgressResult,
+      placementResultsResult,
+      lessonProgressResult,
+      exerciseAttemptsResult,
+      reviewQueueResult,
+      savedTextsResult,
+      generatedTextsResult,
+      certificatesResult,
+    ]
+      .filter((result) => !result.ok)
+      .map((result) => result.error)
+      .filter(Boolean),
   });
 });
 
@@ -801,6 +1062,45 @@ app.post('/api/admin/users/:userId/reset-password', async (req, res) => {
   }
 
   return res.json({ sent: true, email });
+});
+
+app.delete('/api/admin/users/:userId', async (req, res) => {
+  const adminContext = await getAdminRequestContext(req, res);
+  if (!adminContext) return;
+
+  if (!canManagePrivilegedAdminActions(adminContext.admin)) {
+    return res.status(403).json({ error: 'Only an owner can permanently delete users.' });
+  }
+
+  const targetUserId = req.params.userId;
+  if (targetUserId === adminContext.admin.id) {
+    return res.status(400).json({ error: 'You cannot delete your own admin account.' });
+  }
+
+  const authUser = await fetchAuthUser(adminContext.supabaseUrl, adminContext.serviceRoleKey, targetUserId);
+  if (!authUser.ok) {
+    return res.status(authUser.status).json({ error: authUser.error });
+  }
+
+  const storageCleanup = await deleteUserShadowingRecordings(
+    adminContext.supabaseUrl,
+    adminContext.serviceRoleKey,
+    targetUserId,
+  );
+  const tableCleanup = await deleteUserOwnedRows(adminContext.supabaseUrl, adminContext.serviceRoleKey, targetUserId);
+  const authDelete = await deleteAuthUser(adminContext.supabaseUrl, adminContext.serviceRoleKey, targetUserId);
+
+  if (!authDelete.ok) {
+    return res.status(authDelete.status).json({ error: authDelete.error });
+  }
+
+  return res.json({
+    deleted: true,
+    userId: targetUserId,
+    email: authUser.user?.email ?? null,
+    tableCleanup,
+    storageCleanup,
+  });
 });
 
 app.post('/api/stripe/webhook', async (req, res) => {
@@ -2082,6 +2382,8 @@ async function getAiGenerationAccess(supabaseUrl: string, serviceRoleKey: string
 
 async function recordAiGenerationUsage(supabaseUrl: string, serviceRoleKey: string, userId: string, promptLength: number, request?: AiLabRequest) {
   const period = getCurrentUsagePeriod();
+  const model = process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash';
+  const estimatedCostCents = Number(process.env.AI_GENERATION_ESTIMATED_COST_CENTS ?? 0.1);
   return supabaseRest(supabaseUrl, serviceRoleKey, 'usage_events', {
     method: 'POST',
     body: {
@@ -2093,6 +2395,9 @@ async function recordAiGenerationUsage(supabaseUrl: string, serviceRoleKey: stri
       period_end: period.end,
       metadata: {
         source: 'server_ai_endpoint',
+        provider: 'Gemini',
+        model,
+        estimated_cost_cents: Number.isFinite(estimatedCostCents) ? estimatedCostCents : 0,
         prompt_length: promptLength,
         mode: request?.mode ?? null,
         level: request?.settings.level ?? null,
@@ -2274,6 +2579,92 @@ async function fetchAuthUser(supabaseUrl: string, serviceRoleKey: string, userId
   return { ok: true as const, status: response.status, user: data };
 }
 
+async function deleteAuthUser(supabaseUrl: string, serviceRoleKey: string, userId: string) {
+  const response = await fetch(`${supabaseUrl.replace(/\/$/, '')}/auth/v1/admin/users/${encodeURIComponent(userId)}`, {
+    method: 'DELETE',
+    headers: {
+      apikey: serviceRoleKey,
+      Authorization: `Bearer ${serviceRoleKey}`,
+    },
+  });
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    return {
+      ok: false as const,
+      status: response.status,
+      error: data?.msg ?? data?.message ?? data?.error ?? 'Unable to delete Supabase Auth user.',
+    };
+  }
+
+  return { ok: true as const, status: response.status };
+}
+
+async function deleteUserOwnedRows(supabaseUrl: string, serviceRoleKey: string, userId: string) {
+  const tables: Array<{ name: string; field: 'user_id' | 'id' }> = [
+    { name: 'shadowing_attempts', field: 'user_id' },
+    { name: 'shadowing_sessions', field: 'user_id' },
+    { name: 'dictation_mistakes', field: 'user_id' },
+    { name: 'dictation_sessions', field: 'user_id' },
+    { name: 'practice_progress', field: 'user_id' },
+    { name: 'curriculum_review_queue', field: 'user_id' },
+    { name: 'curriculum_exercise_attempts', field: 'user_id' },
+    { name: 'curriculum_lesson_progress', field: 'user_id' },
+    { name: 'curriculum_placement_results', field: 'user_id' },
+    { name: 'certificates', field: 'user_id' },
+    { name: 'saved_texts', field: 'user_id' },
+    { name: 'generated_texts', field: 'user_id' },
+    { name: 'usage_events', field: 'user_id' },
+    { name: 'billing_invoices', field: 'user_id' },
+    { name: 'user_subscriptions', field: 'user_id' },
+    { name: 'admin_users', field: 'user_id' },
+    { name: 'profiles', field: 'id' },
+  ];
+
+  const results = [];
+  for (const table of tables) {
+    const result = await supabaseRest(supabaseUrl, serviceRoleKey, table.name, {
+      method: 'DELETE',
+      query: `${table.field}=eq.${encodeURIComponent(userId)}`,
+      headers: { Prefer: 'return=minimal' },
+    });
+
+    results.push({ table: table.name, ok: result.ok, error: result.ok ? null : result.error });
+  }
+
+  return results;
+}
+
+async function deleteUserShadowingRecordings(supabaseUrl: string, serviceRoleKey: string, userId: string) {
+  const bucket = 'shadowing-recordings';
+  const attemptsResult = await supabaseRest(supabaseUrl, serviceRoleKey, 'shadowing_attempts', {
+    method: 'GET',
+    query: `select=audio_path&user_id=eq.${encodeURIComponent(userId)}&audio_path=not.is.null&limit=1000`,
+  });
+
+  const prefixes = Array.isArray(attemptsResult.data)
+    ? attemptsResult.data
+        .map((row: any) => row?.audio_path)
+        .filter((path: unknown): path is string => typeof path === 'string' && path.startsWith(`${userId}/`))
+    : [];
+
+  if (prefixes.length === 0) {
+    return { bucket, removed: 0, ok: attemptsResult.ok };
+  }
+
+  const deleteResponse = await fetch(`${supabaseUrl.replace(/\/$/, '')}/storage/v1/object/${bucket}`, {
+    method: 'DELETE',
+    headers: {
+      apikey: serviceRoleKey,
+      Authorization: `Bearer ${serviceRoleKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ prefixes }),
+  });
+
+  return { bucket, removed: prefixes.length, ok: deleteResponse.ok };
+}
+
 function isAuthUserBlocked(authUser: any) {
   if (!authUser?.banned_until) {
     return false;
@@ -2332,12 +2723,150 @@ function buildRevenueChart(invoices: any[]) {
   return chart;
 }
 
+function buildRevenueCharts(invoices: any[]) {
+  return {
+    daily: buildRevenueChart(invoices),
+    weekly: buildRevenueBucketChart(invoices, 12, 'week'),
+    monthly: buildRevenueBucketChart(invoices, 12, 'month'),
+  };
+}
+
+function buildRevenueBucketChart(invoices: any[], bucketCount: number, bucket: 'week' | 'month') {
+  const today = getLocalDayStart(new Date());
+  const chart = Array.from({ length: bucketCount }, (_, index) => {
+    const start = bucket === 'week' ? getWeekStart(today) : new Date(today.getFullYear(), today.getMonth(), 1);
+    if (bucket === 'week') {
+      start.setDate(start.getDate() - 7 * (bucketCount - 1 - index));
+    } else {
+      start.setMonth(start.getMonth() - (bucketCount - 1 - index));
+    }
+
+    const end = new Date(start);
+    if (bucket === 'week') {
+      end.setDate(end.getDate() + 7);
+    } else {
+      end.setMonth(end.getMonth() + 1);
+    }
+
+    return {
+      date: formatChartDate(start),
+      label:
+        bucket === 'week'
+          ? `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+          : start.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+      paidInvoices: 0,
+      revenueCents: 0,
+      startMs: start.getTime(),
+      endMs: end.getTime(),
+    };
+  });
+
+  invoices.forEach((invoice) => {
+    const timestamp = getInvoicePaidTimestamp(invoice);
+    if (!timestamp) return;
+
+    const row = chart.find((bucketRow) => timestamp >= bucketRow.startMs && timestamp < bucketRow.endMs);
+    if (!row) return;
+
+    row.paidInvoices += 1;
+    row.revenueCents += Number(invoice.amount_cents ?? 0);
+  });
+
+  return chart.map(({ startMs: _startMs, endMs: _endMs, ...row }) => row);
+}
+
+function getWeekStart(date: Date) {
+  const start = getLocalDayStart(date);
+  const day = start.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  start.setDate(start.getDate() + diff);
+  return start;
+}
+
+function buildRevenuePeriods(invoices: any[]) {
+  const now = new Date();
+  const todayStart = getLocalDayStart(now).getTime();
+  const yesterdayStart = todayStart - 24 * 60 * 60 * 1000;
+  const tomorrowStart = todayStart + 24 * 60 * 60 * 1000;
+  const last7Start = todayStart - 6 * 24 * 60 * 60 * 1000;
+  const last30Start = todayStart - 29 * 24 * 60 * 60 * 1000;
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+
+  return {
+    today: summarizeInvoiceWindow(invoices, todayStart, tomorrowStart),
+    yesterday: summarizeInvoiceWindow(invoices, yesterdayStart, todayStart),
+    last7Days: summarizeInvoiceWindow(invoices, last7Start, tomorrowStart),
+    last30Days: summarizeInvoiceWindow(invoices, last30Start, tomorrowStart),
+    monthToDate: summarizeInvoiceWindow(invoices, monthStart, tomorrowStart),
+    allTime: summarizeInvoiceWindow(invoices, 0, Number.POSITIVE_INFINITY),
+  };
+}
+
+function summarizeInvoiceWindow(invoices: any[], startMs: number, endMs: number) {
+  const matchingInvoices = invoices.filter((invoice) => {
+    const timestamp = getInvoicePaidTimestamp(invoice);
+    return timestamp >= startMs && timestamp < endMs;
+  });
+
+  return {
+    paidInvoices: matchingInvoices.length,
+    revenueCents: matchingInvoices.reduce((sum, invoice) => sum + Number(invoice.amount_cents ?? 0), 0),
+  };
+}
+
+function buildAiUsageSummary(events: any[]) {
+  const aiEvents = events.filter((event) => event.feature_key === 'ai_generation');
+  const todayStart = getLocalDayStart(new Date()).getTime();
+  const tomorrowStart = todayStart + 24 * 60 * 60 * 1000;
+  const last7Start = todayStart - 6 * 24 * 60 * 60 * 1000;
+  const last30Start = todayStart - 29 * 24 * 60 * 60 * 1000;
+  const estimatedCostPerGenerationCents = Number(process.env.AI_GENERATION_ESTIMATED_COST_CENTS ?? 0.1);
+
+  return {
+    provider: 'Gemini',
+    model: process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash',
+    currency: 'usd',
+    estimatedCostPerGenerationCents,
+    today: summarizeAiUsageWindow(aiEvents, todayStart, tomorrowStart, estimatedCostPerGenerationCents),
+    last7Days: summarizeAiUsageWindow(aiEvents, last7Start, tomorrowStart, estimatedCostPerGenerationCents),
+    last30Days: summarizeAiUsageWindow(aiEvents, last30Start, tomorrowStart, estimatedCostPerGenerationCents),
+    allTime: summarizeAiUsageWindow(aiEvents, 0, Number.POSITIVE_INFINITY, estimatedCostPerGenerationCents),
+  };
+}
+
+function summarizeAiUsageWindow(events: any[], startMs: number, endMs: number, fallbackCostCents: number) {
+  const matchingEvents = events.filter((event) => {
+    const timestamp = new Date(event.created_at ?? '').getTime();
+    return Number.isFinite(timestamp) && timestamp >= startMs && timestamp < endMs;
+  });
+  const generations = matchingEvents.reduce((sum, event) => sum + Number(event.quantity ?? 1), 0);
+  const trackedCostCents = matchingEvents.reduce((sum, event) => {
+    const metadata = typeof event.metadata === 'object' && event.metadata !== null ? event.metadata : {};
+    const storedCost = Number(metadata.cost_cents ?? metadata.estimated_cost_cents);
+    return sum + (Number.isFinite(storedCost) ? storedCost : Number(event.quantity ?? 1) * fallbackCostCents);
+  }, 0);
+
+  return {
+    generations,
+    estimatedCostCents: Math.round(trackedCostCents * 100) / 100,
+  };
+}
+
+function getAverageFromRows(rows: any[], field: string) {
+  const values = rows
+    .map((row) => Number(row?.[field]))
+    .filter((value) => Number.isFinite(value));
+  if (values.length === 0) return null;
+  return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
+}
+
 function buildPayerRows(invoices: any[], profileById: Map<any, any>) {
   return invoices.slice(0, 10).map((invoice) => {
-    const profile = profileById.get(invoice.user_id);
+    const userId = invoice.user_id ? String(invoice.user_id) : null;
+    const profile = userId ? profileById.get(userId) : null;
     return {
-      userId: invoice.user_id,
-      name: profile?.full_name || profile?.email || `User ${String(invoice.user_id ?? '').slice(0, 8)}`,
+      userId,
+      name: profile?.full_name || profile?.email || (userId ? `User ${userId.slice(0, 8)}` : 'Unknown user'),
       email: profile?.email ?? null,
       amountCents: Number(invoice.amount_cents ?? 0),
       currency: invoice.currency ?? 'usd',
@@ -2345,6 +2874,49 @@ function buildPayerRows(invoices: any[], profileById: Map<any, any>) {
       label: invoice.label ?? null,
     };
   });
+}
+
+function buildFreePlanSummary() {
+  return {
+    name: 'Free',
+    status: 'free',
+    billingCycle: null,
+    amountCents: 0,
+    currency: 'usd',
+    currentPeriodEnd: null,
+    cancelAtPeriodEnd: false,
+  };
+}
+
+function buildUserPlanMap(subscriptions: any[]) {
+  const planByUserId = new Map<string, ReturnType<typeof buildFreePlanSummary>>();
+  const rankStatus = (status: string) => {
+    if (['active', 'trialing', 'paid', 'complete', 'completed', 'succeeded'].includes(status)) return 3;
+    if (['past_due', 'unpaid'].includes(status)) return 2;
+    if (['canceled', 'cancelled'].includes(status)) return 1;
+    return 0;
+  };
+
+  for (const subscription of subscriptions) {
+    const userId = String(subscription.user_id ?? '');
+    if (!userId) continue;
+
+    const status = String(subscription.status ?? 'unknown').toLowerCase();
+    const current = planByUserId.get(userId);
+    if (current && rankStatus(current.status) > rankStatus(status)) continue;
+
+    planByUserId.set(userId, {
+      name: subscription.plan_name ?? 'WordPilot Pro',
+      status,
+      billingCycle: subscription.billing_cycle ?? null,
+      amountCents: Number(subscription.amount_cents ?? 0),
+      currency: subscription.currency ?? 'usd',
+      currentPeriodEnd: subscription.current_period_end ?? null,
+      cancelAtPeriodEnd: Boolean(subscription.cancel_at_period_end),
+    });
+  }
+
+  return planByUserId;
 }
 
 type ApiResult = { status: number; body: Record<string, unknown> };

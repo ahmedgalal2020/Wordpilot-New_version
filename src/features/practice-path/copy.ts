@@ -1,13 +1,14 @@
 import type { CefrLevel, LearningLanguage } from '../../lib/learning';
+import type { InterfaceLanguage } from '../../i18n';
 import type { PathCopy } from './types';
 
-export function buildPracticePathCopy(language: LearningLanguage, level: CefrLevel): PathCopy {
-  if (language === 'German') {
+export function buildPracticePathCopy(language: LearningLanguage, level: CefrLevel, interfaceLanguage: InterfaceLanguage, displayLanguage = language): PathCopy {
+  if (interfaceLanguage === 'de') {
     return {
       pageEyebrow: 'Übungsweg',
       title: 'Mein Lernweg',
       intro: 'Folge dem Lernweg für deine ausgewählte Sprache und dein aktuelles GER-Niveau.',
-      lessonsTitle: `Deutsch ${level} Lektionen`,
+      lessonsTitle: `${displayLanguage} ${level} Lektionen`,
       lessonsSummary: '12 Lektionen. Jede Lektion enthält Diktat, Lesen, Hören und Schreiben.',
       syncingProgress: 'Fortschritt wird synchronisiert',
       syncingPath: 'Lernweg wird aktualisiert',
@@ -35,7 +36,7 @@ export function buildPracticePathCopy(language: LearningLanguage, level: CefrLev
       practiceStepsLabel: 'Übungsschritten pro Lektion',
       skillFlowLabels: ['Diktat', 'Lesen', 'Hören', 'Schreiben'],
       aiEyebrow: 'KI-Übung',
-      aiTitle: `Übungstext für Deutsch ${level} erstellen`,
+      aiTitle: `Übungstext für ${displayLanguage} ${level} erstellen`,
       aiDescription: 'Erstelle niveaugerechtes Material für Diktat, Hören, Lesen oder Schreiben und nutze es in deinem aktuellen Lernweg.',
       checkingAccess: 'KI-Zugang wird geprüft',
       generate: 'Für mein Niveau erstellen',
@@ -49,7 +50,7 @@ export function buildPracticePathCopy(language: LearningLanguage, level: CefrLev
     pageEyebrow: 'Practice Path',
     title: 'My Learning Path',
     intro: 'Follow the learning path created from your selected language and current CEFR level.',
-    lessonsTitle: `${language} ${level} Lessons`,
+    lessonsTitle: `${displayLanguage} ${level} Lessons`,
     lessonsSummary: '12 lessons. Each lesson has dictation, reading, listening, and writing.',
     syncingProgress: 'Syncing progress',
     syncingPath: 'Updating path',
@@ -77,7 +78,7 @@ export function buildPracticePathCopy(language: LearningLanguage, level: CefrLev
     practiceStepsLabel: 'practice steps per lesson',
     skillFlowLabels: ['Dictation', 'Reading', 'Listening', 'Writing'],
     aiEyebrow: 'AI practice',
-    aiTitle: `Generate practice text for ${language} ${level}`,
+    aiTitle: `Generate practice text for ${displayLanguage} ${level}`,
     aiDescription: 'Create level-aligned dictation, listening, reading, or writing material and add it to your current path.',
     checkingAccess: 'Checking AI access',
     generate: 'Generate for my level',

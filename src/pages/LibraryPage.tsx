@@ -58,7 +58,7 @@ export default function LibraryPage() {
   }
 
   return (
-    <main className="max-w-[1440px] mx-auto px-8 py-12 pt-28">
+    <main className="wp-shell py-10 pt-24 sm:py-12 sm:pt-28">
       <header className="mb-12">
         <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary mb-3">Library</p>
         <h1 className="font-headline font-extrabold text-4xl tracking-tight text-on-surface">Saved Texts</h1>

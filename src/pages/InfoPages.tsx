@@ -292,7 +292,7 @@ export default function InfoPage() {
   const content = pages[location.pathname] ?? pages['/help'];
 
   return (
-    <main className="pt-24 pb-16 sm:pb-20 px-4 sm:px-6 lg:px-8 max-w-[1200px] mx-auto min-h-screen">
+    <main className="wp-shell min-h-screen pt-24 pb-16 sm:pb-20">
       <header className="mb-10 sm:mb-12">
         <div className="inline-flex items-center gap-2 rounded-full bg-primary-container px-4 py-2 text-xs font-bold uppercase tracking-widest text-primary">
           {content.icon}

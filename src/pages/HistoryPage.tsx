@@ -133,7 +133,7 @@ export default function HistoryPage() {
   }
 
   return (
-    <main className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-12 pt-24 sm:pt-28 min-h-screen">
+    <main className="wp-shell min-h-screen py-10 pt-24 sm:py-12 sm:pt-28">
       <header className="mb-10 sm:mb-12">
         <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary mb-3">History</p>
         <h1 className="font-headline font-extrabold text-3xl sm:text-4xl tracking-tight text-on-surface">Practice History</h1>

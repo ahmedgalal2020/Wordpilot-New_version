@@ -5,10 +5,12 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { CEFR_LEVELS, LEARNING_LANGUAGES, type CefrLevel, type LearningLanguage, normalizeCefrLevel, normalizeLearningLanguage } from '../lib/learning';
 import { cn } from '../lib/utils';
+import { useI18n } from '../i18n';
 
 const NATIVE_LANGUAGE_OPTIONS = ['Arabic', 'English', 'German', 'Spanish', 'Italian', 'French'] as const;
 
 export function LearningOnboardingPrompt() {
+  const { t, translateLanguageName } = useI18n();
   const navigate = useNavigate();
   const location = useLocation();
   const { user, profile, loading, updateProfile } = useAuth();
@@ -19,7 +21,8 @@ export function LearningOnboardingPrompt() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const shouldShow = Boolean(user && profile && !loading && profile.onboarding_completed !== true);
+  const isSystemRoute = location.pathname.startsWith('/admin') || location.pathname === '/account' || location.pathname === '/pricing';
+  const shouldShow = Boolean(user && profile && !loading && !isSystemRoute && profile.onboarding_completed !== true);
   const currentLevelIndex = CEFR_LEVELS.findIndex((item) => item.level === currentLevel);
   const goalLevelIndex = CEFR_LEVELS.findIndex((item) => item.level === goalLevel);
   const canSave = useMemo(
@@ -68,13 +71,13 @@ export function LearningOnboardingPrompt() {
         <div className="border-b border-surface-container px-5 py-5 sm:px-8 sm:py-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
-              <p className="text-[0.6875rem] font-bold uppercase tracking-widest text-primary">First setup</p>
-              <h2 id="learning-onboarding-title" className="mt-2 font-headline text-2xl font-black tracking-tight text-on-surface sm:text-3xl">Choose your learning path</h2>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-on-surface-variant">Four quick choices so your dashboard, practice path, and AI Lab start in the right direction.</p>
+              <p className="text-[0.6875rem] font-bold uppercase tracking-widest text-primary">{t('onboarding.eyebrow')}</p>
+              <h2 id="learning-onboarding-title" className="mt-2 font-headline text-2xl font-black tracking-tight text-on-surface sm:text-3xl">{t('onboarding.title')}</h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-on-surface-variant">{t('onboarding.subtitle')}</p>
             </div>
             <div className="grid grid-cols-2 gap-2 text-xs sm:flex">
-              <SummaryPill label="Learn" value={targetLanguage} />
-              <SummaryPill label="Goal" value={goalLevel} />
+              <SummaryPill label={t('onboarding.learn')} value={translateLanguageName(targetLanguage)} />
+              <SummaryPill label={t('onboarding.goal')} value={goalLevel} />
             </div>
           </div>
         </div>
@@ -83,21 +86,21 @@ export function LearningOnboardingPrompt() {
           <aside className="rounded-[1.5rem] bg-primary p-5 text-on-primary">
             <div className="flex items-center gap-2 text-[0.6875rem] font-bold uppercase tracking-widest text-primary-container">
               <Route className="h-4 w-4" />
-              Your route
+              {t('onboarding.route')}
             </div>
             <div className="mt-5 space-y-4">
-              <PathStep number="1" title="Base language" value={nativeLanguage} />
-              <PathStep number="2" title="Practice language" value={targetLanguage} />
-              <PathStep number="3" title="Current level" value={currentLevel} />
-              <PathStep number="4" title="Target level" value={goalLevel} />
+              <PathStep number="1" title={t('onboarding.baseLanguage')} value={translateLanguageName(nativeLanguage)} />
+              <PathStep number="2" title={t('onboarding.practiceLanguage')} value={translateLanguageName(targetLanguage)} />
+              <PathStep number="3" title={t('onboarding.currentLevel')} value={currentLevel} />
+              <PathStep number="4" title={t('onboarding.targetLevel')} value={goalLevel} />
             </div>
             <p className="mt-6 rounded-2xl bg-white/10 p-4 text-sm font-semibold leading-6 text-on-primary/85">
-              You can change this later from Account. WordPilot uses it to order lessons and keep AI practice relevant.
+              {t('onboarding.note')}
             </p>
           </aside>
 
           <div className="grid gap-4">
-            <ChoiceGroup label="Main language" icon={<Languages className="h-4 w-4" />}>
+            <ChoiceGroup label={t('onboarding.mainLanguage')} icon={<Languages className="h-4 w-4" />}>
               <div className="grid grid-cols-2 gap-2">
                 {NATIVE_LANGUAGE_OPTIONS.map((language) => (
                   <button
@@ -106,13 +109,13 @@ export function LearningOnboardingPrompt() {
                     onClick={() => setNativeLanguage(language)}
                     className={cn('rounded-2xl border px-4 py-3 text-left text-sm font-bold transition', nativeLanguage === language ? 'border-primary bg-primary text-on-primary' : 'border-transparent bg-surface-container-lowest text-on-surface hover:border-primary/30')}
                   >
-                    {language}
+                    {translateLanguageName(language)}
                   </button>
                 ))}
               </div>
             </ChoiceGroup>
 
-            <ChoiceGroup label="Practice language" icon={<Target className="h-4 w-4" />}>
+            <ChoiceGroup label={t('onboarding.practiceLanguage')} icon={<Target className="h-4 w-4" />}>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {LEARNING_LANGUAGES.map((item) => (
                   <button
@@ -121,22 +124,22 @@ export function LearningOnboardingPrompt() {
                     onClick={() => setTargetLanguage(item.language)}
                     className={cn('rounded-2xl border px-4 py-3 text-left transition', targetLanguage === item.language ? 'border-primary bg-primary text-on-primary' : 'border-transparent bg-surface-container-lowest text-on-surface hover:border-primary/30')}
                   >
-                    <span className="block text-sm font-bold">{item.language}</span>
-                    <span className={cn('mt-1 block text-[10px] font-semibold leading-4', targetLanguage === item.language ? 'text-on-primary/75' : 'text-on-surface-variant')}>{item.description}</span>
+                    <span className="block text-sm font-bold">{translateLanguageName(item.language)}</span>
+                    <span className={cn('mt-1 block text-[10px] font-semibold leading-4', targetLanguage === item.language ? 'text-on-primary/75' : 'text-on-surface-variant')}>{t(`languageDescription.${item.language}` as Parameters<typeof t>[0])}</span>
                   </button>
                 ))}
               </div>
             </ChoiceGroup>
 
             <div className="grid gap-4 xl:grid-cols-2">
-              <ChoiceGroup label="Current level">
+              <ChoiceGroup label={t('onboarding.currentLevel')}>
                 <LevelGrid selected={currentLevel} onSelect={setCurrentLevel} />
               </ChoiceGroup>
 
-              <ChoiceGroup label="Goal level">
+              <ChoiceGroup label={t('onboarding.targetLevel')}>
                 <LevelGrid selected={goalLevel} onSelect={setGoalLevel} />
                 {goalLevelIndex < currentLevelIndex && (
-                  <p className="mt-3 rounded-xl bg-error/5 px-3 py-2 text-xs font-semibold text-error">Choose a goal at or above your current level.</p>
+                  <p className="mt-3 rounded-xl bg-error/5 px-3 py-2 text-xs font-semibold text-error">{t('onboarding.goalError')}</p>
                 )}
               </ChoiceGroup>
             </div>
@@ -146,7 +149,7 @@ export function LearningOnboardingPrompt() {
         <div className="border-t border-surface-container bg-surface-container-low px-5 py-5 sm:px-8">
           {error && <p className="mb-3 rounded-2xl border border-error/20 bg-error/5 px-4 py-3 text-sm font-semibold text-error">{error}</p>}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs font-semibold leading-5 text-on-surface-variant">Your first path: {targetLanguage} {currentLevel} toward {goalLevel}.</p>
+            <p className="text-xs font-semibold leading-5 text-on-surface-variant">{t('onboarding.summary', { language: translateLanguageName(targetLanguage), current: currentLevel, goal: goalLevel })}</p>
             <button
               type="button"
               onClick={() => void saveLearningProfile()}
@@ -154,7 +157,7 @@ export function LearningOnboardingPrompt() {
               className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-6 py-3 font-headline text-sm font-bold text-on-primary transition hover:bg-primary-dim disabled:opacity-60"
             >
               {saving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
-              Start my path
+              {t('onboarding.start')}
               {!saving && <ArrowRight className="h-4 w-4" />}
             </button>
           </div>

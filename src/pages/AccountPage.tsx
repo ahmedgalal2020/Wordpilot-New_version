@@ -8,6 +8,7 @@ import { BillingInvoice, Certificate, SavedText } from '../types';
 import { formatUsage, isPaidBillingInvoice, PRO_LIMITS, writeCachedEntitlement } from '../lib/entitlements';
 import { useEntitlements } from '../hooks/useEntitlements';
 import { fetchApi } from '../lib/api';
+import { useI18n } from '../i18n';
 
 const LANGUAGE_OPTIONS = ['English', 'German', 'Spanish', 'Italian', 'French'];
 const CEFR_OPTIONS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
@@ -48,6 +49,8 @@ type CheckoutSessionSummary = {
 export default function AccountPage() {
   const location = useLocation();
   const { session, user, profile, updateProfile, sendPasswordChangeCode, changePasswordWithCode, authMessage } = useAuth();
+  const { language: interfaceLanguage, translateLanguageName } = useI18n();
+  const copy = accountCopy[interfaceLanguage];
   const [fullName, setFullName] = useState('');
   const [targetLanguage, setTargetLanguage] = useState('English');
   const [cefrLevel, setCefrLevel] = useState('B1');
@@ -150,7 +153,7 @@ export default function AccountPage() {
             id: text.id,
             title: text.title,
             level: text.level ?? 'B1',
-            category: text.category ?? 'General',
+        category: text.category ?? copy.general,
             icon: index % 2 === 0 ? 'book' : 'history',
             body: text.body ?? '',
           })),
@@ -193,7 +196,7 @@ export default function AccountPage() {
     if (checkoutStatus !== 'success' || !sessionId) {
       if (checkoutStatus === 'cancelled') {
         setCheckoutSyncState('error');
-        setCheckoutNotice('Checkout was cancelled. Your current plan was not changed.');
+      setCheckoutNotice(copy.checkoutCancelled);
       }
       return;
     }
@@ -207,7 +210,7 @@ export default function AccountPage() {
     }
 
     setCheckoutSyncState('syncing');
-    setCheckoutNotice('Confirming your Stripe payment and updating your subscription...');
+    setCheckoutNotice(copy.confirmingPayment);
 
     try {
       const response = await fetchApi('/api/billing/sync-checkout', {
@@ -233,17 +236,17 @@ export default function AccountPage() {
       const checkout = syncPayload.checkout;
 
       if (!response.ok || !checkout) {
-        throw new Error(syncPayload.error ?? 'Unable to confirm checkout.');
+        throw new Error(syncPayload.error ?? copy.unableConfirm);
       }
 
       if (checkout.clientReferenceId && checkout.clientReferenceId !== user.id) {
-        throw new Error('This checkout session belongs to a different account.');
+        throw new Error(copy.checkoutDifferentAccount);
       }
 
       const paymentConfirmed = checkout.status === 'complete' || checkout.paymentStatus === 'paid';
       if (!paymentConfirmed) {
         setCheckoutSyncState('error');
-        setCheckoutNotice('Stripe has not marked this checkout as paid yet. Refresh the page in a moment.');
+        setCheckoutNotice(copy.checkoutNotPaid);
         return;
       }
 
@@ -264,7 +267,7 @@ export default function AccountPage() {
 
       if (hasSupabaseEnv()) {
         if (!syncPayload.database?.synced) {
-          throw new Error(syncPayload.database?.reason ?? 'Payment was confirmed, but billing sync is not configured on the server.');
+          throw new Error(syncPayload.database?.reason ?? copy.billingSyncMissing);
         }
 
         const invoiceLabel = `WordPilot Pro checkout ${checkout.id.slice(-8)}`;
@@ -314,12 +317,12 @@ export default function AccountPage() {
       writeCachedEntitlement(user.id, true);
       void refreshEntitlements();
       setCheckoutSyncState('synced');
-      setCheckoutNotice('Payment confirmed. WordPilot Pro is now active on this account.');
+      setCheckoutNotice(copy.paymentConfirmed);
       void sendBillingReceiptEmail(sessionId);
       window.history.replaceState({}, document.title, '/account');
     } catch (error) {
       setCheckoutSyncState('error');
-      setCheckoutNotice(error instanceof Error ? error.message : 'Unable to sync checkout.');
+      setCheckoutNotice(error instanceof Error ? error.message : copy.unableSync);
     }
   }
 
@@ -341,17 +344,17 @@ export default function AccountPage() {
       const payload = await response.json();
 
       if (!response.ok) {
-        throw new Error(payload.error ?? 'Receipt email could not be sent.');
+        throw new Error(payload.error ?? copy.receiptNotSent);
       }
 
       window.sessionStorage.setItem(sentKey, 'true');
       setBillingEmailNotice(
         payload.skipped
-          ? 'Payment is confirmed. Receipt email is waiting for email service configuration.'
-          : 'Receipt email sent with payment confirmation and renewal date.',
+          ? copy.receiptWaiting
+          : copy.receiptSent,
       );
     } catch (error) {
-      setBillingEmailNotice(error instanceof Error ? error.message : 'Receipt email could not be sent.');
+      setBillingEmailNotice(error instanceof Error ? error.message : copy.receiptNotSent);
     }
   }
 
@@ -367,14 +370,14 @@ export default function AccountPage() {
     });
 
     setSaving(false);
-    setStatus(error ? error : 'Profile saved successfully.');
+    setStatus(error ? error : copy.profileSaved);
   }
 
   async function handleSendPasswordCode() {
     setPasswordStatus(null);
 
     if (currentPassword.length < 6) {
-      setPasswordStatus('Enter your current password first.');
+      setPasswordStatus(copy.currentPasswordFirst);
       return;
     }
 
@@ -389,17 +392,17 @@ export default function AccountPage() {
     setPasswordStatus(null);
 
     if (currentPassword.length < 6) {
-      setPasswordStatus('Enter your current password first.');
+      setPasswordStatus(copy.currentPasswordFirst);
       return;
     }
 
     if (newPassword.length < 8) {
-      setPasswordStatus('Password must be at least 8 characters.');
+      setPasswordStatus(copy.passwordLength);
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setPasswordStatus('Password confirmation does not match.');
+      setPasswordStatus(copy.passwordMismatch);
       return;
     }
 
@@ -417,11 +420,11 @@ export default function AccountPage() {
   }
 
   return (
-    <main className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-12 pt-24 sm:pt-28">
+    <main className="wp-shell py-10 pt-24 sm:py-12 sm:pt-28">
       <header className="mb-10 sm:mb-12">
-        <h1 className="font-headline font-extrabold text-3xl sm:text-4xl tracking-tight text-on-surface mb-3">Account Settings</h1>
+        <h1 className="font-headline font-extrabold text-3xl sm:text-4xl tracking-tight text-on-surface mb-3">{copy.title}</h1>
         <p className="text-on-surface-variant max-w-2xl">
-          Manage your profile, security, subscription details, and certificates in one place while preserving the same product feel across the app.
+          {copy.subtitle}
         </p>
       </header>
 
@@ -452,8 +455,8 @@ export default function AccountPage() {
           <form onSubmit={handleProfileSubmit} className="bg-surface-container-lowest rounded-[2rem] p-6 sm:p-8 whisper-shadow space-y-6">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary mb-2">Profile</p>
-                <h2 className="font-headline font-bold text-2xl text-on-surface">Personal Preferences</h2>
+                <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary mb-2">{copy.profile}</p>
+                <h2 className="font-headline font-bold text-2xl text-on-surface">{copy.preferences}</h2>
               </div>
               <div className="w-14 h-14 rounded-2xl bg-primary-container text-primary flex items-center justify-center">
                 <Globe2 className="w-6 h-6" />
@@ -461,17 +464,17 @@ export default function AccountPage() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-[0.6875rem] uppercase tracking-wider text-on-surface-variant font-bold ml-1">Full Name</label>
+              <label className="text-[0.6875rem] uppercase tracking-wider text-on-surface-variant font-bold ml-1">{copy.fullName}</label>
               <input
                 className="w-full bg-surface-container-low border border-surface-container rounded-xl px-4 py-3 text-on-surface text-sm outline-none focus:border-primary"
                 value={fullName}
                 onChange={(event) => setFullName(event.target.value)}
-                placeholder="Your full name"
+                placeholder={copy.fullNamePlaceholder}
               />
             </div>
 
             <div className="space-y-2">
-              <label className="text-[0.6875rem] uppercase tracking-wider text-on-surface-variant font-bold ml-1">Email</label>
+              <label className="text-[0.6875rem] uppercase tracking-wider text-on-surface-variant font-bold ml-1">{copy.email}</label>
               <input
                 className="w-full bg-surface-container-low border border-surface-container rounded-xl px-4 py-3 text-on-surface text-sm"
                 value={user?.email ?? ''}
@@ -481,7 +484,7 @@ export default function AccountPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-[0.6875rem] uppercase tracking-wider text-on-surface-variant font-bold ml-1">Target Language</label>
+                <label className="text-[0.6875rem] uppercase tracking-wider text-on-surface-variant font-bold ml-1">{copy.targetLanguage}</label>
                 <select
                   className="w-full bg-surface-container-low border border-surface-container rounded-xl px-4 py-3 text-on-surface text-sm outline-none focus:border-primary"
                   value={targetLanguage}
@@ -489,14 +492,14 @@ export default function AccountPage() {
                 >
                   {LANGUAGE_OPTIONS.map((option) => (
                     <option key={option} value={option}>
-                      {option}
+                      {translateLanguageName(option)}
                     </option>
                   ))}
                 </select>
               </div>
 
               <div className="space-y-2">
-                <label className="text-[0.6875rem] uppercase tracking-wider text-on-surface-variant font-bold ml-1">Current CEFR Level</label>
+                <label className="text-[0.6875rem] uppercase tracking-wider text-on-surface-variant font-bold ml-1">{copy.currentLevel}</label>
                 <select
                   className="w-full bg-surface-container-low border border-surface-container rounded-xl px-4 py-3 text-on-surface text-sm outline-none focus:border-primary"
                   value={cefrLevel}
@@ -519,17 +522,17 @@ export default function AccountPage() {
               className="primary-gradient text-on-primary px-6 py-3 rounded-full font-bold inline-flex items-center gap-2 disabled:opacity-70"
             >
               <Save className="w-4 h-4" />
-              {saving ? 'Saving...' : 'Save Changes'}
+              {saving ? copy.saving : copy.saveChanges}
             </button>
           </form>
 
           <form onSubmit={handlePasswordSubmit} className="bg-surface-container-lowest rounded-[2rem] p-6 sm:p-8 whisper-shadow space-y-6">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary mb-2">Security</p>
-                <h2 className="font-headline font-bold text-2xl text-on-surface">Change Password</h2>
+                <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary mb-2">{copy.security}</p>
+                <h2 className="font-headline font-bold text-2xl text-on-surface">{copy.changePassword}</h2>
                 <p className="text-sm text-on-surface-variant mt-2 max-w-xl">
-                  Confirm your current password, request an email verification code, then save the new password securely.
+                  {copy.changePasswordBody}
                 </p>
               </div>
               <div className="w-14 h-14 rounded-2xl bg-primary-container text-primary flex items-center justify-center">
@@ -541,17 +544,17 @@ export default function AccountPage() {
               <PasswordInput
                 value={currentPassword}
                 onChange={setCurrentPassword}
-                label="Current Password"
+                label={copy.currentPassword}
                 visible={showCurrentPassword}
                 onToggleVisibility={() => setShowCurrentPassword((value) => !value)}
               />
               <div className="space-y-2">
-                <label className="text-[0.6875rem] uppercase tracking-wider text-on-surface-variant font-bold ml-1">Verification Code</label>
+                <label className="text-[0.6875rem] uppercase tracking-wider text-on-surface-variant font-bold ml-1">{copy.verificationCode}</label>
                 <input
                   value={emailCode}
                   onChange={(event) => setEmailCode(event.target.value)}
                   className="w-full bg-surface-container-low border border-surface-container rounded-xl px-4 py-3 text-on-surface text-sm outline-none focus:border-primary"
-                  placeholder="Enter the code from email"
+                  placeholder={copy.codePlaceholder}
                   autoComplete="one-time-code"
                 />
               </div>
@@ -561,14 +564,14 @@ export default function AccountPage() {
               <PasswordInput
                 value={newPassword}
                 onChange={setNewPassword}
-                label="New Password"
+                label={copy.newPassword}
                 visible={showNewPassword}
                 onToggleVisibility={() => setShowNewPassword((value) => !value)}
               />
               <PasswordInput
                 value={confirmPassword}
                 onChange={setConfirmPassword}
-                label="Confirm Password"
+                label={copy.confirmPassword}
                 visible={showConfirmPassword}
                 onToggleVisibility={() => setShowConfirmPassword((value) => !value)}
               />
@@ -584,7 +587,7 @@ export default function AccountPage() {
                 className="primary-gradient text-on-primary px-6 py-3 rounded-full font-bold inline-flex items-center gap-2 disabled:opacity-70"
               >
                 <Mail className="w-4 h-4" />
-                {sendingPasswordCode ? 'Sending code...' : 'Send Email Code'}
+                {sendingPasswordCode ? copy.sendingCode : copy.sendCode}
               </button>
               <button
                 type="submit"
@@ -592,7 +595,7 @@ export default function AccountPage() {
                 className="bg-surface-container text-on-surface px-6 py-3 rounded-full font-bold inline-flex items-center gap-2 hover:bg-surface-container-high transition-colors disabled:opacity-70"
               >
                 <ShieldCheck className="w-4 h-4" />
-                {savingPassword ? 'Updating...' : 'Update Password'}
+                {savingPassword ? copy.updating : copy.updatePassword}
               </button>
             </div>
           </form>
@@ -600,11 +603,11 @@ export default function AccountPage() {
           <section className="bg-surface-container-lowest rounded-[2rem] p-8 whisper-shadow space-y-6">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary mb-2">Learning Assets</p>
-                <h2 className="font-headline font-bold text-2xl text-on-surface">Saved Text Library</h2>
+                <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary mb-2">{copy.learningAssets}</p>
+                <h2 className="font-headline font-bold text-2xl text-on-surface">{copy.savedLibrary}</h2>
               </div>
               <Link to="/library" className="text-primary font-bold text-sm hover:underline">
-                Open Library
+                {copy.openLibrary}
               </Link>
             </div>
 
@@ -614,17 +617,17 @@ export default function AccountPage() {
                   <div>
                     <h3 className="font-bold text-on-surface">{text.title}</h3>
                     <p className="text-sm text-on-surface-variant mt-1">
-                      {text.level} Level • {text.category}
+                      {copy.textMeta(text.level, text.category)}
                     </p>
                   </div>
                   <Link to="/library" className="bg-primary text-on-primary px-5 py-2 rounded-full text-xs font-bold">
-                    Open
+                    {copy.open}
                   </Link>
                 </div>
               ))}
               {savedTexts.length === 0 && (
                 <div className="bg-surface-container-low rounded-2xl p-5 text-sm text-on-surface-variant">
-                  Your library is empty right now. Save texts from AI Lab or the workspace and they will appear here.
+                  {copy.emptyLibrary}
                 </div>
               )}
             </div>
@@ -634,14 +637,14 @@ export default function AccountPage() {
         <aside className="space-y-8">
           <section className="bg-primary text-on-primary rounded-[2rem] p-8 whisper-shadow relative overflow-hidden">
             <div className="absolute right-0 top-0 w-40 h-40 bg-white/5 rounded-full translate-x-1/3 -translate-y-1/3"></div>
-            <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary-container mb-3">Subscription</p>
+            <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary-container mb-3">{copy.subscription}</p>
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="font-headline font-black text-3xl">{activePlanName}</h2>
                 <p className="text-on-primary/80 mt-3">
                   {accountHasProAccess
-                    ? 'Your paid plan is connected to this account and ready for Pro workflows.'
-                    : 'You are currently on the free plan. Upgrade to unlock the full practice workflow.'}
+                    ? copy.proConnected
+                    : copy.freePlan}
                 </p>
               </div>
               <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-bold uppercase tracking-widest text-primary-container">
@@ -649,26 +652,26 @@ export default function AccountPage() {
               </span>
             </div>
             <div className="mt-6 grid grid-cols-2 gap-3">
-              <SubscriptionMetric label="Plan" value={accountHasProAccess ? activePlanName : 'Essential'} />
-              <SubscriptionMetric label="Billing" value={accountHasProAccess ? (subscription?.billingCycle ?? 'monthly') : 'none'} />
-              <SubscriptionMetric label="Amount" value={accountHasProAccess ? (subscription?.amountLabel ?? '$12.00') : '$0.00'} />
+              <SubscriptionMetric label={copy.plan} value={accountHasProAccess ? activePlanName : 'Essential'} />
+              <SubscriptionMetric label={copy.billing} value={accountHasProAccess ? (subscription?.billingCycle ?? 'monthly') : copy.none} />
+              <SubscriptionMetric label={copy.amount} value={accountHasProAccess ? (subscription?.amountLabel ?? '$12.00') : '$0.00'} />
               <SubscriptionMetric
-                label={subscription?.renewalDate ? 'Renews' : 'Access'}
+                label={subscription?.renewalDate ? copy.renews : copy.access}
                 value={
                   accountHasProAccess && subscription?.renewalDate
-                    ? new Date(subscription.renewalDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                    ? new Date(subscription.renewalDate).toLocaleDateString(interfaceLanguage === 'de' ? 'de-DE' : 'en-US', { month: 'short', day: 'numeric' })
                     : accountHasProAccess
-                      ? 'Active'
-                      : 'Limited'
+                      ? copy.active
+                      : copy.limited
                 }
               />
             </div>
             <div className="mt-6 rounded-2xl bg-white/10 p-5">
-              <p className="text-xs uppercase tracking-widest font-bold text-primary-container">What the user gets</p>
+              <p className="text-xs uppercase tracking-widest font-bold text-primary-container">{copy.planIncludes}</p>
               <ul className="mt-4 space-y-2 text-sm text-on-primary/85">
                 {(accountHasProAccess
-                  ? ['Unlimited AI Lab generation', 'Saved history and progress tracking', 'English and German dictation workflows']
-                  : ['Free workspace access', 'Limited saved texts', 'Upgrade required for full Pro workflow']
+                  ? copy.proBenefits
+                  : copy.freeBenefits
                 ).map((item) => (
                   <li key={item} className="flex items-center gap-2">
                     <CheckCircle className="h-4 w-4 text-primary-container" />
@@ -680,31 +683,31 @@ export default function AccountPage() {
             <div className="mt-4 rounded-2xl bg-white/10 p-5">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-xs uppercase tracking-widest font-bold text-primary-container">
-                  {accountHasProAccess ? 'Usage this month' : 'Usage & limits'}
+                   {accountHasProAccess ? copy.usageThisMonth : copy.usageLimits}
                 </p>
                 {accountHasProAccess && (
                   <span className="rounded-full bg-white/15 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-primary-container">
-                    Unlimited plan
+                    {copy.unlimitedPlan}
                   </span>
                 )}
               </div>
               <div className="mt-4 space-y-3 text-sm text-on-primary/85">
                 <UsageLine
-                  label="AI generations"
+                  label={copy.aiGenerations}
                   value={formatAccountUsage(entitlements.usage.aiGenerationsThisMonth, accountLimits.aiGenerationsMonthly, accountHasProAccess)}
                 />
                 <UsageLine
-                  label="Saved texts"
+                  label={copy.savedTexts}
                   value={formatAccountUsage(entitlements.usage.savedTexts, accountLimits.savedTexts, accountHasProAccess)}
                 />
                 <UsageLine
-                  label="Saved sessions"
+                  label={copy.savedSessions}
                   value={formatAccountUsage(entitlements.usage.savedSessions, accountLimits.savedSessions, accountHasProAccess)}
                 />
               </div>
               {accountHasProAccess && (
                 <p className="mt-4 text-xs font-medium leading-5 text-on-primary/70">
-                  These numbers are activity tracking only. WordPilot Pro does not cap AI Lab generation, saved texts, or saved sessions.
+                  {copy.activityOnly}
                 </p>
               )}
             </div>
@@ -712,15 +715,15 @@ export default function AccountPage() {
               to="/pricing"
               className="mt-6 inline-flex w-full items-center justify-center rounded-full bg-white/15 px-5 py-3 text-sm font-bold text-on-primary transition hover:bg-white/25"
             >
-              {accountHasProAccess ? 'Review plan options' : 'Upgrade to WordPilot Pro'}
+              {accountHasProAccess ? copy.reviewPlans : copy.upgradePro}
             </Link>
           </section>
 
           <section className="bg-surface-container-lowest rounded-[2rem] p-8 whisper-shadow space-y-5">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary mb-2">Billing</p>
-                <h2 className="font-headline font-bold text-2xl text-on-surface">Invoices</h2>
+                <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary mb-2">{copy.billing}</p>
+                <h2 className="font-headline font-bold text-2xl text-on-surface">{copy.invoices}</h2>
               </div>
               <div className="w-14 h-14 rounded-2xl bg-primary-container text-primary flex items-center justify-center">
                 <CreditCard className="w-6 h-6" />
@@ -733,12 +736,12 @@ export default function AccountPage() {
                   <div key={invoice.id} className="bg-surface-container-low rounded-2xl p-4 flex items-center justify-between gap-4">
                     <div>
                       <p className="font-semibold text-on-surface text-sm">{invoice.label}</p>
-                      <p className="text-xs text-on-surface-variant mt-1">{new Date(invoice.issuedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                      <p className="text-xs text-on-surface-variant mt-1">{new Date(invoice.issuedAt).toLocaleDateString(interfaceLanguage === 'de' ? 'de-DE' : 'en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
                       {(invoice.hostedInvoiceUrl || invoice.invoicePdfUrl) && (
                         <div className="mt-2 flex flex-wrap gap-3 text-xs font-bold text-primary">
                           {invoice.hostedInvoiceUrl && (
                             <a href={invoice.hostedInvoiceUrl} target="_blank" rel="noreferrer" className="hover:underline">
-                              View invoice
+                              {copy.viewInvoice}
                             </a>
                           )}
                           {invoice.invoicePdfUrl && (
@@ -759,7 +762,7 @@ export default function AccountPage() {
                 ))
               ) : (
                 <div className="bg-surface-container-low rounded-2xl p-4 text-sm text-on-surface-variant">
-                  No invoices yet. After a successful Stripe checkout, the first WordPilot Pro invoice appears here automatically.
+                  {copy.noInvoices}
                 </div>
               )}
             </div>
@@ -768,8 +771,8 @@ export default function AccountPage() {
           <section className="bg-surface-container-lowest rounded-[2rem] p-8 whisper-shadow space-y-5">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary mb-2">Certificates</p>
-                <h2 className="font-headline font-bold text-2xl text-on-surface">Achievement History</h2>
+                <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary mb-2">{copy.certificates}</p>
+                <h2 className="font-headline font-bold text-2xl text-on-surface">{copy.achievementHistory}</h2>
               </div>
               <div className="w-14 h-14 rounded-2xl bg-primary-container text-primary flex items-center justify-center">
                 <ScrollText className="w-6 h-6" />
@@ -784,34 +787,34 @@ export default function AccountPage() {
                     <div className="flex items-center justify-between mt-2 text-sm">
                       <span className="text-primary font-bold">{certificate.score}%</span>
                       <span className="text-on-surface-variant">
-                        {new Date(certificate.issuedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        {new Date(certificate.issuedAt).toLocaleDateString(interfaceLanguage === 'de' ? 'de-DE' : 'en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                       </span>
                     </div>
                   </div>
                 ))
               ) : (
                 <div className="bg-surface-container-low rounded-2xl p-4 text-sm text-on-surface-variant">
-                  No certificates yet. Complete strong dictation sessions first and your achievements will appear here.
+                  {copy.noCertificates}
                 </div>
               )}
             </div>
 
             {certificates.length > 0 && (
               <Link to="/certificates" className="inline-flex text-primary font-bold text-sm hover:underline">
-                Open certificate history
+                {copy.openCertificates}
               </Link>
             )}
           </section>
 
           <section className="bg-surface-container rounded-[2rem] p-8 space-y-4">
-            <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary">Account Status</p>
-            <p className="font-semibold text-on-surface">Your workspace is ready</p>
+            <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary">{copy.accountStatus}</p>
+            <p className="font-semibold text-on-surface">{copy.workspaceReady}</p>
             <p className="text-sm text-on-surface-variant">
-              {authMessage ?? 'Your profile, saved practice, certificates, and subscription details will stay synced with your account.'}
+              {authMessage ?? copy.accountStatusBody}
             </p>
             <Link to="/pricing" className="inline-flex items-center gap-2 text-primary font-bold text-sm hover:underline">
               <FileText className="w-4 h-4" />
-              View plans
+              {copy.viewPlans}
             </Link>
           </section>
         </aside>
@@ -901,6 +904,171 @@ function isActiveAccountSubscription(subscription: SubscriptionSummary) {
   const status = subscription.status.toLowerCase();
   return planName.includes('pro') && ['active', 'trialing', 'paid', 'complete', 'completed', 'succeeded'].includes(status);
 }
+
+const accountCopy = {
+  en: {
+    title: 'Account Settings',
+    subtitle: 'Manage your profile, security, subscription details, and certificates in one place.',
+    profile: 'Profile',
+    preferences: 'Personal Preferences',
+    fullName: 'Full Name',
+    fullNamePlaceholder: 'Your full name',
+    email: 'Email',
+    targetLanguage: 'Target Language',
+    currentLevel: 'Current CEFR Level',
+    saving: 'Saving...',
+    saveChanges: 'Save Changes',
+    security: 'Security',
+    changePassword: 'Change Password',
+    changePasswordBody: 'Confirm your current password, request an email verification code, then save the new password securely.',
+    currentPassword: 'Current Password',
+    verificationCode: 'Verification Code',
+    codePlaceholder: 'Enter the code from email',
+    newPassword: 'New Password',
+    confirmPassword: 'Confirm Password',
+    sendingCode: 'Sending code...',
+    sendCode: 'Send Email Code',
+    updating: 'Updating...',
+    updatePassword: 'Update Password',
+    learningAssets: 'Learning Assets',
+    savedLibrary: 'Saved Text Library',
+    openLibrary: 'Open Library',
+    open: 'Open',
+    textMeta: (level: string, category: string) => `${level} Level - ${category}`,
+    emptyLibrary: 'Your library is empty right now. Save texts from AI Lab or the workspace and they will appear here.',
+    subscription: 'Subscription',
+    proConnected: 'Your paid plan is connected to this account and ready for Pro workflows.',
+    freePlan: 'You are currently on the free plan. Upgrade to unlock the full practice workflow.',
+    plan: 'Plan',
+    billing: 'Billing',
+    amount: 'Amount',
+    none: 'none',
+    renews: 'Renews',
+    access: 'Access',
+    active: 'Active',
+    limited: 'Limited',
+    planIncludes: 'What the user gets',
+    proBenefits: ['Unlimited AI Lab generation', 'Saved history and progress tracking', 'English and German dictation workflows'],
+    freeBenefits: ['Free workspace access', 'Limited saved texts', 'Upgrade required for full Pro workflow'],
+    usageThisMonth: 'Usage this month',
+    usageLimits: 'Usage & limits',
+    unlimitedPlan: 'Unlimited plan',
+    aiGenerations: 'AI generations',
+    savedTexts: 'Saved texts',
+    savedSessions: 'Saved sessions',
+    activityOnly: 'These numbers are activity tracking only. WordPilot Pro does not cap AI Lab generation, saved texts, or saved sessions.',
+    reviewPlans: 'Review plan options',
+    upgradePro: 'Upgrade to WordPilot Pro',
+    invoices: 'Invoices',
+    viewInvoice: 'View invoice',
+    noInvoices: 'No invoices yet. After a successful Stripe checkout, the first WordPilot Pro invoice appears here automatically.',
+    certificates: 'Certificates',
+    achievementHistory: 'Achievement History',
+    noCertificates: 'No certificates yet. Complete strong dictation sessions first and your achievements will appear here.',
+    openCertificates: 'Open certificate history',
+    accountStatus: 'Account Status',
+    workspaceReady: 'Your workspace is ready',
+    accountStatusBody: 'Your profile, saved practice, certificates, and subscription details will stay synced with your account.',
+    viewPlans: 'View plans',
+    checkoutCancelled: 'Checkout was cancelled. Your current plan was not changed.',
+    confirmingPayment: 'Confirming your Stripe payment and updating your subscription...',
+    unableConfirm: 'Unable to confirm checkout.',
+    checkoutDifferentAccount: 'This checkout session belongs to a different account.',
+    checkoutNotPaid: 'Stripe has not marked this checkout as paid yet. Refresh the page in a moment.',
+    billingSyncMissing: 'Payment was confirmed, but billing sync is not configured on the server.',
+    paymentConfirmed: 'Payment confirmed. WordPilot Pro is now active on this account.',
+    unableSync: 'Unable to sync checkout.',
+    receiptNotSent: 'Receipt email could not be sent.',
+    receiptWaiting: 'Payment is confirmed. Receipt email is waiting for email service configuration.',
+    receiptSent: 'Receipt email sent with payment confirmation and renewal date.',
+    profileSaved: 'Profile saved successfully.',
+    currentPasswordFirst: 'Enter your current password first.',
+    passwordLength: 'Password must be at least 8 characters.',
+    passwordMismatch: 'Password confirmation does not match.',
+    general: 'General',
+  },
+  de: {
+    title: 'Kontoeinstellungen',
+    subtitle: 'Verwalte Profil, Sicherheit, Abo-Details und Zertifikate an einem Ort.',
+    profile: 'Profil',
+    preferences: 'Persönliche Einstellungen',
+    fullName: 'Vollständiger Name',
+    fullNamePlaceholder: 'Dein vollständiger Name',
+    email: 'E-Mail',
+    targetLanguage: 'Zielsprache',
+    currentLevel: 'Aktuelles GER-Niveau',
+    saving: 'Speichern...',
+    saveChanges: 'Änderungen speichern',
+    security: 'Sicherheit',
+    changePassword: 'Passwort ändern',
+    changePasswordBody: 'Bestätige dein aktuelles Passwort, fordere einen E-Mail-Code an und speichere dann das neue Passwort sicher.',
+    currentPassword: 'Aktuelles Passwort',
+    verificationCode: 'Bestätigungscode',
+    codePlaceholder: 'Code aus der E-Mail eingeben',
+    newPassword: 'Neues Passwort',
+    confirmPassword: 'Passwort bestätigen',
+    sendingCode: 'Code wird gesendet...',
+    sendCode: 'E-Mail-Code senden',
+    updating: 'Aktualisieren...',
+    updatePassword: 'Passwort aktualisieren',
+    learningAssets: 'Lernmaterial',
+    savedLibrary: 'Gespeicherte Texte',
+    openLibrary: 'Bibliothek öffnen',
+    open: 'Öffnen',
+    textMeta: (level: string, category: string) => `${level}-Niveau - ${category}`,
+    emptyLibrary: 'Deine Bibliothek ist aktuell leer. Speichere Texte aus dem KI-Lab oder Workspace, dann erscheinen sie hier.',
+    subscription: 'Abo',
+    proConnected: 'Dein bezahlter Plan ist mit diesem Konto verbunden und bereit für Pro-Workflows.',
+    freePlan: 'Du nutzt aktuell den kostenlosen Plan. Upgrade schaltet den vollständigen Übungsflow frei.',
+    plan: 'Plan',
+    billing: 'Billing',
+    amount: 'Betrag',
+    none: 'keins',
+    renews: 'Verlängert',
+    access: 'Zugriff',
+    active: 'Aktiv',
+    limited: 'Begrenzt',
+    planIncludes: 'Was der Plan enthält',
+    proBenefits: ['Unbegrenzte KI-Lab-Generierung', 'Gespeicherter Verlauf und Fortschritt', 'Englische und deutsche Diktat-Workflows'],
+    freeBenefits: ['Kostenloser Workspace-Zugriff', 'Begrenzte gespeicherte Texte', 'Upgrade für den vollständigen Pro-Workflow erforderlich'],
+    usageThisMonth: 'Nutzung diesen Monat',
+    usageLimits: 'Nutzung & Limits',
+    unlimitedPlan: 'Unbegrenzter Plan',
+    aiGenerations: 'KI-Generierungen',
+    savedTexts: 'Gespeicherte Texte',
+    savedSessions: 'Gespeicherte Sessions',
+    activityOnly: 'Diese Zahlen dienen nur der Aktivitätsanzeige. WordPilot Pro begrenzt KI-Lab, gespeicherte Texte oder Sessions nicht.',
+    reviewPlans: 'Planoptionen ansehen',
+    upgradePro: 'Auf WordPilot Pro upgraden',
+    invoices: 'Rechnungen',
+    viewInvoice: 'Rechnung ansehen',
+    noInvoices: 'Noch keine Rechnungen. Nach erfolgreichem Stripe-Checkout erscheint die erste WordPilot-Pro-Rechnung automatisch hier.',
+    certificates: 'Zertifikate',
+    achievementHistory: 'Erfolge',
+    noCertificates: 'Noch keine Zertifikate. Schließe zuerst starke Diktat-Sessions ab, dann erscheinen deine Erfolge hier.',
+    openCertificates: 'Zertifikatsverlauf öffnen',
+    accountStatus: 'Kontostatus',
+    workspaceReady: 'Dein Workspace ist bereit',
+    accountStatusBody: 'Profil, gespeicherte Übungen, Zertifikate und Abo-Details bleiben mit deinem Konto synchronisiert.',
+    viewPlans: 'Pläne ansehen',
+    checkoutCancelled: 'Checkout wurde abgebrochen. Dein aktueller Plan wurde nicht geändert.',
+    confirmingPayment: 'Stripe-Zahlung wird bestätigt und dein Abo aktualisiert...',
+    unableConfirm: 'Checkout konnte nicht bestätigt werden.',
+    checkoutDifferentAccount: 'Diese Checkout-Session gehört zu einem anderen Konto.',
+    checkoutNotPaid: 'Stripe hat diesen Checkout noch nicht als bezahlt markiert. Aktualisiere die Seite gleich erneut.',
+    billingSyncMissing: 'Zahlung wurde bestätigt, aber Billing-Sync ist serverseitig nicht konfiguriert.',
+    paymentConfirmed: 'Zahlung bestätigt. WordPilot Pro ist jetzt für dieses Konto aktiv.',
+    unableSync: 'Checkout konnte nicht synchronisiert werden.',
+    receiptNotSent: 'Beleg-E-Mail konnte nicht gesendet werden.',
+    receiptWaiting: 'Zahlung ist bestätigt. Die Beleg-E-Mail wartet auf die E-Mail-Service-Konfiguration.',
+    receiptSent: 'Beleg-E-Mail mit Zahlungsbestätigung und Verlängerungsdatum wurde gesendet.',
+    profileSaved: 'Profil erfolgreich gespeichert.',
+    currentPasswordFirst: 'Gib zuerst dein aktuelles Passwort ein.',
+    passwordLength: 'Das Passwort muss mindestens 8 Zeichen lang sein.',
+    passwordMismatch: 'Die Passwortbestätigung stimmt nicht überein.',
+    general: 'Allgemein',
+  },
+};
 
 
 

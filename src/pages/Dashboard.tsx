@@ -11,6 +11,7 @@ import { usePracticeProgress } from '../hooks/usePracticeProgress';
 import { useWeeklyReport } from '../hooks/useWeeklyReport';
 import { CurrentLevelCard, PracticeExerciseCard, PracticeRecommendationCard, WeeklyProgressReport } from '../components/LearningComponents';
 import { buildPracticeRecommendation, getPracticeExercises, normalizeCefrLevel, normalizeLearningLanguage, PracticeExercise } from '../lib/learning';
+import { useI18n } from '../i18n';
 
 type SessionMetricRow = {
   accuracy: number | null;
@@ -40,6 +41,7 @@ type ShadowingDashboardSession = {
 const SHADOWING_STORAGE_KEY = 'wordpilot-shadowing-sessions-v1';
 
 export default function Dashboard() {
+  const { t, translateLanguageName } = useI18n();
   const navigate = useNavigate();
   const { user, profile } = useAuth();
   const displayName = profile?.full_name || user?.user_metadata.full_name || user?.email?.split('@')[0] || 'Pilot';
@@ -70,7 +72,7 @@ export default function Dashboard() {
 
     if (!supabaseReady) {
       setIsLoading(false);
-      setLoadError('Connect Supabase to load live dashboard data.');
+      setLoadError(t('dashboard.supabase'));
       return;
     }
 
@@ -145,7 +147,7 @@ export default function Dashboard() {
     return () => {
       active = false;
     };
-  }, [supabaseReady, user]);
+  }, [supabaseReady, t, user]);
 
   useEffect(() => {
     setShadowingSessions(readShadowingSessions());
@@ -246,11 +248,11 @@ export default function Dashboard() {
   }
 
   return (
-    <main className="pt-24 pb-16 sm:pb-20 px-4 sm:px-6 lg:px-8 max-w-[1440px] mx-auto min-h-screen">
+    <main className="wp-shell min-h-screen pt-24 pb-16 sm:pb-20">
       <header className="mb-10 sm:mb-12">
-        <h1 className="font-headline font-extrabold text-3xl sm:text-4xl tracking-tight text-on-surface mb-2">Welcome back, {displayName}</h1>
+        <h1 className="font-headline font-extrabold text-3xl sm:text-4xl tracking-tight text-on-surface mb-2">{t('dashboard.welcome', { name: displayName })}</h1>
         <p className="text-on-surface-variant font-medium">
-          Your workspace is connected to your account. Current target: {targetLanguage} at {cefrLevel}.
+          {t('dashboard.subtitle', { language: translateLanguageName(targetLanguage), level: cefrLevel })}
         </p>
       </header>
 
@@ -262,17 +264,17 @@ export default function Dashboard() {
 
       <section className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 mb-12 sm:mb-16">
         <StatCard
-          label="Average Score"
+          label={t('dashboard.averageScore')}
           value={sessionMetrics.averageScore === null ? '--' : String(sessionMetrics.averageScore)}
-          trend={buildTrendLabel(sessionMetrics.weeklyDelta)}
+          trend={buildTrendLabel(sessionMetrics.weeklyDelta, t)}
           icon={<TrendingUp className="w-4 h-4 mr-1" />}
           primary
           loading={isLoading}
         />
         <StatCard
-          label="Total Sessions"
+          label={t('dashboard.totalSessions')}
           value={String(sessionMetrics.totalSessions)}
-          trend={sessionMetrics.totalSessions > 0 ? 'Live progress synced from your account.' : 'Start your first dictation to populate this dashboard.'}
+          trend={sessionMetrics.totalSessions > 0 ? t('dashboard.synced') : t('dashboard.firstDictation')}
           italic
           loading={isLoading}
         />
@@ -296,11 +298,11 @@ export default function Dashboard() {
       <section className="mb-12 sm:mb-16">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
           <div>
-            <h2 className="font-headline font-bold text-xl text-on-surface">Practice Path Preview</h2>
-            <p className="mt-1 text-sm text-on-surface-variant">Start with the next cards for your current {cefrLevel} plan.</p>
+            <h2 className="font-headline font-bold text-xl text-on-surface">{t('dashboard.practicePathPreview')}</h2>
+            <p className="mt-1 text-sm text-on-surface-variant">{t('dashboard.practicePathBody', { level: cefrLevel })}</p>
           </div>
           <Link to="/practice-path" className="text-primary text-sm font-bold hover:underline">
-            Open full path
+            {t('dashboard.openFullPath')}
           </Link>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
@@ -318,22 +320,22 @@ export default function Dashboard() {
             <div>
               <div className="flex items-center gap-2 text-primary text-[0.6875rem] font-bold tracking-widest uppercase">
                 <Mic className="h-4 w-4" />
-                Shadowing Practice
+                {t('dashboard.shadowingPractice')}
               </div>
-              <h2 className="mt-2 font-headline font-black text-2xl text-on-surface">Speaking fluency tracker</h2>
+              <h2 className="mt-2 font-headline font-black text-2xl text-on-surface">{t('dashboard.speakingTracker')}</h2>
               <p className="mt-2 text-sm text-on-surface-variant max-w-2xl">
-                Continue YouTube-based sentence repetition sessions and watch your pronunciation scores improve over time.
+                {t('dashboard.speakingBody')}
               </p>
             </div>
             <Link to="/shadowing" className="inline-flex shrink-0 items-center justify-center rounded-full bg-primary px-5 py-3 text-sm font-bold text-on-primary hover:bg-primary-dim transition">
-              Open Shadowing
+              {t('dashboard.openShadowing')}
             </Link>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-            <MiniMetric label="Sessions" value={String(shadowingSessions.length)} />
-            <MiniMetric label="Average score" value={shadowingAverage === null ? '--' : `${shadowingAverage}%`} />
-            <MiniMetric label="Unfinished" value={String(unfinishedShadowingSessions.length)} />
+            <MiniMetric label={t('dashboard.sessions')} value={String(shadowingSessions.length)} />
+            <MiniMetric label={t('dashboard.average')} value={shadowingAverage === null ? '--' : `${shadowingAverage}%`} />
+            <MiniMetric label={t('dashboard.unfinished')} value={String(unfinishedShadowingSessions.length)} />
           </div>
 
           {latestShadowingSession ? (
@@ -344,13 +346,13 @@ export default function Dashboard() {
                     <div>
                       <p className="font-headline font-bold text-on-surface">{session.title}</p>
                       <p className="mt-1 text-xs text-on-surface-variant">
-                        {formatSessionDate(session.updatedAt)} - {session.completed}/{session.total} sentences - best {session.bestScore}%
+                        {formatSessionDate(session.updatedAt)} - {session.completed}/{session.total} {t('dashboard.sentences')} - {t('dashboard.best')} {session.bestScore}%
                       </p>
                     </div>
                     <div className="flex items-center gap-3">
                       <span className="rounded-xl bg-primary-container px-3 py-2 text-sm font-black text-primary">{session.averageScore}%</span>
                       <Link to="/shadowing" className="rounded-full bg-surface-container-lowest px-4 py-2 text-xs font-bold text-on-surface">
-                        {session.status === 'completed' ? 'Review' : 'Resume'}
+                        {session.status === 'completed' ? t('dashboard.review') : t('dashboard.resume')}
                       </Link>
                     </div>
                   </div>
@@ -362,18 +364,18 @@ export default function Dashboard() {
             </div>
           ) : (
             <div className="rounded-2xl bg-surface-container-low px-6 py-8">
-              <h3 className="font-headline font-bold text-lg text-on-surface">No shadowing sessions yet</h3>
-              <p className="mt-2 text-sm text-on-surface-variant">Paste a YouTube lesson and transcript to start tracking speaking progress.</p>
+              <h3 className="font-headline font-bold text-lg text-on-surface">{t('dashboard.noShadowingTitle')}</h3>
+              <p className="mt-2 text-sm text-on-surface-variant">{t('dashboard.noShadowingBody')}</p>
             </div>
           )}
         </div>
 
         <div className="lg:col-span-4 bg-surface-container-lowest rounded-[2rem] p-6 sm:p-8 whisper-shadow">
-          <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary">Review queue</p>
-          <h2 className="mt-2 font-headline font-black text-2xl text-on-surface">Difficult sentences</h2>
+          <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary">{t('dashboard.reviewQueue')}</p>
+          <h2 className="mt-2 font-headline font-black text-2xl text-on-surface">{t('dashboard.difficultSentences')}</h2>
           <div className="mt-5 space-y-3">
             {difficultShadowingSentences.length === 0 ? (
-              <p className="text-sm leading-6 text-on-surface-variant">Sentences below 60% will appear here for targeted review.</p>
+              <p className="text-sm leading-6 text-on-surface-variant">{t('dashboard.difficultBody')}</p>
             ) : (
               difficultShadowingSentences.map((sentence) => (
                 <p key={sentence} className="rounded-2xl bg-surface-container-low px-4 py-3 text-sm leading-6 text-on-surface">
@@ -388,7 +390,7 @@ export default function Dashboard() {
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 mb-12 sm:mb-16">
         <div className="lg:col-span-8">
           <div className="flex items-center justify-between mb-6 gap-3">
-            <h2 className="font-headline font-bold text-xl text-on-surface">Recent Sessions</h2>
+            <h2 className="font-headline font-bold text-xl text-on-surface">{t('dashboard.recentSessions')}</h2>
             <div className="flex items-center gap-4">
               {recentSessions.length > 5 && (
                 <button
@@ -396,22 +398,22 @@ export default function Dashboard() {
                   onClick={() => setShowAllSessions((current) => !current)}
                   className="text-primary text-sm font-bold hover:underline"
                 >
-                  {showAllSessions ? 'Show less' : 'View all history'}
+                  {showAllSessions ? t('dashboard.showLess') : t('dashboard.viewAllHistory')}
                 </button>
               )}
               <Link to="/history" className="text-primary text-sm font-bold hover:underline">
-                Filters
+                {t('dashboard.filters')}
               </Link>
             </div>
           </div>
 
           {isLoading ? (
-            <PanelLoader label="Loading your latest sessions..." />
+            <PanelLoader label={t('dashboard.loadingSessions')} />
           ) : visibleSessions.length === 0 ? (
             <EmptyPanel
-              title="No sessions yet"
-              body="Your completed dictation sessions will appear here with review links and scores."
-              ctaLabel="Start New Dictation"
+              title={t('dashboard.noSessionsTitle')}
+              body={t('dashboard.noSessionsBody')}
+              ctaLabel={t('dashboard.startNewDictation')}
               ctaTo="/workspace"
             />
           ) : (
@@ -420,11 +422,11 @@ export default function Dashboard() {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-surface-container-low/50">
-                      <th className="py-4 px-6 text-[0.6875rem] font-bold text-on-surface-variant tracking-wider uppercase">Date</th>
-                      <th className="py-4 px-6 text-[0.6875rem] font-bold text-on-surface-variant tracking-wider uppercase">Text Title</th>
-                      <th className="py-4 px-6 text-[0.6875rem] font-bold text-on-surface-variant tracking-wider uppercase">Language</th>
-                      <th className="py-4 px-6 text-[0.6875rem] font-bold text-on-surface-variant tracking-wider uppercase">Score</th>
-                      <th className="py-4 px-6 text-[0.6875rem] font-bold text-on-surface-variant tracking-wider uppercase text-right">Action</th>
+                      <th className="py-4 px-6 text-[0.6875rem] font-bold text-on-surface-variant tracking-wider uppercase">{t('dashboard.date')}</th>
+                      <th className="py-4 px-6 text-[0.6875rem] font-bold text-on-surface-variant tracking-wider uppercase">{t('dashboard.textTitle')}</th>
+                      <th className="py-4 px-6 text-[0.6875rem] font-bold text-on-surface-variant tracking-wider uppercase">{t('dashboard.language')}</th>
+                      <th className="py-4 px-6 text-[0.6875rem] font-bold text-on-surface-variant tracking-wider uppercase">{t('admin.score')}</th>
+                      <th className="py-4 px-6 text-[0.6875rem] font-bold text-on-surface-variant tracking-wider uppercase text-right">{t('dashboard.action')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-surface-container">
@@ -440,7 +442,7 @@ export default function Dashboard() {
                         <td className="py-5 px-6 font-headline font-bold text-primary">{session.score}%</td>
                         <td className="py-5 px-6 text-right">
                           <button type="button" onClick={() => reviewSession(session)} className="text-primary font-bold text-sm hover:underline">
-                            Review
+                            {t('dashboard.review')}
                           </button>
                         </td>
                       </tr>
@@ -464,7 +466,7 @@ export default function Dashboard() {
                     <div className="flex items-center justify-between">
                       <span className="font-headline font-bold text-primary text-lg">{session.score}%</span>
                       <button type="button" onClick={() => reviewSession(session)} className="text-primary font-bold text-sm hover:underline">
-                        Review
+                        {t('dashboard.review')}
                       </button>
                     </div>
                   </div>
@@ -476,19 +478,19 @@ export default function Dashboard() {
 
         <div className="lg:col-span-4">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="font-headline font-bold text-xl text-on-surface">Saved Texts</h2>
+            <h2 className="font-headline font-bold text-xl text-on-surface">{t('dashboard.savedTexts')}</h2>
             <Link to="/library" className="text-primary text-sm font-bold hover:underline">
-              Library
+              {t('dashboard.library')}
             </Link>
           </div>
 
           {isLoading ? (
-            <PanelLoader label="Loading your saved texts..." />
+            <PanelLoader label={t('dashboard.loadingSavedTexts')} />
           ) : savedTexts.length === 0 ? (
             <EmptyPanel
-              title="No saved texts yet"
-              body="Save drafts from AI Lab or your practice flow and they will show up here."
-              ctaLabel="Open AI Lab"
+              title={t('dashboard.noSavedTextsTitle')}
+              body={t('dashboard.noSavedTextsBody')}
+              ctaLabel={t('dashboard.openAiLab')}
               ctaTo="/ai-lab"
             />
           ) : (
@@ -505,13 +507,13 @@ export default function Dashboard() {
                   </div>
                   <div className="flex-1">
                     <h3 className="font-bold text-sm text-on-surface group-hover:text-primary transition-colors">{text.title}</h3>
-                    <p className="text-xs text-on-surface-variant mt-1">{text.level} Level - {text.category}</p>
+                    <p className="text-xs text-on-surface-variant mt-1">{text.level} {t('dashboard.level')} - {text.category}</p>
                     <button
                       type="button"
                       onClick={() => startPractice(text)}
                       className="mt-3 w-full bg-surface-container hover:bg-primary hover:text-on-primary transition-all py-2 rounded-lg text-[11px] font-bold tracking-wide uppercase"
                     >
-                      Practice Now
+                      {t('dashboard.practiceNow')}
                     </button>
                   </div>
                 </div>
@@ -524,19 +526,19 @@ export default function Dashboard() {
       <section className="mb-12 sm:mb-16">
         <div className="bg-surface-container rounded-3xl p-6 sm:p-8 lg:p-10 flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="text-center md:text-left">
-            <h2 className="font-headline font-black text-3xl text-on-surface mb-2">Keep the momentum</h2>
+            <h2 className="font-headline font-black text-3xl text-on-surface mb-2">{t('dashboard.momentumTitle')}</h2>
             <p className="text-on-surface-variant max-w-xl">
               {sessionMetrics.totalSessions > 0
-                ? `You have ${sessionMetrics.totalSessions} recorded session${sessionMetrics.totalSessions === 1 ? '' : 's'} and ${savedTexts.length} saved text${savedTexts.length === 1 ? '' : 's'} ready for more practice.`
-                : 'Start a new dictation or generate a fresh AI text to begin building your dashboard history.'}
+                ? t('dashboard.momentumActive', { sessions: sessionMetrics.totalSessions, texts: savedTexts.length })
+                : t('dashboard.momentumEmpty')}
             </p>
           </div>
           <div className="flex w-full md:w-auto flex-col sm:flex-row gap-3 sm:gap-4">
             <Link to="/workspace" className="bg-primary text-on-primary px-6 sm:px-8 py-4 rounded-full font-headline font-bold shadow-lg shadow-primary/20 hover:scale-105 active:scale-95 transition-transform flex items-center justify-center">
-              Start New Dictation
+              {t('dashboard.startNewDictation')}
             </Link>
             <Link to="/ai-lab" className="bg-surface-container-lowest text-on-surface px-6 sm:px-8 py-4 rounded-full font-headline font-bold shadow-sm hover:bg-white transition-colors flex items-center justify-center">
-              Open AI Lab
+              {t('dashboard.openAiLab')}
             </Link>
           </div>
         </div>
@@ -556,6 +558,8 @@ function AchievementCard({
   loading: boolean;
   onOpen: () => void;
 }) {
+  const { t, translateLanguageName } = useI18n();
+
   if (loading) {
     return (
       <div className="bg-primary text-on-primary rounded-2xl p-8 flex items-center justify-center min-h-[200px] whisper-shadow">
@@ -565,13 +569,13 @@ function AchievementCard({
   }
 
   const score = certificate?.score ?? bestSession?.score ?? 0;
-  const label = certificate ? 'Best Performance' : bestSession ? 'Top Session' : 'Best Performance';
+  const label = certificate ? t('dashboard.bestPerformance') : bestSession ? t('dashboard.topSession') : t('dashboard.bestPerformance');
   const detail = certificate
-    ? `${certificate.level} ${certificate.language} ${certificate.sessionTitle}`
+    ? `${certificate.level} ${translateLanguageName(certificate.language)} ${certificate.sessionTitle}`
     : bestSession
-      ? `${bestSession.cefrLevel ?? 'B1'} ${bestSession.language} ${bestSession.title}`
-      : 'Complete your first dictation to unlock your best score card.';
-  const buttonLabel = certificate ? 'View Certificate' : bestSession ? 'Review Session' : 'Start Practising';
+      ? `${bestSession.cefrLevel ?? 'B1'} ${translateLanguageName(bestSession.language)} ${bestSession.title}`
+      : t('dashboard.firstScoreCard');
+  const buttonLabel = certificate ? t('dashboard.viewCertificate') : bestSession ? t('dashboard.reviewSession') : t('dashboard.startPractising');
 
   return (
     <div className="bg-primary text-on-primary rounded-2xl p-8 flex flex-col justify-between relative overflow-hidden whisper-shadow min-h-[200px]">
@@ -616,6 +620,8 @@ function StatCard({
   italic?: boolean;
   loading?: boolean;
 }) {
+  const { t } = useI18n();
+
   return (
     <div className="bg-surface-container-low rounded-2xl p-6 sm:p-8 transition-all hover:bg-surface-container flex flex-col justify-between whisper-shadow min-h-[200px]">
       <div>
@@ -627,7 +633,7 @@ function StatCard({
       </div>
       <div className={cn('mt-6 flex items-center text-xs font-semibold', primary ? 'text-primary' : 'text-on-surface-variant', italic && 'italic font-medium')}>
         {icon}
-        {loading ? 'Syncing dashboard data...' : trend}
+        {loading ? t('dashboard.syncing') : trend}
       </div>
     </div>
   );
@@ -722,16 +728,16 @@ function getAverageAccuracy(rows: SessionMetricRow[]) {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
-function buildTrendLabel(weeklyDelta: number | null) {
+function buildTrendLabel(weeklyDelta: number | null, t: ReturnType<typeof useI18n>['t']) {
   if (weeklyDelta === null) {
-    return 'Weekly trend will appear after two active weeks.';
+    return t('dashboard.weeklyPending');
   }
 
   if (weeklyDelta === 0) {
-    return 'Steady compared with the previous week.';
+    return t('dashboard.weeklySteady');
   }
 
-  return `${weeklyDelta > 0 ? '+' : ''}${weeklyDelta}% from last week`;
+  return t('dashboard.weeklyDelta', { delta: `${weeklyDelta > 0 ? '+' : ''}${weeklyDelta}` });
 }
 
 function readShadowingSessions(): ShadowingDashboardSession[] {
@@ -747,7 +753,8 @@ function readShadowingSessions(): ShadowingDashboardSession[] {
 }
 
 function formatSessionDate(value: string) {
-  return new Date(value).toLocaleDateString('en-US', {
+  const language = typeof document === 'undefined' ? 'en' : document.documentElement.lang === 'de' ? 'de' : 'en';
+  return new Date(value).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',

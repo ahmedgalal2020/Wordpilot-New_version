@@ -1,6 +1,7 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useAdminAccess } from '../hooks/useAdminAccess';
+import { useI18n } from '../i18n';
 
 function FullScreenState({ message, subtle = false }: { message: string; subtle?: boolean }) {
   return (
@@ -28,13 +29,14 @@ function FullScreenState({ message, subtle = false }: { message: string; subtle?
 export function ProtectedRoute() {
   const { user, profile, loading, authReady, authMessage } = useAuth();
   const location = useLocation();
+  const { t } = useI18n();
 
   if (loading) {
-    return <FullScreenState message="Preparing your workspace..." subtle />;
+    return <FullScreenState message={t('guard.preparingWorkspace')} subtle />;
   }
 
   if (!authReady) {
-    return <FullScreenState message={authMessage ?? 'Authentication is not configured yet.'} />;
+    return <FullScreenState message={authMessage ?? t('guard.authMissing')} />;
   }
 
   if (!user) {
@@ -47,8 +49,8 @@ export function ProtectedRoute() {
       <FullScreenState
         message={
           profile?.blocked_reason || user.app_metadata?.blocked_reason
-            ? `This account is blocked. Reason: ${profile?.blocked_reason ?? user.app_metadata?.blocked_reason}`
-            : 'This account is blocked. Contact support if you think this is a mistake.'
+            ? t('guard.accountBlockedWithReason', { reason: String(profile?.blocked_reason ?? user.app_metadata?.blocked_reason) })
+            : t('guard.accountBlocked')
         }
       />
     );
@@ -73,27 +75,32 @@ export function PublicOnlyRoute() {
 
 export function AdminRoute() {
   const { user, loading, authReady, authMessage } = useAuth();
-  const { isAdmin, loading: adminLoading, error: adminError } = useAdminAccess(user);
   const location = useLocation();
+  const { isAdmin, loading: adminLoading, error } = useAdminAccess(user);
+  const { t } = useI18n();
 
-  if (loading || adminLoading) {
-    return <FullScreenState message="Checking admin access..." subtle />;
+  if (loading) {
+    return <FullScreenState message={t('guard.preparingAdmin')} subtle />;
   }
 
   if (!authReady) {
-    return <FullScreenState message={authMessage ?? 'Authentication is not configured yet.'} />;
+    return <FullScreenState message={authMessage ?? t('guard.authMissing')} />;
   }
 
   if (!user) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
 
-  if (adminError) {
-    return <FullScreenState message={`Admin service unavailable. ${adminError}`} />;
+  if (adminLoading) {
+    return <FullScreenState message={t('guard.checkingAdmin')} subtle />;
+  }
+
+  if (error) {
+    return <FullScreenState message={t('guard.adminCheckFailed', { error })} />;
   }
 
   if (!isAdmin) {
-    return <Navigate to="/dashboard" replace />;
+    return <FullScreenState message={t('guard.adminDenied')} />;
   }
 
   return <Outlet />;

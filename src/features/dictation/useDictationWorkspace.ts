@@ -47,6 +47,7 @@ export function useDictationWorkspace() {
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const [isAwaitingManualAdvance, setIsAwaitingManualAdvance] = useState(false);
   const [sourceText, setSourceText] = useState(initialDraft?.sourceText ?? INITIAL_SOURCE);
   const [inputText, setInputText] = useState(initialDraft?.inputText ?? '');
   const [selectedLanguage, setSelectedLanguage] = useState<PracticeLanguage>(initialDraft?.selectedLanguage ?? getPracticeLanguageCode(profile?.target_language));
@@ -247,6 +248,7 @@ export function useDictationWorkspace() {
     awaitingSpaceAdvanceRef.current = false;
     spaceAdvanceRequestedRef.current = false;
     pendingSpaceAdvanceIndexRef.current = null;
+    setIsAwaitingManualAdvance(false);
     window.speechSynthesis.cancel();
     if (playbackTimeoutRef.current) {
       window.clearTimeout(playbackTimeoutRef.current);
@@ -303,6 +305,7 @@ export function useDictationWorkspace() {
     awaitingSpaceAdvanceRef.current = false;
     spaceAdvanceRequestedRef.current = false;
     pendingSpaceAdvanceIndexRef.current = null;
+    setIsAwaitingManualAdvance(false);
     if (wordIndex >= sourceWordRanges.length) {
       stopSpeaking();
       return;
@@ -327,6 +330,7 @@ export function useDictationWorkspace() {
         }
 
         awaitingSpaceAdvanceRef.current = true;
+        setIsAwaitingManualAdvance(true);
         return;
       }
 
@@ -362,6 +366,7 @@ export function useDictationWorkspace() {
         }
 
         awaitingSpaceAdvanceRef.current = true;
+        setIsAwaitingManualAdvance(true);
         return;
       }
 
@@ -401,6 +406,7 @@ export function useDictationWorkspace() {
     awaitingSpaceAdvanceRef.current = false;
     spaceAdvanceRequestedRef.current = false;
     pendingSpaceAdvanceIndexRef.current = null;
+    setIsAwaitingManualAdvance(false);
     if (nextIndex >= sourceWordRanges.length) {
       stopSpeaking();
       return;
@@ -469,6 +475,7 @@ export function useDictationWorkspace() {
 
     if (!enabled && playbackActiveRef.current && awaitingSpaceAdvanceRef.current && currentWordIndex >= 0) {
       awaitingSpaceAdvanceRef.current = false;
+      setIsAwaitingManualAdvance(false);
       const nextIndex = currentWordIndex + 1;
       playbackCursorRef.current = nextIndex;
       playbackTimeoutRef.current = window.setTimeout(() => {
@@ -766,11 +773,13 @@ export function useDictationWorkspace() {
     handleSkillModeChange,
     isPlaying,
     isPaused,
+    isAwaitingManualAdvance,
     currentWordIndex,
     sourceWordRanges,
     seekWords,
     restartSpeaking,
     pauseSpeaking,
+    stopSpeaking,
     resumeSpeaking,
     startSpeaking,
     handleAdvanceOnSpaceChange,

@@ -1,17 +1,37 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Bell, ChevronDown, History, LoaderCircle, LogOut, Menu, Settings, User, X } from 'lucide-react';
+import {
+  Bell,
+  Bot,
+  ChevronDown,
+  CreditCard,
+  History,
+  Keyboard,
+  LayoutDashboard,
+  Library,
+  LoaderCircle,
+  LogOut,
+  Menu,
+  Mic2,
+  Plus,
+  Route,
+  Settings,
+  ShieldCheck,
+  X,
+} from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
+import { useAdminAccess } from '../hooks/useAdminAccess';
 import { supabase } from '../lib/supabase';
 import { hasSupabaseEnv } from '../lib/env';
-import { useAdminAccess } from '../hooks/useAdminAccess';
+import { useI18n } from '../i18n';
 
 type NavActivityItem = {
   id: string;
   title: string;
   meta: string;
   to: string;
+  createdAt: string;
 };
 
 type NavNotificationItem = {
@@ -21,21 +41,54 @@ type NavNotificationItem = {
   to: string;
 };
 
+type NavItem = {
+  to: string;
+  labelKey: Parameters<ReturnType<typeof useI18n>['t']>[0];
+  icon: React.ElementType;
+  userOnly?: boolean;
+  adminOnly?: boolean;
+  match?: string[];
+};
+
+const mainNavItems: NavItem[] = [
+  { to: '/dashboard', labelKey: 'nav.dashboard', icon: LayoutDashboard, userOnly: true },
+  { to: '/practice-path', labelKey: 'nav.practicePath', icon: Route, userOnly: true, match: ['/practice-path', '/curriculum'] },
+  { to: '/workspace', labelKey: 'nav.exercises', icon: Keyboard, userOnly: true },
+  { to: '/shadowing', labelKey: 'nav.shadowing', icon: Mic2, userOnly: true },
+  { to: '/ai-lab', labelKey: 'nav.aiLab', icon: Bot, userOnly: true },
+  { to: '/pricing', labelKey: 'nav.pricing', icon: CreditCard },
+  { to: '/admin', labelKey: 'nav.admin', icon: ShieldCheck, userOnly: true, adminOnly: true },
+];
+
+const practiceItems: NavItem[] = [
+  { to: '/library', labelKey: 'nav.library', icon: Library, userOnly: true },
+  { to: '/history', labelKey: 'nav.history', icon: History, userOnly: true },
+];
+
+const startItems = [
+  { to: '/ai-lab', labelKey: 'nav.startPractice.aiText', descriptionKey: 'nav.startPractice.aiTextBody', icon: Bot },
+  { to: '/workspace', labelKey: 'nav.startPractice.dictation', descriptionKey: 'nav.startPractice.dictationBody', icon: Keyboard },
+  { to: '/shadowing', labelKey: 'nav.startPractice.shadowing', descriptionKey: 'nav.startPractice.shadowingBody', icon: Mic2 },
+];
+
 export function Navbar() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { language, setLanguage, t } = useI18n();
   const { user, profile, signOut } = useAuth();
+  const { isAdmin } = useAdminAccess(user);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [startMenuOpen, setStartMenuOpen] = useState(false);
   const [loadingQuickData, setLoadingQuickData] = useState(false);
   const [recentActivity, setRecentActivity] = useState<NavActivityItem[]>([]);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const notificationsRef = useRef<HTMLDivElement | null>(null);
   const historyRef = useRef<HTMLDivElement | null>(null);
+  const startMenuRef = useRef<HTMLDivElement | null>(null);
   const supabaseReady = hasSupabaseEnv();
-  const { isAdmin } = useAdminAccess(user);
   const isAuthPage =
     location.pathname === '/login' ||
     location.pathname === '/signup' ||
@@ -44,63 +97,67 @@ export function Navbar() {
   const displayName = profile?.full_name || user?.user_metadata.full_name || user?.email?.split('@')[0] || 'Guest';
   const initials = displayName
     .split(' ')
+    .filter(Boolean)
     .map((part) => part[0])
     .join('')
     .slice(0, 2)
     .toUpperCase();
+  const visibleMainItems = mainNavItems.filter((item) => {
+    if (item.userOnly && !user) return false;
+    if (item.adminOnly && !isAdmin) return false;
+    return true;
+  });
+  const centerNavItems = user ? visibleMainItems : [];
+  const visiblePracticeItems = practiceItems.filter((item) => !item.userOnly || user);
   const notifications = useMemo(() => {
     const items: NavNotificationItem[] = [];
 
     if (!supabaseReady) {
       items.push({
-        id: 'supabase',
-        title: 'Data sync is not connected',
-        body: 'Connect Supabase to unlock live history, certificates, and account syncing.',
+        id: 'sync',
+        title: t('nav.notice.syncTitle'),
+        body: t('nav.notice.syncBody'),
         to: '/account',
       });
     }
 
-    if (!profile?.full_name?.trim()) {
+    if (user && !profile?.full_name?.trim()) {
       items.push({
         id: 'profile-name',
-        title: 'Complete your profile',
-        body: 'Add your full name in Account so certificates and saved data look cleaner.',
+        title: t('nav.notice.profileTitle'),
+        body: t('nav.notice.profileBody'),
         to: '/account',
       });
     }
 
-    if (!profile?.target_language || !profile?.cefr_level) {
+    if (user && (!profile?.target_language || !profile?.cefr_level)) {
       items.push({
         id: 'learning-target',
-        title: 'Set your learning target',
-        body: 'Choose your target language and CEFR level to keep AI Lab and Exercises aligned.',
-        to: '/account',
+        title: t('nav.notice.targetTitle'),
+        body: t('nav.notice.targetBody'),
+        to: '/practice-path',
       });
     }
 
     if (items.length === 0) {
       items.push({
         id: 'clear',
-        title: 'You are all caught up',
-        body: 'No pending account or setup actions right now.',
+        title: t('nav.notice.readyTitle'),
+        body: t('nav.notice.readyBody'),
         to: '/dashboard',
       });
     }
 
     return items.slice(0, 3);
-  }, [profile?.cefr_level, profile?.full_name, profile?.target_language, supabaseReady]);
+  }, [profile?.cefr_level, profile?.full_name, profile?.target_language, supabaseReady, t, user]);
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
-      if (!accountMenuRef.current?.contains(event.target as Node)) {
-        setAccountMenuOpen(false);
-      }
-      if (!notificationsRef.current?.contains(event.target as Node)) {
-        setNotificationsOpen(false);
-      }
-      if (!historyRef.current?.contains(event.target as Node)) {
-        setHistoryOpen(false);
-      }
+      const target = event.target as Node;
+      if (!accountMenuRef.current?.contains(target)) setAccountMenuOpen(false);
+      if (!notificationsRef.current?.contains(target)) setNotificationsOpen(false);
+      if (!historyRef.current?.contains(target)) setHistoryOpen(false);
+      if (!startMenuRef.current?.contains(target)) setStartMenuOpen(false);
     }
 
     function handleEscape(event: KeyboardEvent) {
@@ -108,6 +165,8 @@ export function Navbar() {
         setAccountMenuOpen(false);
         setNotificationsOpen(false);
         setHistoryOpen(false);
+        setStartMenuOpen(false);
+        setMobileMenuOpen(false);
       }
     }
 
@@ -125,6 +184,7 @@ export function Navbar() {
     setMobileMenuOpen(false);
     setNotificationsOpen(false);
     setHistoryOpen(false);
+    setStartMenuOpen(false);
   }, [location.pathname]);
 
   useEffect(() => {
@@ -142,27 +202,27 @@ export function Navbar() {
         supabase.from('saved_texts').select('id,title,created_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(2),
       ]);
 
-      if (!active) {
-        return;
-      }
+      if (!active) return;
 
       const sessionItems: NavActivityItem[] =
         sessionsResult.data?.map((session) => ({
           id: `session-${session.id}`,
-          title: session.title,
-          meta: `Session - ${formatNavDate(session.created_at)}`,
+          title: session.title || t('nav.history.dictationSession'),
+          meta: `${t('nav.history.session')} - ${formatNavDate(session.created_at, language)}`,
           to: '/history',
+          createdAt: session.created_at,
         })) ?? [];
 
       const savedTextItems: NavActivityItem[] =
         savedTextsResult.data?.map((text) => ({
           id: `text-${text.id}`,
-          title: text.title,
-          meta: `Saved text - ${formatNavDate(text.created_at)}`,
+          title: text.title || t('nav.history.savedTextFallback'),
+          meta: `${t('nav.history.savedText')} - ${formatNavDate(text.created_at, language)}`,
           to: '/library',
+          createdAt: text.created_at,
         })) ?? [];
 
-      setRecentActivity([...sessionItems, ...savedTextItems].sort((a, b) => a.meta < b.meta ? 1 : -1).slice(0, 5));
+      setRecentActivity([...sessionItems, ...savedTextItems].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5));
       setLoadingQuickData(false);
     }
 
@@ -171,7 +231,7 @@ export function Navbar() {
     return () => {
       active = false;
     };
-  }, [supabaseReady, user]);
+  }, [language, supabaseReady, t, user]);
 
   async function handleSignOut() {
     setAccountMenuOpen(false);
@@ -181,93 +241,73 @@ export function Navbar() {
 
   if (isAuthPage) {
     return (
-      <header className="w-full px-4 sm:px-6 lg:px-8 py-8 sm:py-10 flex justify-center">
-        <Link to="/" className="flex items-center gap-2">
-          <img src="/wordpilot-logo.png" alt="WordPilot" className="h-10 w-auto sm:h-12" />
-        </Link>
+      <header className="w-full py-8 sm:py-10">
+        <div className="wp-shell flex justify-center">
+          <Link to="/" className="flex items-center gap-2">
+            <img src="/wordpilot-logo.svg" alt="WordPilot" className="h-10 w-auto sm:h-12" />
+          </Link>
+        </div>
       </header>
     );
   }
 
   return (
-    <nav className="fixed top-0 z-50 w-full border-b border-surface-container bg-surface/95 backdrop-blur supports-[backdrop-filter]:bg-surface/90" aria-label="Primary navigation">
-      <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
-        <Link to="/" className="shrink-0" aria-label="WordPilot home">
-          <img src="/wordpilot-logo.png" alt="WordPilot" className="h-8 w-auto sm:h-9" />
+    <nav className="fixed top-0 z-50 w-full border-b border-surface-container bg-surface/94 backdrop-blur-xl supports-[backdrop-filter]:bg-surface/88" aria-label={t('nav.primary')}>
+      <div className="wp-shell flex h-16 items-center justify-between gap-3">
+        <Link to={user ? '/dashboard' : '/'} className="flex min-w-[8.75rem] shrink-0 items-center focus:outline-none" aria-label={t('nav.home')}>
+          <img src="/wordpilot-logo.svg" alt="WordPilot" className="h-9 w-auto sm:h-10" />
         </Link>
 
-        <div className="hidden items-center gap-1 rounded-full bg-surface-container-low px-1.5 py-1 font-headline text-sm font-semibold tracking-tight lg:flex xl:gap-2">
-          {user && <NavLink to="/dashboard">Dashboard</NavLink>}
-          {user && <NavLink to="/practice-path">Practice Path</NavLink>}
-          {user && <NavLink to="/workspace">Exercises</NavLink>}
-          {user && <NavLink to="/shadowing">Shadowing</NavLink>}
-          {user && <NavLink to="/ai-lab">AI Lab</NavLink>}
-          <NavLink to="/pricing">Pricing</NavLink>
-          {user && isAdmin && <NavLink to="/admin">Admin</NavLink>}
+        <div className="hidden min-w-0 flex-1 justify-center lg:flex">
+          <div className={cn('max-w-full items-center gap-1 overflow-hidden rounded-full bg-surface-container-low p-1 font-headline text-sm font-semibold tracking-tight', centerNavItems.length > 0 ? 'flex' : 'hidden')}>
+            {centerNavItems.map((item) => (
+              <NavLink key={item.to} item={item} />
+            ))}
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex min-w-0 items-center justify-end gap-1.5 sm:gap-2">
           {user && (
-            <div className="hidden lg:block relative" ref={notificationsRef}>
-              <button
-                type="button"
+            <div className="relative hidden lg:block" ref={notificationsRef}>
+              <IconButton
+                active={notificationsOpen}
+                label={t('nav.notifications.open')}
                 onClick={() => {
                   setNotificationsOpen((open) => !open);
                   setHistoryOpen(false);
                   setAccountMenuOpen(false);
+                  setStartMenuOpen(false);
                 }}
-                className="inline-flex rounded-full p-2 text-on-surface-variant transition-all hover:bg-surface-container hover:text-primary"
-                aria-expanded={notificationsOpen}
-                aria-label="Open notifications"
               >
-                <Bell className="w-5 h-5" />
-              </button>
-              {notificationsOpen && (
-                <QuickPanel
-                  title="Notifications"
-                  items={notifications}
-                  onItemClick={() => setNotificationsOpen(false)}
-                />
-              )}
+                <Bell className="h-5 w-5" />
+              </IconButton>
+              {notificationsOpen && <QuickPanel title={t('nav.notifications.title')} items={notifications} onItemClick={() => setNotificationsOpen(false)} />}
             </div>
           )}
 
           {user && (
-            <div className="hidden lg:block relative" ref={historyRef}>
-              <button
-                type="button"
+            <div className="relative hidden lg:block" ref={historyRef}>
+              <IconButton
+                active={historyOpen}
+                label={t('nav.history.open')}
                 onClick={() => {
                   setHistoryOpen((open) => !open);
                   setNotificationsOpen(false);
                   setAccountMenuOpen(false);
+                  setStartMenuOpen(false);
                 }}
-                className="inline-flex rounded-full p-2 text-on-surface-variant transition-all hover:bg-surface-container hover:text-primary"
-                aria-expanded={historyOpen}
-                aria-label="Open recent activity"
               >
-                <History className="w-5 h-5" />
-              </button>
+                <History className="h-5 w-5" />
+              </IconButton>
               {historyOpen && (
                 <QuickPanel
-                  title="Recent Activity"
+                  title={t('nav.history.title')}
                   items={
                     loadingQuickData
                       ? []
                       : recentActivity.length > 0
-                        ? recentActivity.map((item) => ({
-                            id: item.id,
-                            title: item.title,
-                            body: item.meta,
-                            to: item.to,
-                          }))
-                        : [
-                            {
-                              id: 'empty-history',
-                              title: 'No recent activity yet',
-                              body: 'Your latest sessions and saved texts will appear here.',
-                              to: '/workspace',
-                            },
-                          ]
+                        ? recentActivity.map((item) => ({ id: item.id, title: item.title, body: item.meta, to: item.to }))
+                        : [{ id: 'empty-history', title: t('nav.history.emptyTitle'), body: t('nav.history.emptyBody'), to: '/workspace' }]
                   }
                   loading={loadingQuickData}
                   onItemClick={() => setHistoryOpen(false)}
@@ -278,9 +318,28 @@ export function Navbar() {
 
           {user ? (
             <>
-              <Link to="/workspace" className="hidden rounded-full bg-primary px-4 py-2 font-headline text-sm font-semibold text-on-primary shadow-sm transition hover:bg-primary-dim active:opacity-80 sm:inline-flex lg:px-5">
-                Start New
-              </Link>
+              <div className="relative hidden sm:block" ref={startMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStartMenuOpen((open) => !open);
+                    setAccountMenuOpen(false);
+                    setNotificationsOpen(false);
+                    setHistoryOpen(false);
+                  }}
+                  className="primary-gradient inline-flex h-11 items-center gap-2 rounded-full px-4 font-headline text-sm font-bold text-on-primary whisper-shadow transition hover:scale-[1.02] active:scale-[0.99]"
+                  aria-expanded={startMenuOpen}
+                  aria-haspopup="menu"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span className="hidden lg:inline">{t('nav.start')}</span>
+                  <ChevronDown className={cn('hidden h-4 w-4 transition-transform lg:block', startMenuOpen && 'rotate-180')} />
+                </button>
+                {startMenuOpen && <StartMenu onItemClick={() => setStartMenuOpen(false)} />}
+              </div>
+
+              <LanguageToggle language={language} setLanguage={setLanguage} label={t('nav.language')} />
+
               <div className="relative" ref={accountMenuRef}>
                 <button
                   type="button"
@@ -289,55 +348,43 @@ export function Navbar() {
                     setMobileMenuOpen(false);
                     setNotificationsOpen(false);
                     setHistoryOpen(false);
+                    setStartMenuOpen(false);
                   }}
-                  className="inline-flex items-center gap-2 rounded-full bg-primary py-1 pl-1 pr-3 text-on-primary shadow-sm transition hover:bg-primary-dim focus:outline-none focus:ring-2 focus:ring-primary/30 focus:ring-offset-2 focus:ring-offset-surface"
+                  className="inline-flex h-11 items-center gap-2 rounded-full bg-surface-container-lowest py-1 pl-1 pr-2 text-on-surface shadow-sm ring-1 ring-surface-container transition hover:bg-surface-container-low focus:outline-none focus:ring-2 focus:ring-primary/30 focus:ring-offset-2 focus:ring-offset-surface sm:pr-3"
                   aria-expanded={accountMenuOpen}
                   aria-haspopup="menu"
-                  aria-label="Open account menu"
+                  aria-label={t('nav.account.open')}
                 >
-                  <span className="w-10 h-10 rounded-full bg-primary text-on-primary flex items-center justify-center font-bold">
-                    {initials}
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-sm font-bold text-on-primary">
+                    {initials || 'U'}
                   </span>
-                  <ChevronDown className={cn('hidden sm:block w-4 h-4 transition-transform', accountMenuOpen && 'rotate-180')} />
+                  <span className="hidden max-w-[7.5rem] truncate text-sm font-bold text-on-surface 2xl:block">{displayName}</span>
+                  <ChevronDown className={cn('hidden h-4 w-4 text-on-surface-variant transition-transform sm:block', accountMenuOpen && 'rotate-180')} />
                 </button>
 
-                {accountMenuOpen && (
-                  <div className="absolute right-0 top-[calc(100%+0.75rem)] min-w-[220px] rounded-[1.5rem] border border-surface-container bg-surface-container-lowest p-2 whisper-shadow">
-                    <div className="px-4 py-3">
-                      <p className="font-headline font-semibold text-on-surface">{displayName}</p>
-                      <p className="text-sm text-on-surface-variant truncate">{user.email}</p>
-                    </div>
-                    <div className="h-px bg-surface-container mx-2" />
-                    <Link
-                      to="/account"
-                      className="mt-2 flex items-center gap-3 rounded-2xl px-4 py-3 text-on-surface-variant font-headline font-semibold transition hover:bg-surface-container-low hover:text-primary"
-                    >
-                      <Settings className="w-4 h-4" />
-                      Settings
-                    </Link>
-                    <button
-                      type="button"
-                      onClick={() => void handleSignOut()}
-                      className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-on-surface-variant font-headline font-semibold transition hover:bg-surface-container-low hover:text-primary"
-                    >
-                      <LogOut className="w-4 h-4" />
-                      Sign out
-                    </button>
-                  </div>
-                )}
+                {accountMenuOpen && <AccountMenu displayName={displayName} email={user.email ?? ''} onSignOut={() => void handleSignOut()} />}
               </div>
             </>
           ) : (
             <>
-              <Link to="/login" className="hidden sm:block text-on-surface-variant font-headline font-semibold px-4 py-2 hover:bg-surface-container rounded-lg transition-all">
-                Login
+              <Link
+                to="/pricing"
+                className={cn(
+                  'hidden rounded-full px-4 py-2.5 font-headline text-sm font-semibold transition sm:block',
+                  location.pathname === '/pricing'
+                    ? 'bg-primary-container text-primary'
+                    : 'text-on-surface-variant hover:bg-surface-container-low hover:text-primary',
+                )}
+              >
+                {t('nav.pricing')}
               </Link>
-              <Link to="/signup" className="primary-gradient text-on-primary font-headline font-semibold px-4 sm:px-6 py-2 rounded-full scale-95 active:opacity-80 transition-transform duration-200 text-sm sm:text-base">
-                Start Free
+              <Link to="/login" className="hidden rounded-full px-4 py-2.5 font-headline text-sm font-semibold text-on-surface-variant transition hover:bg-surface-container-low hover:text-primary sm:block">
+                {t('nav.login')}
               </Link>
-              <div className="hidden sm:flex w-8 h-8 rounded-full bg-surface-container-highest overflow-hidden items-center justify-center text-on-surface-variant">
-                <User className="w-4 h-4" />
-              </div>
+              <Link to="/signup" className="primary-gradient rounded-full px-4 py-2.5 font-headline text-sm font-bold text-on-primary whisper-shadow transition hover:scale-[1.02] active:scale-[0.99] sm:px-6">
+                {t('nav.startFree')}
+              </Link>
+              <LanguageToggle language={language} setLanguage={setLanguage} label={t('nav.language')} />
             </>
           )}
 
@@ -348,39 +395,41 @@ export function Navbar() {
               setAccountMenuOpen(false);
               setNotificationsOpen(false);
               setHistoryOpen(false);
+              setStartMenuOpen(false);
             }}
-            className="inline-flex items-center justify-center rounded-full p-2 text-on-surface transition-all hover:bg-surface-container focus:outline-none focus:ring-2 focus:ring-primary/30 focus:ring-offset-2 focus:ring-offset-surface lg:hidden"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full text-on-surface transition hover:bg-surface-container-low focus:outline-none focus:ring-2 focus:ring-primary/30 focus:ring-offset-2 focus:ring-offset-surface lg:hidden"
             aria-expanded={mobileMenuOpen}
             aria-controls="mobile-navigation"
-            aria-label="Toggle navigation menu"
+            aria-label={t('nav.toggle')}
           >
-            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
         </div>
       </div>
 
       {mobileMenuOpen && (
         <div id="mobile-navigation" className="border-t border-surface-container bg-surface/98 shadow-lg lg:hidden">
-          <div className="mx-auto flex max-h-[calc(100dvh-4rem)] max-w-[1440px] flex-col gap-2 overflow-y-auto px-4 py-4 sm:px-6">
-            {user && <MobileNavLink to="/dashboard">Dashboard</MobileNavLink>}
-            {user && <MobileNavLink to="/practice-path">Practice Path</MobileNavLink>}
-            {user && <MobileNavLink to="/workspace">Exercises</MobileNavLink>}
-            {user && <MobileNavLink to="/shadowing">Shadowing</MobileNavLink>}
-            {user && <MobileNavLink to="/ai-lab">AI Lab</MobileNavLink>}
-            <MobileNavLink to="/pricing">Pricing</MobileNavLink>
-            {user && isAdmin && <MobileNavLink to="/admin">Admin</MobileNavLink>}
-            {user && <MobileNavLink to="/account">Account</MobileNavLink>}
+          <div className="wp-shell flex max-h-[calc(100dvh-4rem)] flex-col gap-2 overflow-y-auto py-4">
+            {visibleMainItems.map((item) => (
+              <MobileNavLink key={item.to} item={item} />
+            ))}
+            {user && visiblePracticeItems.map((item) => <MobileNavLink key={item.to} item={item} />)}
+            {user && (
+              <MobileUtilityLink to="/account" icon={Settings} label={t('nav.account.settings')} />
+            )}
             {user ? (
-              <Link to="/workspace" className="mt-2 inline-flex items-center justify-center rounded-2xl primary-gradient text-on-primary font-headline font-semibold px-5 py-3">
-                Start New
-              </Link>
+              <div className="mt-2 grid gap-2 rounded-3xl bg-surface-container-low p-2 sm:grid-cols-3">
+                {startItems.map((item) => (
+                  <MobileStartLink key={item.to} {...item} />
+                ))}
+              </div>
             ) : (
-              <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <Link to="/login" className="inline-flex items-center justify-center rounded-2xl bg-surface-container-low text-on-surface font-headline font-semibold px-5 py-3">
-                  Login
+              <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <Link to="/login" className="inline-flex items-center justify-center rounded-2xl bg-surface-container-low px-5 py-3 font-headline font-semibold text-on-surface">
+                  {t('nav.login')}
                 </Link>
-                <Link to="/signup" className="inline-flex items-center justify-center rounded-2xl primary-gradient text-on-primary font-headline font-semibold px-5 py-3">
-                  Start Free
+                <Link to="/signup" className="primary-gradient inline-flex items-center justify-center rounded-2xl px-5 py-3 font-headline font-semibold text-on-primary">
+                  {t('nav.startFree')}
                 </Link>
               </div>
             )}
@@ -388,6 +437,134 @@ export function Navbar() {
         </div>
       )}
     </nav>
+  );
+}
+
+function IconButton({ active, label, onClick, children }: { active: boolean; label: string; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'inline-flex h-10 w-10 items-center justify-center rounded-full transition focus:outline-none focus:ring-2 focus:ring-primary/30 focus:ring-offset-2 focus:ring-offset-surface',
+        active ? 'bg-primary-container text-primary' : 'text-on-surface-variant hover:bg-surface-container-low hover:text-primary',
+      )}
+      aria-expanded={active}
+      aria-label={label}
+    >
+      {children}
+    </button>
+  );
+}
+
+function StartMenu({ onItemClick }: { onItemClick: () => void }) {
+  const { t } = useI18n();
+
+  return (
+    <div className="absolute right-0 top-[calc(100%+0.75rem)] w-[280px] rounded-[1.5rem] border border-surface-container bg-surface-container-lowest p-2 whisper-shadow">
+      <div className="px-4 py-3">
+        <p className="font-headline font-semibold text-on-surface">{t('nav.startPractice.title')}</p>
+        <p className="mt-1 text-xs text-on-surface-variant">{t('nav.startPractice.body')}</p>
+      </div>
+      <div className="h-px bg-surface-container mx-2" />
+      <div className="py-2">
+        {startItems.map((item) => (
+          <StartMenuItem key={item.to} {...item} onItemClick={onItemClick} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function StartMenuItem({ to, labelKey, descriptionKey, icon: Icon, onItemClick }: { key?: React.Key; to: string; labelKey: Parameters<ReturnType<typeof useI18n>['t']>[0]; descriptionKey: Parameters<ReturnType<typeof useI18n>['t']>[0]; icon: React.ElementType; onItemClick: () => void }) {
+  const { t } = useI18n();
+
+  return (
+    <Link to={to} onClick={onItemClick} className="mx-2 flex items-center gap-3 rounded-2xl px-4 py-3 transition hover:bg-surface-container-low">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary-container text-primary">
+        <Icon className="h-5 w-5" />
+      </span>
+      <span>
+        <span className="block font-headline text-sm font-bold text-on-surface">{t(labelKey)}</span>
+        <span className="mt-0.5 block text-xs text-on-surface-variant">{t(descriptionKey)}</span>
+      </span>
+    </Link>
+  );
+}
+
+function MobileStartLink({ to, labelKey, descriptionKey, icon: Icon }: { key?: React.Key; to: string; labelKey: Parameters<ReturnType<typeof useI18n>['t']>[0]; descriptionKey: Parameters<ReturnType<typeof useI18n>['t']>[0]; icon: React.ElementType }) {
+  const { t } = useI18n();
+
+  return (
+    <Link to={to} className="flex items-center gap-3 rounded-2xl bg-surface-container-lowest px-4 py-3">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary-container text-primary">
+        <Icon className="h-5 w-5" />
+      </span>
+      <span>
+        <span className="block font-headline text-sm font-bold text-on-surface">{t(labelKey)}</span>
+        <span className="block text-xs text-on-surface-variant">{t(descriptionKey)}</span>
+      </span>
+    </Link>
+  );
+}
+
+function MobileUtilityLink({ to, icon: Icon, label }: { to: string; icon: React.ElementType; label: string }) {
+  return (
+    <Link to={to} className="flex items-center gap-3 rounded-2xl px-4 py-3 font-headline font-semibold text-on-surface-variant transition-colors hover:bg-surface-container-low hover:text-primary">
+      <Icon className="h-5 w-5" />
+      {label}
+    </Link>
+  );
+}
+
+function AccountMenu({ displayName, email, onSignOut }: { displayName: string; email: string; onSignOut: () => void }) {
+  const { t } = useI18n();
+
+  return (
+    <div className="absolute right-0 top-[calc(100%+0.75rem)] min-w-[240px] rounded-[1.5rem] border border-surface-container bg-surface-container-lowest p-2 whisper-shadow">
+      <div className="px-4 py-3">
+        <p className="font-headline font-semibold text-on-surface">{displayName}</p>
+        <p className="max-w-[12rem] truncate text-sm text-on-surface-variant">{email}</p>
+      </div>
+      <div className="h-px bg-surface-container mx-2" />
+      <Link to="/account" className="mt-2 flex items-center gap-3 rounded-2xl px-4 py-3 font-headline font-semibold text-on-surface-variant transition hover:bg-surface-container-low hover:text-primary">
+        <Settings className="h-4 w-4" />
+        {t('nav.account.settings')}
+      </Link>
+      <button type="button" onClick={onSignOut} className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 font-headline font-semibold text-on-surface-variant transition hover:bg-surface-container-low hover:text-primary">
+        <LogOut className="h-4 w-4" />
+        {t('nav.account.signOut')}
+      </button>
+    </div>
+  );
+}
+
+function LanguageToggle({
+  language,
+  setLanguage,
+  label,
+}: {
+  language: 'en' | 'de';
+  setLanguage: (language: 'en' | 'de') => void;
+  label: string;
+}) {
+  return (
+    <div className="hidden items-center rounded-full bg-surface-container-low p-1 sm:flex" aria-label={label}>
+      {(['en', 'de'] as const).map((option) => (
+        <button
+          key={option}
+          type="button"
+          onClick={() => setLanguage(option)}
+          className={cn(
+            'h-8 rounded-full px-3 text-[11px] font-black uppercase tracking-wider transition',
+            language === option ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-primary',
+          )}
+          aria-pressed={language === option}
+        >
+          {option}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -415,12 +592,7 @@ function QuickPanel({
           </div>
         ) : (
           items.map((item) => (
-            <Link
-              key={item.id}
-              to={item.to}
-              onClick={onItemClick}
-              className="mx-2 flex rounded-2xl px-4 py-3 transition hover:bg-surface-container-low"
-            >
+            <Link key={item.id} to={item.to} onClick={onItemClick} className="mx-2 flex rounded-2xl px-4 py-3 transition hover:bg-surface-container-low">
               <div>
                 <p className="font-headline font-semibold text-sm text-on-surface">{item.title}</p>
                 <p className="mt-1 text-xs leading-relaxed text-on-surface-variant">{item.body}</p>
@@ -433,69 +605,79 @@ function QuickPanel({
   );
 }
 
-function formatNavDate(value: string) {
-  return new Date(value).toLocaleDateString('en-US', {
+function formatNavDate(value: string, language: 'en' | 'de') {
+  return new Date(value).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US', {
     month: 'short',
     day: 'numeric',
   });
 }
 
-function NavLink({ to, children }: { to: string; children: React.ReactNode }) {
+function NavLink({ item }: { key?: React.Key; item: NavItem }) {
   const location = useLocation();
-  const isActive = location.pathname === to;
+  const { t } = useI18n();
+  const isActive = item.match?.includes(location.pathname) ?? location.pathname === item.to;
 
   return (
     <Link
-      to={to}
+      to={item.to}
       aria-current={isActive ? 'page' : undefined}
       className={cn(
-        'inline-flex h-9 items-center rounded-full px-3 text-sm transition-colors xl:px-4',
+        'inline-flex h-9 items-center rounded-full px-3 text-[13px] transition-colors xl:px-4 xl:text-sm',
         isActive ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-container hover:text-primary',
       )}
     >
-      {children}
+      <span>{t(item.labelKey)}</span>
     </Link>
   );
 }
 
-function MobileNavLink({ to, children }: { to: string; children: React.ReactNode }) {
+function MobileNavLink({ item }: { key?: React.Key; item: NavItem }) {
   const location = useLocation();
-  const isActive = location.pathname === to;
+  const { t } = useI18n();
+  const isActive = item.match?.includes(location.pathname) ?? location.pathname === item.to;
+  const Icon = item.icon;
 
   return (
     <Link
-      to={to}
+      to={item.to}
       aria-current={isActive ? 'page' : undefined}
       className={cn(
-        'rounded-2xl px-4 py-3 font-headline font-semibold transition-colors',
+        'flex items-center gap-3 rounded-2xl px-4 py-3 font-headline font-semibold transition-colors',
         isActive ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:bg-surface-container-low hover:text-primary',
       )}
     >
-      {children}
+      <Icon className="h-5 w-5" />
+      {t(item.labelKey)}
     </Link>
   );
 }
 
 export function Footer() {
+  const { t } = useI18n();
+
   return (
-    <footer className="bg-surface w-full py-10 sm:py-12 px-4 sm:px-6 lg:px-8 border-t border-surface-container">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center max-w-[1440px] mx-auto">
+    <footer className="bg-surface w-full border-t border-surface-container py-10 sm:py-12">
+      <div className="wp-shell grid grid-cols-1 items-center gap-8 md:grid-cols-2">
         <div className="space-y-4">
-          <img src="/wordpilot-logo.png" alt="WordPilot" className="h-9 w-auto" />
+          <img src="/wordpilot-logo.svg" alt="WordPilot" className="h-9 w-auto" />
           <p className="text-xs tracking-wide leading-relaxed text-on-surface-variant max-w-xs">
-            Copyright 2026 WordPilot. Built by Eng.Ahmed Hassan.
+            Copyright 2026 WordPilot. {t('footer.rights')}
           </p>
         </div>
         <div className="flex flex-wrap justify-start md:justify-end gap-x-8 gap-y-4 text-xs tracking-wide leading-relaxed text-on-surface-variant">
-          <Link to="/privacy" className="hover:text-primary transition-colors">Privacy Policy</Link>
-          <Link to="/terms" className="hover:text-primary transition-colors">Terms of Service</Link>
-          <Link to="/help" className="hover:text-primary transition-colors">Help Center</Link>
-          <Link to="/contact" className="hover:text-primary transition-colors">Contact Support</Link>
+          <Link to="/privacy" className="hover:text-primary transition-colors">{t('title.privacy').replace(' | WordPilot', '')}</Link>
+          <Link to="/terms" className="hover:text-primary transition-colors">{t('title.terms').replace(' | WordPilot', '')}</Link>
+          <Link to="/help" className="hover:text-primary transition-colors">{t('title.help').replace(' | WordPilot', '')}</Link>
+          <Link to="/contact" className="hover:text-primary transition-colors">{t('title.contact').replace(' | WordPilot', '')}</Link>
         </div>
       </div>
     </footer>
   );
 }
+
+
+
+
 
 
 

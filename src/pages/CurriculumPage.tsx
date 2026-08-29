@@ -77,6 +77,11 @@ export default function CurriculumPage() {
   const selectedLessonAverage = selectedLessonAttempts.length
     ? Math.round(selectedLessonAttempts.reduce((sum, attempt) => sum + attempt.score, 0) / selectedLessonAttempts.length)
     : 0;
+  const selectedLessonIndex = level.lessons.findIndex((lesson) => lesson.id === selectedLesson.id);
+  const selectedExerciseIndex = selectedLesson.exercises.findIndex((exercise) => exercise.id === selectedExercise.id);
+  const nextLesson = selectedLessonIndex >= 0 ? level.lessons[selectedLessonIndex + 1] : undefined;
+  const nextExercise = selectedExerciseIndex >= 0 ? selectedLesson.exercises[selectedExerciseIndex + 1] : undefined;
+  const hasNextExercise = Boolean(nextExercise || nextLesson?.exercises[0]);
 
   useEffect(() => {
     setLanguage(profile?.target_language === 'German' ? 'German' : 'English');
@@ -127,6 +132,18 @@ export default function CurriculumPage() {
     setAttemptRows((attemptsResult.data ?? []) as ExerciseAttemptRow[]);
   }
 
+  function goToNextExercise() {
+    if (nextExercise) {
+      setSelectedExerciseId(nextExercise.id);
+      return;
+    }
+
+    const firstExerciseInNextLesson = nextLesson?.exercises[0];
+    if (nextLesson && firstExerciseInNextLesson) {
+      setSelectedLessonId(nextLesson.id);
+      setSelectedExerciseId(firstExerciseInNextLesson.id);
+    }
+  }
   async function completeExercise(exercise: CurriculumExercise, result: ExerciseResult) {
     const attempt: ExerciseAttemptRow = {
       lesson_id: selectedLesson.id,
@@ -217,7 +234,7 @@ export default function CurriculumPage() {
   }
 
   return (
-    <main className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-12 pt-24 sm:pt-28 min-h-screen">
+    <main className="wp-shell min-h-screen py-10 pt-24 sm:py-12 sm:pt-28">
       <header className="mb-8 sm:mb-10">
         <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary mb-3">Curriculum beta</p>
         <h1 className="font-headline font-extrabold text-3xl sm:text-4xl tracking-tight text-on-surface">CEFR Lesson Journey</h1>
@@ -344,7 +361,12 @@ export default function CurriculumPage() {
                 </div>
               </div>
 
-              <ExerciseRenderer exercise={selectedExercise} onComplete={(result) => void completeExercise(selectedExercise, result)} />
+              <ExerciseRenderer
+                exercise={selectedExercise}
+                onComplete={(result) => void completeExercise(selectedExercise, result)}
+                onNext={goToNextExercise}
+                hasNext={hasNextExercise}
+              />
             </>
           )}
         </section>

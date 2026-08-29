@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useEntitlements } from '../../hooks/useEntitlements';
 import { usePracticeProgress } from '../../hooks/usePracticeProgress';
 import { useWeeklyReport } from '../../hooks/useWeeklyReport';
+import { useI18n } from '../../i18n';
 import {
   buildPracticeRecommendation,
   type CefrLevel,
@@ -20,6 +21,7 @@ import type { PracticePathLevelMap, PracticePathState } from './types';
 export function usePracticePath(): PracticePathState {
   const navigate = useNavigate();
   const { user, profile, updateProfile } = useAuth();
+  const { language: interfaceLanguage, translateLanguageName } = useI18n();
   const { entitlements, loadingEntitlements } = useEntitlements(user);
   const [selectedLanguage, setSelectedLanguage] = useState<LearningLanguage>(normalizeLearningLanguage(profile?.target_language));
   const [selectedLevel, setSelectedLevel] = useState<CefrLevel>(normalizeCefrLevel(profile?.cefr_level));
@@ -54,19 +56,23 @@ export function usePracticePath(): PracticePathState {
   const savedLevel = normalizeCefrLevel(profile?.cefr_level);
   const structuredLanguage = getStructuredLanguage(selectedLanguage);
   const phaseOneLevels = useMemo(() => getPhaseOneLevels(structuredLanguage), [structuredLanguage]);
-  const pathCopy = useMemo(() => buildPracticePathCopy(selectedLanguage, selectedLevel), [selectedLanguage, selectedLevel]);
+  const displayLanguage = translateLanguageName(selectedLanguage);
+  const pathCopy = useMemo(
+    () => buildPracticePathCopy(selectedLanguage, selectedLevel, interfaceLanguage, displayLanguage),
+    [displayLanguage, interfaceLanguage, selectedLanguage, selectedLevel],
+  );
 
   async function saveLevel() {
     setSavingLevel(true);
     setStatus(null);
     const result = await updateProfile({ cefr_level: selectedLevel });
     setSavingLevel(false);
-    setStatus(result.error ?? formatSavedMessage(selectedLanguage, selectedLevel));
+    setStatus(result.error ?? formatSavedMessage(displayLanguage, selectedLevel, interfaceLanguage));
   }
 
   function chooseLevel(level: CefrLevel) {
     setSelectedLevel(level);
-    setStatus(formatPreviewMessage(selectedLanguage, level));
+    setStatus(formatPreviewMessage(displayLanguage, level, interfaceLanguage));
   }
 
   async function startExercise(exercise: PracticeExercise) {
@@ -141,14 +147,14 @@ function getPhaseOneLevels(language: CurriculumLanguage | null): PracticePathLev
   );
 }
 
-function formatSavedMessage(language: LearningLanguage, level: CefrLevel) {
-  return language === 'German'
-    ? `Deutsch ${level} ist jetzt dein aktiver Lernweg.`
+function formatSavedMessage(language: string, level: CefrLevel, interfaceLanguage: 'en' | 'de') {
+  return interfaceLanguage === 'de'
+    ? `${language} ${level} ist jetzt dein aktiver Lernweg.`
     : `${language} ${level} is now your active training path.`;
 }
 
-function formatPreviewMessage(language: LearningLanguage, level: CefrLevel) {
-  return language === 'German'
-    ? `Vorschau: Deutsch ${level}. Speichere das Niveau, um den Lernweg zu aktualisieren.`
+function formatPreviewMessage(language: string, level: CefrLevel, interfaceLanguage: 'en' | 'de') {
+  return interfaceLanguage === 'de'
+    ? `Vorschau: ${language} ${level}. Speichere das Niveau, um den Lernweg zu aktualisieren.`
     : `Previewing ${language} ${level}. Save the level to update your path.`;
 }
