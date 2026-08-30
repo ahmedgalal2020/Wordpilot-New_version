@@ -7,6 +7,7 @@ import { supabase } from '../lib/supabase';
 import {
   buildReviewQueueItems,
   CURRICULUM_LEVELS,
+  SUPPORTED_CURRICULUM_LANGUAGES,
   getCurriculumLevel,
   type CurriculumExercise,
   type CurriculumLanguage,
@@ -36,8 +37,8 @@ type ExerciseAttemptRow = {
 export default function CurriculumPage() {
   const { user, profile } = useAuth();
   const supabaseReady = hasSupabaseEnv();
-  const [language, setLanguage] = useState<CurriculumLanguage>(profile?.target_language === 'German' ? 'German' : 'English');
-  const [levelNumber, setLevelNumber] = useState(profile?.cefr_level === 'A1' ? 1 : 1);
+  const [language, setLanguage] = useState<CurriculumLanguage>(() => normalizeCurriculumLanguage(profile?.target_language));
+  const [levelNumber, setLevelNumber] = useState(() => firstLevelNumberForBand(profile?.cefr_level));
   const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null);
   const [selectedExerciseId, setSelectedExerciseId] = useState<string | null>(null);
   const [progressRows, setProgressRows] = useState<LessonProgressRow[]>([]);
@@ -84,7 +85,7 @@ export default function CurriculumPage() {
   const hasNextExercise = Boolean(nextExercise || nextLesson?.exercises[0]);
 
   useEffect(() => {
-    setLanguage(profile?.target_language === 'German' ? 'German' : 'English');
+    setLanguage(normalizeCurriculumLanguage(profile?.target_language));
   }, [profile?.target_language]);
 
   useEffect(() => {
@@ -247,7 +248,7 @@ export default function CurriculumPage() {
         <div className="lg:col-span-7 rounded-2xl bg-surface-container-lowest p-4 sm:p-5 whisper-shadow">
           <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Language</p>
           <div className="flex flex-wrap gap-2">
-            {(['English', 'German'] as CurriculumLanguage[]).map((item) => (
+            {SUPPORTED_CURRICULUM_LANGUAGES.map((item) => (
               <button key={item} type="button" onClick={() => setLanguage(item)} className={`rounded-full px-4 py-2 text-sm font-bold ${item === language ? 'bg-primary text-on-primary' : 'bg-surface-container-low text-on-surface'}`}>
                 {item}
               </button>
@@ -257,8 +258,7 @@ export default function CurriculumPage() {
         <div className="lg:col-span-5 rounded-2xl bg-surface-container-lowest p-4 sm:p-5 whisper-shadow">
           <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Level</p>
           <div className="flex flex-wrap gap-2">
-            {[1, 2].map((number) => {
-              const label = CURRICULUM_LEVELS[number - 1].label;
+            {CURRICULUM_LEVELS.map(({ levelNumber: number, label }) => {
               return (
                 <button key={number} type="button" onClick={() => setLevelNumber(number)} className={`rounded-full px-4 py-2 text-sm font-bold ${number === levelNumber ? 'bg-primary text-on-primary' : 'bg-surface-container-low text-on-surface'}`}>
                   {label}
@@ -429,4 +429,12 @@ function MiniMetric({ label, value }: { label: string; value: string }) {
       <p className="mt-1 font-headline font-black text-on-surface">{value}</p>
     </div>
   );
+}
+
+function normalizeCurriculumLanguage(value?: string | null): CurriculumLanguage {
+  return SUPPORTED_CURRICULUM_LANGUAGES.includes(value as CurriculumLanguage) ? (value as CurriculumLanguage) : 'English';
+}
+
+function firstLevelNumberForBand(value?: string | null) {
+  return CURRICULUM_LEVELS.find((level) => level.cefrLevel === value)?.levelNumber ?? 1;
 }

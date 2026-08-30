@@ -91,6 +91,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [idleWarningVisible, setIdleWarningVisible] = useState(false);
   const [secondsUntilSignOut, setSecondsUntilSignOut] = useState(0);
   const lastActivityRef = useRef(Date.now());
+  const profileRequestRef = useRef<{ userId: string; promise: Promise<void> } | null>(null);
 
   const authReady = hasSupabaseEnv();
   const authMessage = buildAuthMessage();
@@ -148,47 +149,62 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', currentUser.id)
-      .maybeSingle();
+    const existingRequest = profileRequestRef.current;
+    if (existingRequest?.userId === currentUser.id) {
+      await existingRequest.promise;
+      return;
+    }
 
-    if (error || !data) {
-      await ensureProfile(currentUser);
-
-      const { data: retriedProfile } = await supabase
+    const profileRequest = (async () => {
+      const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', currentUser.id)
         .maybeSingle();
 
-      if (retriedProfile) {
-        setProfile(retriedProfile);
+      if (error || !data) {
+        await ensureProfile(currentUser);
+
+        const { data: retriedProfile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', currentUser.id)
+          .maybeSingle();
+
+        if (retriedProfile) {
+          setProfile(retriedProfile);
+          return;
+        }
+
+        setProfile({
+          id: currentUser.id,
+          email: currentUser.email ?? null,
+          full_name: currentUser.user_metadata.full_name ?? null,
+          avatar_url: currentUser.user_metadata.avatar_url ?? null,
+          native_language: null,
+          target_language: null,
+          cefr_level: null,
+          goal_cefr_level: null,
+          onboarding_completed: null,
+          onboarding_completed_at: null,
+          is_blocked: false,
+          blocked_reason: null,
+          blocked_at: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
         return;
       }
 
-      setProfile({
-        id: currentUser.id,
-        email: currentUser.email ?? null,
-        full_name: currentUser.user_metadata.full_name ?? null,
-        avatar_url: currentUser.user_metadata.avatar_url ?? null,
-        native_language: null,
-        target_language: null,
-        cefr_level: null,
-        goal_cefr_level: null,
-        onboarding_completed: null,
-        onboarding_completed_at: null,
-        is_blocked: false,
-        blocked_reason: null,
-        blocked_at: null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      });
-      return;
-    }
+      setProfile(data);
+    })().finally(() => {
+      if (profileRequestRef.current?.userId === currentUser.id) {
+        profileRequestRef.current = null;
+      }
+    });
 
-    setProfile(data);
+    profileRequestRef.current = { userId: currentUser.id, promise: profileRequest };
+    await profileRequest;
   }
 
   useEffect(() => {

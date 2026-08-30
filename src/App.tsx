@@ -11,9 +11,9 @@ import { DynamicTitle } from './components/DynamicTitle';
 import { SessionSecurityPrompt } from './components/SessionSecurityPrompt';
 import { LearningOnboardingPrompt } from './components/LearningOnboardingPrompt';
 import { LanguageProvider, useI18n } from './i18n';
+import LandingPage from './pages/LandingPage';
+import AuthPage from './pages/AuthPage';
 
-const LandingPage = lazy(() => import('./pages/LandingPage'));
-const AuthPage = lazy(() => import('./pages/AuthPage'));
 const PricingPage = lazy(() => import('./pages/PricingPage'));
 const InfoPage = lazy(() => import('./pages/InfoPages'));
 const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));

@@ -8,15 +8,14 @@ import { useI18n } from '../../i18n';
 import {
   buildPracticeRecommendation,
   type CefrLevel,
-  getCurriculumLessons,
   normalizeCefrLevel,
   normalizeLearningLanguage,
   type PracticeExercise,
   type LearningLanguage,
 } from '../../lib/learning';
-import { getCurriculumLevel, type CurriculumLanguage } from '../../lib/curriculum';
 import { buildPracticePathCopy } from './copy';
-import type { PracticePathLevelMap, PracticePathState } from './types';
+import type { PracticePathState } from './types';
+import { getStructuredLevelMap, getStructuredPracticeLessons } from './structuredCurriculum';
 
 export function usePracticePath(): PracticePathState {
   const navigate = useNavigate();
@@ -42,7 +41,7 @@ export function usePracticePath(): PracticePathState {
 
   const lessons = useMemo(
     () =>
-      getCurriculumLessons(selectedLevel, selectedLanguage).map((lesson) => ({
+      getStructuredPracticeLessons(selectedLevel, selectedLanguage).map((lesson) => ({
         ...lesson,
         exercises: practiceProgress.applyProgress(lesson.exercises),
       })),
@@ -54,8 +53,7 @@ export function usePracticePath(): PracticePathState {
   const allExercises = lessons.flatMap((lesson) => lesson.exercises);
   const completedCount = allExercises.filter((exercise) => exercise.status === 'completed').length;
   const savedLevel = normalizeCefrLevel(profile?.cefr_level);
-  const structuredLanguage = getStructuredLanguage(selectedLanguage);
-  const phaseOneLevels = useMemo(() => getPhaseOneLevels(structuredLanguage), [structuredLanguage]);
+  const phaseOneLevels = useMemo(() => getStructuredLevelMap(selectedLanguage), [selectedLanguage]);
   const displayLanguage = translateLanguageName(selectedLanguage);
   const pathCopy = useMemo(
     () => buildPracticePathCopy(selectedLanguage, selectedLevel, interfaceLanguage, displayLanguage),
@@ -131,20 +129,6 @@ export function usePracticePath(): PracticePathState {
     selectLesson: setSelectedLessonId,
     startExercise,
   };
-}
-
-function getStructuredLanguage(language: LearningLanguage): CurriculumLanguage | null {
-  return language === 'English' || language === 'German' ? language : null;
-}
-
-function getPhaseOneLevels(language: CurriculumLanguage | null): PracticePathLevelMap[] {
-  if (!language) {
-    return [];
-  }
-
-  return [getCurriculumLevel(language, 1), getCurriculumLevel(language, 2)].filter(
-    (level): level is PracticePathLevelMap => Boolean(level),
-  );
 }
 
 function formatSavedMessage(language: string, level: CefrLevel, interfaceLanguage: 'en' | 'de') {

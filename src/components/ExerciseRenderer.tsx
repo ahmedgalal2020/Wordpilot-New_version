@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle, Mic, Play, RotateCcw, Volume2 } from 'lucide-react';
-import type { CurriculumExercise, ExerciseType, ScoringRubric } from '../lib/curriculum';
+import { CURRICULUM_SPEECH_LOCALES, type CurriculumExercise, type CurriculumLanguage, type ExerciseType, type ScoringRubric } from '../lib/curriculum';
 import { cn } from '../lib/utils';
 
 type SpeechRecognitionLike = {
@@ -38,9 +38,14 @@ type ExerciseRendererProps = {
   autoAdvanceOnPass?: boolean;
 };
 
+type OrderToken = {
+  id: string;
+  word: string;
+};
+
 export function ExerciseRenderer({ exercise, onComplete, onNext, hasNext = false, autoAdvanceOnPass = true }: ExerciseRendererProps) {
   const [selected, setSelected] = useState<string>('');
-  const [orderedWords, setOrderedWords] = useState<string[]>([]);
+  const [orderedTokens, setOrderedTokens] = useState<OrderToken[]>([]);
   const [textResponse, setTextResponse] = useState('');
   const [spokenResponse, setSpokenResponse] = useState('');
   const [selfChecks, setSelfChecks] = useState<Record<string, boolean>>({});
@@ -61,7 +66,7 @@ export function ExerciseRenderer({ exercise, onComplete, onNext, hasNext = false
   useEffect(() => {
     clearAutoAdvanceTimer();
     setSelected('');
-    setOrderedWords([]);
+    setOrderedTokens([]);
     setTextResponse('');
     setSpokenResponse('');
     setSelfChecks({});
@@ -79,7 +84,7 @@ export function ExerciseRenderer({ exercise, onComplete, onNext, hasNext = false
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = 0.9;
-    utterance.lang = model.language === 'German' ? 'de-DE' : 'en-US';
+    utterance.lang = model.locale;
     window.speechSynthesis.speak(utterance);
   }
 
@@ -93,7 +98,7 @@ export function ExerciseRenderer({ exercise, onComplete, onNext, hasNext = false
       return;
     }
     const recognition = new RecognitionCtor() as SpeechRecognitionLike;
-    recognition.lang = model.language === 'German' ? 'de-DE' : 'en-US';
+    recognition.lang = model.locale;
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
     recognition.onresult = (event) => {
@@ -110,8 +115,8 @@ export function ExerciseRenderer({ exercise, onComplete, onNext, hasNext = false
     recognitionRef.current = null;
   }
 
-  function addOrderedWord(word: string) {
-    setOrderedWords((current) => (current.includes(word) ? current : [...current, word]));
+  function addOrderedToken(token: OrderToken) {
+    setOrderedTokens((current) => (current.some((item) => item.id === token.id) ? current : [...current, token]));
   }
 
   function submit() {
@@ -135,7 +140,7 @@ export function ExerciseRenderer({ exercise, onComplete, onNext, hasNext = false
 
   function buildResponse() {
     if (needsChoices) return { selected };
-    if (needsOrdering) return { ordered: orderedWords };
+    if (needsOrdering) return { ordered: orderedTokens.map((token) => token.word), orderedTokenIds: orderedTokens.map((token) => token.id) };
     if (isSpeaking) return { transcript: spokenResponse || textResponse, selfChecks };
     return { text: textResponse };
   }
@@ -189,21 +194,27 @@ export function ExerciseRenderer({ exercise, onComplete, onNext, hasNext = false
       {needsOrdering && (
         <div className="mt-5 space-y-4">
           <div className="flex min-h-14 flex-wrap gap-2 rounded-2xl bg-surface-container-low p-3">
-            {orderedWords.length === 0 ? (
+            {orderedTokens.length === 0 ? (
               <span className="text-sm text-on-surface-variant">Build the sentence here.</span>
             ) : (
-              orderedWords.map((word) => (
-                <span key={word} className="rounded-full bg-primary px-3 py-1 text-xs font-bold text-on-primary">{word}</span>
+              orderedTokens.map((token) => (
+                <span key={token.id} className="rounded-full bg-primary px-3 py-1 text-xs font-bold text-on-primary">{token.word}</span>
               ))
             )}
           </div>
           <div className="flex flex-wrap gap-2">
-            {model.orderWords.map((word) => (
-              <button key={word} type="button" onClick={() => addOrderedWord(word)} className="rounded-full bg-surface-container-low px-3 py-2 text-xs font-bold text-on-surface">
-                {word}
+            {model.orderTokens.map((token) => (
+              <button
+                key={token.id}
+                type="button"
+                disabled={orderedTokens.some((item) => item.id === token.id)}
+                onClick={() => addOrderedToken(token)}
+                className="rounded-full bg-surface-container-low px-3 py-2 text-xs font-bold text-on-surface disabled:opacity-40"
+              >
+                {token.word}
               </button>
             ))}
-            <button type="button" onClick={() => setOrderedWords([])} className="inline-flex items-center gap-1 rounded-full bg-surface-container px-3 py-2 text-xs font-bold text-on-surface-variant">
+            <button type="button" onClick={() => setOrderedTokens([])} className="inline-flex items-center gap-1 rounded-full bg-surface-container px-3 py-2 text-xs font-bold text-on-surface-variant">
               <RotateCcw className="h-3 w-3" />
               Reset
             </button>
@@ -294,7 +305,8 @@ function buildExerciseModel(exercise: CurriculumExercise) {
   const vocabulary = readStringArray(content.vocabulary);
   const chunks = readStringArray(content.chunks);
   const theme = String(content.theme ?? 'practice');
-  const language = String(content.language ?? inferLanguageFromExerciseId(exercise.id));
+  const language = readCurriculumLanguage(content.language, inferLanguageFromExerciseId(exercise.id));
+  const locale = readString(content.locale) || CURRICULUM_SPEECH_LOCALES[language];
   const targetSentence = readString(content.targetSentence);
   const readingText = readString(content.readingText);
   const basePrompt = readString(content.prompt) || `Complete the ${theme} task.`;
@@ -304,18 +316,20 @@ function buildExerciseModel(exercise: CurriculumExercise) {
     : typeof exercise.correctAnswer === 'string'
       ? exercise.correctAnswer
       : String(targetSentence || chunks[0] || vocabulary[0] || prompt);
-  const distractors = vocabulary.filter((word) => !targetText.toLowerCase().includes(word.toLowerCase())).slice(0, 3);
-  const choices = shuffleUnique([targetText, ...distractors, basePrompt].filter(Boolean)).slice(0, 4);
-  const orderWords = shuffleUnique(targetText.split(/\s+/).filter(Boolean));
+  const contentChoices = readStringArray(content.choices);
+  const distractors = vocabulary.filter((word) => normalize(word) !== normalize(targetText)).slice(0, 3);
+  const choices = contentChoices.length > 0 ? contentChoices : shuffleUnique([targetText, ...distractors, basePrompt].filter(Boolean)).slice(0, 4);
+  const orderTokens = shuffleOrderTokens(readOrderTokens(content.orderTokens, targetSentence || targetText));
   const audioText = isReadingExercise(exercise.type) ? targetSentence || targetText : targetText || targetSentence || prompt;
 
   return {
     language,
+    locale,
     prompt,
     targetText,
     audioText,
     choices,
-    orderWords,
+    orderTokens,
     vocabulary,
     chunks,
   };
@@ -324,7 +338,7 @@ function buildExerciseModel(exercise: CurriculumExercise) {
 function scoreExercise(exercise: CurriculumExercise, model: ReturnType<typeof buildExerciseModel>, response: Record<string, unknown>): ExerciseResult {
   if (isChoiceExercise(exercise.type)) {
     const selected = String(response.selected ?? '');
-    const correct = normalize(selected) === normalize(model.targetText) || model.vocabulary.some((word) => normalize(word) === normalize(selected));
+    const correct = normalize(selected) === normalize(model.targetText);
     return result(correct ? 100 : 0, correct ? 'Correct answer.' : `Expected: ${model.targetText}`, response, exercise);
   }
 
@@ -448,6 +462,37 @@ function readString(value: unknown) {
   return typeof value === 'string' ? value : '';
 }
 
+function readCurriculumLanguage(value: unknown, fallback: CurriculumLanguage): CurriculumLanguage {
+  const language = String(value);
+  if (language === 'English' || language === 'German' || language === 'Spanish' || language === 'Italian' || language === 'French') {
+    return language;
+  }
+  return fallback;
+}
+
+function readOrderTokens(value: unknown, targetText: string): OrderToken[] {
+  if (Array.isArray(value)) {
+    const tokens = value
+      .map((item) => {
+        if (!item || typeof item !== 'object') return null;
+        const token = item as Record<string, unknown>;
+        const id = readString(token.id);
+        const word = readString(token.word);
+        return id && word ? { id, word } : null;
+      })
+      .filter((token): token is OrderToken => Boolean(token));
+
+    if (tokens.length > 0) {
+      return tokens;
+    }
+  }
+
+  return targetText.split(/\s+/).filter(Boolean).map((word, index) => ({
+    id: `${index}-${normalize(word)}`,
+    word,
+  }));
+}
+
 function normalize(value: string) {
   return value.toLowerCase().normalize('NFKC').replace(/[^\p{L}\p{N}\s]/gu, '').trim();
 }
@@ -456,8 +501,16 @@ function shuffleUnique(values: string[]) {
   return [...new Set(values)].sort((left, right) => left.localeCompare(right));
 }
 
-function inferLanguageFromExerciseId(id: string) {
-  return id.startsWith('german') ? 'German' : 'English';
+function shuffleOrderTokens(tokens: OrderToken[]) {
+  return [...tokens].sort((left, right) => left.id.localeCompare(right.id));
+}
+
+function inferLanguageFromExerciseId(id: string): CurriculumLanguage {
+  if (id.startsWith('german')) return 'German';
+  if (id.startsWith('spanish')) return 'Spanish';
+  if (id.startsWith('italian')) return 'Italian';
+  if (id.startsWith('french')) return 'French';
+  return 'English';
 }
 
 

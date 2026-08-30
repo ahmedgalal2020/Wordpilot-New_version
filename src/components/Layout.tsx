@@ -88,6 +88,7 @@ export function Navbar() {
   const notificationsRef = useRef<HTMLDivElement | null>(null);
   const historyRef = useRef<HTMLDivElement | null>(null);
   const startMenuRef = useRef<HTMLDivElement | null>(null);
+  const quickHistoryLoadedForRef = useRef<string | null>(null);
   const supabaseReady = hasSupabaseEnv();
   const isAuthPage =
     location.pathname === '/login' ||
@@ -190,6 +191,12 @@ export function Navbar() {
   useEffect(() => {
     if (!user || !supabaseReady) {
       setRecentActivity([]);
+      quickHistoryLoadedForRef.current = null;
+      return;
+    }
+
+    const quickHistoryCacheKey = `${user.id}:${language}`;
+    if (!historyOpen || quickHistoryLoadedForRef.current === quickHistoryCacheKey) {
       return;
     }
 
@@ -223,6 +230,7 @@ export function Navbar() {
         })) ?? [];
 
       setRecentActivity([...sessionItems, ...savedTextItems].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5));
+      quickHistoryLoadedForRef.current = quickHistoryCacheKey;
       setLoadingQuickData(false);
     }
 
@@ -231,7 +239,7 @@ export function Navbar() {
     return () => {
       active = false;
     };
-  }, [language, supabaseReady, t, user]);
+  }, [historyOpen, language, supabaseReady, t, user?.id]);
 
   async function handleSignOut() {
     setAccountMenuOpen(false);
