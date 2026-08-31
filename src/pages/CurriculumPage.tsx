@@ -41,6 +41,7 @@ export default function CurriculumPage() {
   const [levelNumber, setLevelNumber] = useState(() => firstLevelNumberForBand(profile?.cefr_level));
   const [selectedLessonId, setSelectedLessonId] = useState<string | null>(null);
   const [selectedExerciseId, setSelectedExerciseId] = useState<string | null>(null);
+  const [examOpen, setExamOpen] = useState(false);
   const [progressRows, setProgressRows] = useState<LessonProgressRow[]>([]);
   const [attemptRows, setAttemptRows] = useState<ExerciseAttemptRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -74,6 +75,7 @@ export default function CurriculumPage() {
   const selectedLesson = level.lessons.find((lesson) => lesson.id === selectedLessonId) ?? level.lessons[0];
   const selectedExercise = selectedLesson.exercises.find((exercise) => exercise.id === selectedExerciseId) ?? selectedLesson.exercises[0];
   const selectedLessonStatus = lessonStatuses.get(selectedLesson.id) ?? 'available';
+  const levelExamAvailable = level.lessons.every((lesson) => lessonStatuses.get(lesson.id) === 'passed');
   const selectedLessonAttempts = selectedLesson.exercises.map((exercise) => attemptsByExerciseId.get(exercise.id)).filter(Boolean) as ExerciseAttemptRow[];
   const selectedLessonAverage = selectedLessonAttempts.length
     ? Math.round(selectedLessonAttempts.reduce((sum, attempt) => sum + attempt.score, 0) / selectedLessonAttempts.length)
@@ -91,6 +93,7 @@ export default function CurriculumPage() {
   useEffect(() => {
     setSelectedLessonId(null);
     setSelectedExerciseId(null);
+    setExamOpen(false);
     setAttemptRows([]);
     setProgressRows([]);
   }, [language, levelNumber]);
@@ -291,6 +294,7 @@ export default function CurriculumPage() {
                   type="button"
                   disabled={status === 'locked'}
                   onClick={() => {
+                    setExamOpen(false);
                     setSelectedLessonId(lesson.id);
                     setSelectedExerciseId(null);
                   }}
@@ -312,11 +316,35 @@ export default function CurriculumPage() {
                 </button>
               );
             })}
+            <button
+              type="button"
+              disabled={!levelExamAvailable}
+              onClick={() => setExamOpen(true)}
+              className="w-full rounded-2xl border border-primary/20 bg-primary/5 p-4 text-left text-on-surface transition hover:border-primary disabled:cursor-not-allowed disabled:opacity-55"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-primary">Level exam</p>
+                  <h3 className="mt-1 font-headline font-bold">{level.title} assessment</h3>
+                </div>
+                <LessonStatusPill status={levelExamAvailable ? 'available' : 'locked'} active={false} />
+              </div>
+              <p className="mt-2 text-xs leading-5 text-on-surface-variant">
+                Mixed vocabulary, grammar, listening, reading, writing, and speaking check.
+              </p>
+            </button>
           </div>
         </aside>
 
         <section className="xl:col-span-8 space-y-5">
-          <div className="rounded-2xl bg-surface-container-lowest p-5 sm:p-6 whisper-shadow border border-outline-variant/10">
+          {examOpen ? (
+            <div className="rounded-2xl bg-surface-container-lowest p-5 sm:p-6 whisper-shadow border border-outline-variant/10">
+              <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary">Level exam</p>
+              <h2 className="mt-2 font-headline font-black text-2xl text-on-surface">{level.levelExam.title}</h2>
+              <p className="mt-2 text-sm leading-6 text-on-surface-variant">{level.levelExam.instruction}</p>
+            </div>
+          ) : (
+            <div className="rounded-2xl bg-surface-container-lowest p-5 sm:p-6 whisper-shadow border border-outline-variant/10">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary">{selectedLesson.title}</p>
@@ -329,8 +357,16 @@ export default function CurriculumPage() {
               </div>
             </div>
           </div>
+          )}
 
-          {selectedLessonStatus === 'locked' ? (
+          {examOpen ? (
+            <ExerciseRenderer
+              exercise={level.levelExam}
+              onComplete={(result) => setStatus(`Level exam scored locally: ${result.score}%. Section storage will be added with the next schema migration.`)}
+              hasNext={false}
+              autoAdvanceOnPass={false}
+            />
+          ) : selectedLessonStatus === 'locked' ? (
             <div className="rounded-2xl bg-surface-container-lowest p-8 text-center whisper-shadow">
               <LockKeyhole className="mx-auto h-8 w-8 text-primary" />
               <h3 className="mt-4 font-headline font-black text-xl text-on-surface">Lesson locked</h3>

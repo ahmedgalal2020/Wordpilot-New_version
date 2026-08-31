@@ -16,8 +16,10 @@
     "lint": "tsc --noEmit",
     "test:api-routes": "tsx scripts/api-route-smoke.ts",
     "test:curriculum": "tsx scripts/curriculum-smoke.ts",
+    "test:curriculum-quality": "tsx scripts/curriculum-quality.ts",
     "test:dictation": "tsx scripts/dictation-analysis-smoke.ts",
-    "test": "npm run test:api-routes && npm run test:curriculum && npm run test:dictation"
+    "test": "npm run test:api-routes && npm run test:curriculum && npm run test:curriculum-quality && npm run test:dictation",
+    "sync:curriculum-content": "tsx scripts/sync-curriculum-content.ts"
   },
   "dependencies": {
     "@hallelx/youtube-transcript": "^0.2.0",

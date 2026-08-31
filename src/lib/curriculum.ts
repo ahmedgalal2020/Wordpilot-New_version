@@ -74,6 +74,7 @@ export type CurriculumExercise = {
   title: string;
   instruction: string;
   content: Record<string, unknown>;
+  grammarFocusId?: string;
   correctAnswer?: string | string[] | Record<string, unknown>;
   acceptableAnswers?: string[];
   scoringRubric: ScoringRubric;
@@ -91,10 +92,21 @@ export type CurriculumLesson = {
   objective: string;
   canDo: string;
   grammarFocus: string;
+  grammarFocusId: string;
   targetSentence: string;
   readingText: string;
+  newVocabulary: CurriculumVocabularyItem[];
+  reviewVocabulary: CurriculumVocabularyItem[];
   vocabulary: CurriculumVocabularyItem[];
   chunks: CurriculumChunk[];
+  exampleSentences: string[];
+  readingQuestions: ChoiceQuestion[];
+  listeningScript: string;
+  listeningQuestions: ChoiceQuestion[];
+  grammarItems: ChoiceQuestion[];
+  writingTask: WritingTask;
+  speakingTask: SpeakingTask;
+  roleplay: RoleplayTask;
   exercises: CurriculumExercise[];
   mastery: {
     minOverallScore: 75;
@@ -120,23 +132,55 @@ type LessonSeed = {
   objective: string;
   canDo: string;
   grammarFocus: string;
+  grammarFocusId: string;
+  newVocabulary: CurriculumVocabularyItem[];
+  reviewVocabulary: CurriculumVocabularyItem[];
   vocabulary: CurriculumVocabularyItem[];
   chunks: CurriculumChunk[];
   pronunciation: string;
   targetSentence: string;
   readingText: string;
+  exampleSentences: string[];
   readingQuestion: ChoiceQuestion;
+  readingQuestions: ChoiceQuestion[];
+  listeningScript: string;
   listeningQuestion: ChoiceQuestion;
+  listeningQuestions: ChoiceQuestion[];
   grammarQuestion: ChoiceQuestion;
-  writingTask: string;
-  speakingPrompt: string;
-  roleplayPrompt: string;
+  grammarItems: ChoiceQuestion[];
+  writingTask: WritingTask;
+  speakingTask: SpeakingTask;
+  roleplay: RoleplayTask;
 };
 
 type ChoiceQuestion = {
   question: string;
   answer: string;
   choices: string[];
+};
+
+type WritingTask = {
+  situation: string;
+  audience: string;
+  purpose: string;
+  expectedOutput: string;
+  approximateLength: string;
+  usefulLanguage: string[];
+  assessmentDimensions: string[];
+};
+
+type SpeakingTask = {
+  prompt: string;
+  expectedDuration: string;
+  focus: string[];
+  assessmentDimensions: string[];
+};
+
+type RoleplayTask = {
+  learnerRole: string;
+  partnerRole: string;
+  goal: string;
+  successCriteria: string[];
 };
 
 type LevelProfile = {
@@ -336,7 +380,7 @@ function buildLevel(levelNumber: number, language: CurriculumLanguage): Curricul
   const lessons = buildSeeds(language, profile).map((seed, index) =>
     buildLesson(language, meta.levelNumber, meta.cefrLevel, meta.cefrSubLevel, seed, index + 1),
   );
-  const examTargetSentence = String(lessons[lessons.length - 1]?.exercises[0]?.content.targetSentence ?? '');
+  const levelExam = buildLevelExam(language, meta, pack.speechLocale, lessons);
 
   return {
     levelNumber,
@@ -345,26 +389,70 @@ function buildLevel(levelNumber: number, language: CurriculumLanguage): Curricul
     language,
     title: `${language} ${meta.label}`,
     lessons,
-    levelExam: {
-      id: `${slug(language)}-${meta.label.toLowerCase()}-level-exam`,
-      type: 'lesson_test',
-      skill: 'test',
-      title: `${meta.label} Level Exam`,
-      instruction: `Complete a mixed ${meta.label} exam covering comprehension, speaking, writing, and dictation.`,
-      content: {
-        language,
-        locale: pack.speechLocale,
-        levelLabel: meta.label,
-        lessonIds: lessons.map((lesson) => lesson.id),
-        sections: ['listening', 'reading', 'speaking', 'writing', 'dictation'],
-        prompt: lessons[lessons.length - 1]?.canDo ?? `${language} ${meta.label} exam`,
-        targetSentence: examTargetSentence,
+    levelExam,
+  };
+}
+
+function buildLevelExam(
+  language: CurriculumLanguage,
+  meta: (typeof CURRICULUM_LEVELS)[number],
+  locale: string,
+  lessons: CurriculumLesson[],
+): CurriculumExercise {
+  const vocabularySample = lessons.flatMap((lesson) => lesson.newVocabulary.slice(0, 2).map((item) => item.word)).slice(0, 18);
+  const grammarSample = lessons.flatMap((lesson) => lesson.grammarItems.slice(0, 1));
+  const readingLesson = lessons[Math.floor(lessons.length / 2)];
+  const listeningLesson = lessons[Math.max(0, lessons.length - 3)];
+  const writingLesson = lessons[Math.max(0, lessons.length - 2)];
+  const speakingLesson = lessons[lessons.length - 1];
+  const prompt = `${meta.label} exam: vocabulary (${vocabularySample.slice(0, 6).join(', ')}), grammar (${grammarSample
+    .slice(0, 4)
+    .map((item) => item.question)
+    .join(' / ')}), reading, listening, writing, and speaking.`;
+
+  return {
+    id: `${slug(language)}-${meta.label.toLowerCase()}-level-exam`,
+    type: 'lesson_test',
+    skill: 'test',
+    title: `${meta.label} Level Exam`,
+    instruction: `Complete a mixed ${meta.label} exam covering vocabulary, grammar, listening, reading, writing, and speaking.`,
+    content: {
+      language,
+      locale,
+      levelLabel: meta.label,
+      lessonIds: lessons.map((lesson) => lesson.id),
+      prompt,
+      targetSentence: listeningLesson.targetSentence,
+      sections: [
+        { skill: 'vocabulary', items: vocabularySample },
+        { skill: 'grammar', items: grammarSample.slice(0, 6) },
+        { skill: 'listening', script: listeningLesson.listeningScript, questions: listeningLesson.listeningQuestions },
+        { skill: 'reading', text: readingLesson.readingText, questions: readingLesson.readingQuestions },
+        { skill: 'writing', task: writingLesson.writingTask },
+        { skill: 'speaking', task: speakingLesson.speakingTask },
+      ],
+      skillScoreWeights: {
+        vocabulary: 15,
+        grammar: 20,
+        listening: 15,
+        reading: 15,
+        writing: 20,
+        speaking: 15,
       },
-      correctAnswer: examTargetSentence,
-      acceptableAnswers: lessons.flatMap((lesson) => lesson.vocabulary.slice(0, 2).map((item) => item.word)).slice(0, 8),
-      scoringRubric: { taskCompletion: 25, grammar: 20, vocabulary: 20, comprehension: 20, accuracy: 15 },
-      minScoreToPass: 75,
+      reviewTargets: lessons.map((lesson) => ({
+        lessonId: lesson.id,
+        grammarFocusId: lesson.grammarFocusId,
+        vocabulary: lesson.newVocabulary.slice(0, 2).map((item) => item.word),
+      })),
     },
+    correctAnswer: {
+      listening: listeningLesson.targetSentence,
+      grammar: grammarSample.slice(0, 6).map((item) => item.answer),
+      reading: readingLesson.readingQuestions.map((item) => item.answer),
+    },
+    acceptableAnswers: vocabularySample,
+    scoringRubric: { taskCompletion: 20, grammar: 20, vocabulary: 20, comprehension: 25, accuracy: 15 },
+    minScoreToPass: 75,
   };
 }
 
@@ -372,36 +460,51 @@ function buildSeeds(language: CurriculumLanguage, profile: LevelProfile): Lesson
   const pack = LANGUAGE_PACKS[language];
   const themes = pack.themes[profile.levelNumber] ?? COMMON_THEMES[profile.levelNumber];
   const grammar = pack.grammar[profile.levelNumber] ?? BASE_GRAMMAR[profile.levelNumber];
-  const words = pack.words[profile.cefrLevel];
-  const chunks = pack.chunks[profile.cefrLevel];
-  const sentences = pack.sentences[profile.cefrLevel];
-  const readings = pack.readings[profile.cefrLevel];
-  const readingQuestions = pack.readingQuestions[profile.cefrLevel];
-  const listeningQuestions = pack.listeningQuestions[profile.cefrLevel];
-  const grammarQuestions = pack.grammarQuestions[profile.cefrLevel];
 
-  return themes.map((theme, index) => ({
-    theme,
-    objective: pack.objective(theme, profile),
-    canDo: pack.canDo(theme, profile),
-    grammarFocus: grammar[index % grammar.length],
-    vocabulary: rotate(words, index * 4).slice(0, 8).map(([word, translation, example]) => ({
-      word,
-      translation,
-      example,
-      audioText: word,
-    })),
-    chunks: rotate(chunks, index * 2).slice(0, 4).map(([phrase, meaning, example]) => ({ phrase, meaning, example })),
-    pronunciation: pack.pronunciation[profile.cefrLevel],
-    targetSentence: sentences[index % sentences.length],
-    readingText: readings[index % readings.length],
-    readingQuestion: readingQuestions[index % readingQuestions.length],
-    listeningQuestion: listeningQuestions[index % listeningQuestions.length],
-    grammarQuestion: grammarQuestions[index % grammarQuestions.length],
-    writingTask: pack.writingTask(theme, profile),
-    speakingPrompt: pack.speakingPrompt(theme, profile),
-    roleplayPrompt: pack.roleplayPrompt(theme, profile),
-  }));
+  return themes.map((theme, index) => {
+    const grammarFocus = grammar[index % grammar.length];
+    const grammarFocusId = `${slug(language)}-${profile.label.toLowerCase()}-${slug(grammarFocus)}`;
+    const newVocabulary = buildLessonVocabulary(language, profile, theme, grammarFocus, index);
+    const reviewVocabulary = buildReviewVocabulary(pack.words[profile.cefrLevel], index);
+    const vocabulary = [...newVocabulary, ...reviewVocabulary];
+    const chunks = buildLessonChunks(language, profile, theme, grammarFocus, index);
+    const exampleSentences = buildExampleSentences(language, profile, theme, grammarFocus, vocabulary, chunks, index);
+    const targetSentence = buildTargetSentence(language, profile, theme, grammarFocus, vocabulary, index);
+    const readingText = buildLessonReading(language, profile, theme, grammarFocus, vocabulary, chunks, index);
+    const readingQuestions = buildLessonReadingQuestions(language, theme, readingText, vocabulary, profile);
+    const listeningScript = buildListeningScript(language, profile, theme, grammarFocus, vocabulary, index);
+    const listeningQuestions = buildLessonListeningQuestions(language, listeningScript, theme, vocabulary);
+    const grammarItems = buildLessonGrammarItems(language, grammarFocus, grammarFocusId, targetSentence, index);
+    const writingTask = buildWritingTaskObject(language, theme, profile, grammarFocus, vocabulary, chunks);
+    const speakingTask = buildSpeakingTaskObject(language, theme, profile, grammarFocus, vocabulary);
+    const roleplay = buildRoleplayTaskObject(language, theme, profile, grammarFocus);
+
+    return {
+      theme,
+      objective: pack.objective(theme, profile),
+      canDo: pack.canDo(theme, profile),
+      grammarFocus,
+      grammarFocusId,
+      newVocabulary,
+      reviewVocabulary,
+      vocabulary,
+      chunks,
+      pronunciation: pack.pronunciation[profile.cefrLevel],
+      targetSentence,
+      readingText,
+      exampleSentences,
+      readingQuestion: readingQuestions[0],
+      readingQuestions,
+      listeningScript,
+      listeningQuestion: listeningQuestions[0],
+      listeningQuestions,
+      grammarQuestion: grammarItems[0],
+      grammarItems,
+      writingTask,
+      speakingTask,
+      roleplay,
+    };
+  });
 }
 
 function buildLesson(
@@ -425,10 +528,21 @@ function buildLesson(
     objective: seed.objective,
     canDo: seed.canDo,
     grammarFocus: seed.grammarFocus,
+    grammarFocusId: seed.grammarFocusId,
     targetSentence: seed.targetSentence,
     readingText: seed.readingText,
+    newVocabulary: seed.newVocabulary,
+    reviewVocabulary: seed.reviewVocabulary,
     vocabulary: seed.vocabulary,
     chunks: seed.chunks,
+    exampleSentences: seed.exampleSentences,
+    readingQuestions: seed.readingQuestions,
+    listeningScript: seed.listeningScript,
+    listeningQuestions: seed.listeningQuestions,
+    grammarItems: seed.grammarItems,
+    writingTask: seed.writingTask,
+    speakingTask: seed.speakingTask,
+    roleplay: seed.roleplay,
     exercises: LESSON_JOURNEY.map((step) => buildExercise(baseId, seed, step, language, cefrLevel, levelNumber)),
     mastery: {
       minOverallScore: 75,
@@ -465,6 +579,17 @@ function buildExercise(
     chunkItems: seed.chunks,
     pronunciation: seed.pronunciation,
     grammarFocus: seed.grammarFocus,
+    grammarFocusId: seed.grammarFocusId,
+    newVocabulary: seed.newVocabulary.map((item) => item.word),
+    reviewVocabulary: seed.reviewVocabulary.map((item) => item.word),
+    exampleSentences: seed.exampleSentences,
+    readingQuestions: seed.readingQuestions,
+    listeningScript: seed.listeningScript,
+    listeningQuestions: seed.listeningQuestions,
+    grammarItems: seed.grammarItems,
+    writingTask: seed.writingTask,
+    speakingTask: seed.speakingTask,
+    roleplay: seed.roleplay,
     orderTokens: tokenizeSentence(seed.targetSentence),
   };
 
@@ -475,6 +600,7 @@ function buildExercise(
     title: step.title,
     instruction: pack.instruction(step.skill, seed),
     content,
+    grammarFocusId: seed.grammarFocusId,
     correctAnswer: getCorrectAnswer(step.skill, seed),
     acceptableAnswers: step.skill === 'writing' || step.skill === 'speaking' ? seed.vocabulary.slice(0, 5).map((item) => item.word) : undefined,
     scoringRubric: getRubric(step.skill),
@@ -504,9 +630,9 @@ function getPromptForStep(skill: CurriculumSkill, seed: LessonSeed) {
   if (skill === 'listening') return seed.listeningQuestion.question;
   if (skill === 'grammar') return seed.grammarQuestion.question;
   if (skill === 'reading') return `${seed.readingText}\n\n${seed.readingQuestion.question}`;
-  if (skill === 'writing') return seed.writingTask;
-  if (skill === 'speaking') return seed.speakingPrompt;
-  if (skill === 'conversation') return seed.roleplayPrompt;
+  if (skill === 'writing') return formatWritingTask(seed.writingTask);
+  if (skill === 'speaking') return seed.speakingTask.prompt;
+  if (skill === 'conversation') return formatRoleplay(seed.roleplay);
   return seed.canDo;
 }
 
@@ -527,6 +653,870 @@ function getRubric(skill: CurriculumSkill): ScoringRubric {
   if (skill === 'dictation') return { accuracy: 100 };
   if (skill === 'reading' || skill === 'listening') return { comprehension: 60, vocabulary: 20, taskCompletion: 20 };
   return { taskCompletion: 40, grammar: 20, vocabulary: 20, accuracy: 20 };
+}
+
+function buildReviewVocabulary(words: Array<[string, string, string]>, index: number): CurriculumVocabularyItem[] {
+  return rotate(words, index).slice(0, 2).map(([word, translation, example]) => ({
+    word,
+    translation,
+    example,
+    audioText: word,
+  }));
+}
+
+function buildLessonVocabulary(
+  language: CurriculumLanguage,
+  profile: LevelProfile,
+  theme: string,
+  grammarFocus: string,
+  index: number,
+): CurriculumVocabularyItem[] {
+  const aspects = rotate(lexicalAspects(language, profile.cefrLevel), index);
+  return aspects.slice(0, 9).map((aspect, itemIndex) => {
+    const word = lexicalItem(language, theme, aspect.term);
+    const translation = `${aspect.meaning} for ${theme.toLowerCase()} (${profile.label})`;
+    const example = vocabularyExample(language, profile, theme, grammarFocus, word, itemIndex);
+    return { word, translation, example, audioText: word };
+  });
+}
+
+function buildLessonChunks(
+  language: CurriculumLanguage,
+  profile: LevelProfile,
+  theme: string,
+  grammarFocus: string,
+  index: number,
+): CurriculumChunk[] {
+  return rotate(chunkFrames(language, profile.cefrLevel), index).slice(0, 5).map((frame, frameIndex) => ({
+    phrase: frame.phrase(theme),
+    meaning: frame.meaning,
+    example: chunkExample(language, profile, theme, grammarFocus, frameIndex),
+  }));
+}
+
+function buildExampleSentences(
+  language: CurriculumLanguage,
+  profile: LevelProfile,
+  theme: string,
+  grammarFocus: string,
+  vocabulary: CurriculumVocabularyItem[],
+  chunks: CurriculumChunk[],
+  index: number,
+) {
+  const templates = sentenceTemplates(language, profile.cefrLevel);
+  return templates.slice(0, profile.cefrLevel === 'A1' ? 4 : profile.cefrLevel === 'A2' ? 5 : 6).map((template, templateIndex) =>
+    template({
+      theme,
+      grammarFocus,
+      word: vocabulary[(templateIndex + index) % vocabulary.length].word,
+      chunk: chunks[templateIndex % chunks.length].phrase,
+      level: profile.label,
+    }),
+  );
+}
+
+function buildTargetSentence(
+  language: CurriculumLanguage,
+  profile: LevelProfile,
+  theme: string,
+  grammarFocus: string,
+  vocabulary: CurriculumVocabularyItem[],
+  index: number,
+) {
+  const word = vocabulary[index % vocabulary.length].word;
+  if (language === 'German') return `Bei ${theme} nutze ich ${grammarFocus}, damit meine Aussage klar bleibt.`;
+  if (language === 'Spanish') return `En ${theme.toLowerCase()}, uso ${grammarFocus} para expresar una idea clara.`;
+  if (language === 'Italian') return `In ${theme.toLowerCase()}, uso ${grammarFocus} per esprimere un’idea chiara.`;
+  if (language === 'French') return `Dans ${theme.toLowerCase()}, j’utilise ${grammarFocus} pour exprimer une idée claire.`;
+  if (profile.cefrLevel === 'A1') return `In ${theme.toLowerCase()}, I can use ${word} in one clear sentence.`;
+  return `In ${theme.toLowerCase()}, I use ${grammarFocus} to express one clear and useful idea.`;
+}
+
+function buildLessonReading(
+  language: CurriculumLanguage,
+  profile: LevelProfile,
+  theme: string,
+  grammarFocus: string,
+  vocabulary: CurriculumVocabularyItem[],
+  chunks: CurriculumChunk[],
+  index: number,
+) {
+  const sentences = readingSentenceFrames(language, profile.cefrLevel);
+  const targetLength = readingSentenceCount(profile.cefrLevel);
+  return Array.from({ length: targetLength }, (_, sentenceIndex) => {
+    const frame = sentences[(sentenceIndex + index) % sentences.length];
+    return frame({
+      theme,
+      grammarFocus,
+      word: vocabulary[sentenceIndex % vocabulary.length].word,
+      chunk: chunks[sentenceIndex % chunks.length].phrase,
+      level: profile.label,
+    });
+  }).join(' ');
+}
+
+function buildLessonReadingQuestions(
+  language: CurriculumLanguage,
+  theme: string,
+  readingText: string,
+  vocabulary: CurriculumVocabularyItem[],
+  profile: LevelProfile,
+): ChoiceQuestion[] {
+  const labels = questionLabels(language);
+  const detail = vocabulary[0].word;
+  const inference = profile.cefrLevel === 'A1' || profile.cefrLevel === 'A2' ? labels.explicit : labels.inference;
+  return [
+    q(labels.mainIdea(theme), labels.mainIdeaAnswer(theme), [
+      labels.mainIdeaAnswer(theme),
+      labels.unrelatedTravel,
+      labels.unrelatedBilling,
+      labels.unrelatedSports,
+    ]),
+    q(labels.detail(detail), labels.detailAnswer(detail), [
+      labels.detailAnswer(detail),
+      labels.falseDetail,
+      labels.skipLesson,
+      labels.changeLanguage,
+    ]),
+    q(labels.inferenceQuestion(inference), labels.inferenceAnswer(inference), [
+      labels.inferenceAnswer(inference),
+      labels.noEvidence,
+      labels.oppositeTone,
+      labels.unrelatedBilling,
+    ]),
+    q(labels.vocabularyContext(detail), labels.detailAnswer(detail), [
+      labels.detailAnswer(detail),
+      labels.falseDetail,
+      labels.oppositeTone,
+      labels.skipLesson,
+    ]),
+  ].map((question, index) => ({ ...question, question: `${question.question} ${index === 0 ? '' : ''}`.trim() }));
+}
+
+function buildListeningScript(
+  language: CurriculumLanguage,
+  profile: LevelProfile,
+  theme: string,
+  grammarFocus: string,
+  vocabulary: CurriculumVocabularyItem[],
+  index: number,
+) {
+  const frames = listeningFrames(language, profile.cefrLevel);
+  return frames[(index + profile.levelNumber) % frames.length]({
+    theme,
+    grammarFocus,
+    word: vocabulary[index % vocabulary.length].word,
+    chunk: vocabulary[(index + 1) % vocabulary.length].word,
+    level: profile.label,
+  });
+}
+
+function buildLessonListeningQuestions(
+  language: CurriculumLanguage,
+  listeningScript: string,
+  theme: string,
+  vocabulary: CurriculumVocabularyItem[],
+): ChoiceQuestion[] {
+  const labels = questionLabels(language);
+  return [
+    q(labels.listenMain(theme), labels.mainIdeaAnswer(theme), [labels.mainIdeaAnswer(theme), labels.falseDetail, labels.unrelatedBilling, labels.changeLanguage]),
+    q(labels.listenDetail(vocabulary[0].word), labels.detailAnswer(vocabulary[0].word), [labels.detailAnswer(vocabulary[0].word), labels.falseDetail, labels.noEvidence, labels.skipLesson]),
+    q(labels.listenInference, labels.inferenceAnswer(labels.inference), [labels.inferenceAnswer(labels.inference), labels.oppositeTone, labels.unrelatedSports, labels.unrelatedTravel]),
+  ];
+}
+
+function buildLessonGrammarItems(
+  language: CurriculumLanguage,
+  grammarFocus: string,
+  grammarFocusId: string,
+  targetSentence: string,
+  index: number,
+): ChoiceQuestion[] {
+  const labels = grammarLabels(language);
+  return [0, 1, 2, 3].map((offset) => {
+    const answer = grammarAnswer(language, grammarFocus, targetSentence, index + offset);
+    const distractors = grammarDistractors(language, answer, grammarFocus, index + offset);
+    return {
+      ...q(labels.choose(grammarFocus, offset + 1), answer, [answer, ...distractors]),
+      grammarFocusId,
+    } as ChoiceQuestion & { grammarFocusId: string };
+  });
+}
+
+function buildWritingTaskObject(
+  language: CurriculumLanguage,
+  theme: string,
+  profile: LevelProfile,
+  grammarFocus: string,
+  vocabulary: CurriculumVocabularyItem[],
+  chunks: CurriculumChunk[],
+): WritingTask {
+  const labels = taskLabels(language);
+  return {
+    situation: labels.writingSituation(theme, profile.label),
+    audience: labels.audience(profile.intensity),
+    purpose: labels.writingPurpose(theme, grammarFocus),
+    expectedOutput: labels.expectedOutput(profile.cefrLevel),
+    approximateLength: labels.length(profile.cefrLevel),
+    usefulLanguage: chunks.slice(0, 3).map((chunk) => chunk.phrase).concat(vocabulary.slice(0, 2).map((item) => item.word)),
+    assessmentDimensions: ['task completion', 'grammar focus', 'vocabulary range', 'coherence', 'register'],
+  };
+}
+
+function buildSpeakingTaskObject(
+  language: CurriculumLanguage,
+  theme: string,
+  profile: LevelProfile,
+  grammarFocus: string,
+  vocabulary: CurriculumVocabularyItem[],
+): SpeakingTask {
+  const labels = taskLabels(language);
+  return {
+    prompt: labels.speakingPrompt(theme, profile.label, grammarFocus),
+    expectedDuration: profile.cefrLevel === 'A1' ? '20 seconds' : profile.cefrLevel === 'A2' ? '30 seconds' : profile.cefrLevel === 'B1' ? '60 seconds' : '90 seconds',
+    focus: [grammarFocus, vocabulary[0].word, vocabulary[1].word],
+    assessmentDimensions: ['speech-to-text match', 'task completion', 'fluency self-check', 'grammar focus'],
+  };
+}
+
+function buildRoleplayTaskObject(
+  language: CurriculumLanguage,
+  theme: string,
+  profile: LevelProfile,
+  grammarFocus: string,
+): RoleplayTask {
+  const labels = taskLabels(language);
+  return {
+    learnerRole: labels.learnerRole(theme),
+    partnerRole: labels.partnerRole(theme),
+    goal: labels.roleplayGoal(theme, grammarFocus, profile.label),
+    successCriteria: labels.successCriteria(profile.cefrLevel),
+  };
+}
+
+function formatWritingTask(task: WritingTask) {
+  return `${task.situation} Audience: ${task.audience}. Purpose: ${task.purpose}. Output: ${task.expectedOutput}. Length: ${task.approximateLength}. Useful language: ${task.usefulLanguage.join(', ')}.`;
+}
+
+function formatRoleplay(task: RoleplayTask) {
+  return `Learner: ${task.learnerRole}. Partner: ${task.partnerRole}. Goal: ${task.goal}. Success: ${task.successCriteria.join('; ')}.`;
+}
+
+type FrameContext = { theme: string; grammarFocus: string; word: string; chunk: string; level: string };
+type TextFrame = (context: FrameContext) => string;
+
+function lexicalAspects(language: CurriculumLanguage, band: CefrBand) {
+  const shared = {
+    A1: ['identity detail', 'place word', 'time marker', 'family link', 'daily object', 'simple need', 'basic question', 'polite reply', 'location cue', 'number phrase', 'short preference', 'classroom action'],
+    A2: ['appointment detail', 'reason phrase', 'choice marker', 'past event', 'future plan', 'service request', 'comparison point', 'small problem', 'travel change', 'message action', 'health detail', 'shopping decision'],
+    B1: ['experience marker', 'solution step', 'opinion reason', 'community action', 'habit change', 'story detail', 'recommendation point', 'cause phrase', 'planning risk', 'feedback note', 'goal statement', 'summary line'],
+    B2: ['evidence point', 'trend marker', 'tradeoff detail', 'policy effect', 'counterargument', 'formal claim', 'case detail', 'impact measure', 'risk frame', 'professional request', 'presentation move', 'balanced conclusion'],
+    C1: ['register choice', 'hedged claim', 'implicit premise', 'synthesis link', 'stakeholder concern', 'precise reformulation', 'advanced concession', 'tone marker', 'risk qualification', 'source stance', 'executive summary', 'critical nuance'],
+    C2: ['subtext cue', 'rhetorical pivot', 'ironic distance', 'compressed phrasing', 'stylistic echo', 'ethical caveat', 'diplomatic ambiguity', 'inference chain', 'micro-editing choice', 'high-register stance', 'discursive strategy', 'final synthesis'],
+  } satisfies Record<CefrBand, string[]>;
+  return shared[band].map((term) => ({ term: localizedAspect(language, term), meaning: term }));
+}
+
+function localizedAspect(language: CurriculumLanguage, term: string) {
+  const dictionaries: Record<CurriculumLanguage, Record<string, string>> = {
+    English: {},
+    German: {
+      'identity detail': 'Identitätsdetail',
+      'place word': 'Ortswort',
+      'time marker': 'Zeitmarker',
+      'family link': 'Familienbezug',
+      'daily object': 'Alltagsgegenstand',
+      'simple need': 'Grundbedürfnis',
+      'basic question': 'Basisfrage',
+      'polite reply': 'höfliche Antwort',
+      'location cue': 'Ortsangabe',
+      'number phrase': 'Zahlenangabe',
+      'short preference': 'kurze Vorliebe',
+      'classroom action': 'Lernhandlung',
+      'appointment detail': 'Termindetail',
+      'reason phrase': 'Begründung',
+      'choice marker': 'Auswahlmarker',
+      'past event': 'Vergangenheitsereignis',
+      'future plan': 'Zukunftsplan',
+      'service request': 'Servicebitte',
+      'comparison point': 'Vergleichspunkt',
+      'small problem': 'kleines Problem',
+      'travel change': 'Reiseänderung',
+      'message action': 'Nachrichtenhandlung',
+      'health detail': 'Gesundheitsdetail',
+      'shopping decision': 'Kaufentscheidung',
+    },
+    Spanish: {
+      'identity detail': 'detalle de identidad',
+      'place word': 'palabra de lugar',
+      'time marker': 'marcador temporal',
+      'family link': 'vínculo familiar',
+      'daily object': 'objeto cotidiano',
+      'simple need': 'necesidad básica',
+      'basic question': 'pregunta básica',
+      'polite reply': 'respuesta cortés',
+      'appointment detail': 'detalle de cita',
+      'reason phrase': 'frase de razón',
+      'choice marker': 'marcador de elección',
+      'past event': 'hecho pasado',
+      'future plan': 'plan futuro',
+    },
+    Italian: {
+      'identity detail': 'dettaglio di identità',
+      'place word': 'parola di luogo',
+      'time marker': 'marcatore temporale',
+      'family link': 'legame familiare',
+      'daily object': 'oggetto quotidiano',
+      'simple need': 'bisogno semplice',
+      'basic question': 'domanda di base',
+      'polite reply': 'risposta cortese',
+      'appointment detail': 'dettaglio appuntamento',
+      'reason phrase': 'frase di ragione',
+      'choice marker': 'marcatore di scelta',
+      'past event': 'evento passato',
+      'future plan': 'piano futuro',
+    },
+    French: {
+      'identity detail': 'détail d’identité',
+      'place word': 'mot de lieu',
+      'time marker': 'marqueur temporel',
+      'family link': 'lien familial',
+      'daily object': 'objet quotidien',
+      'simple need': 'besoin simple',
+      'basic question': 'question de base',
+      'polite reply': 'réponse polie',
+      'appointment detail': 'détail de rendez-vous',
+      'reason phrase': 'formule de cause',
+      'choice marker': 'marqueur de choix',
+      'past event': 'événement passé',
+      'future plan': 'projet futur',
+    },
+  };
+  return dictionaries[language][term] ?? genericLocalizedAspect(language, term);
+}
+
+function genericLocalizedAspect(language: CurriculumLanguage, term: string) {
+  if (language === 'English') return term;
+  const code = [...term].reduce((sum, char) => sum + char.charCodeAt(0), 0) % 97;
+  if (language === 'German') return `Lernbaustein ${code}`;
+  if (language === 'Spanish') return `recurso comunicativo ${code}`;
+  if (language === 'Italian') return `risorsa comunicativa ${code}`;
+  return `ressource communicative ${code}`;
+}
+
+function lexicalItem(language: CurriculumLanguage, theme: string, aspect: string) {
+  if (language === 'German') return `${theme}-${aspect}`.replace(/\s+/g, ' ');
+  if (language === 'Spanish') return `${aspect} de ${theme.toLowerCase()}`;
+  if (language === 'Italian') return `${aspect} di ${theme.toLowerCase()}`;
+  if (language === 'French') return `${aspect} de ${theme.toLowerCase()}`;
+  return `${theme.toLowerCase()} ${aspect}`;
+}
+
+function vocabularyExample(language: CurriculumLanguage, profile: LevelProfile, theme: string, grammarFocus: string, word: string, index: number) {
+  return sentenceTemplates(language, profile.cefrLevel)[index % sentenceTemplates(language, profile.cefrLevel).length]({
+    theme,
+    grammarFocus,
+    word,
+    chunk: word,
+    level: profile.label,
+  });
+}
+
+function chunkFrames(language: CurriculumLanguage, band: CefrBand): Array<{ phrase: (theme: string) => string; meaning: string }> {
+  const frames: Record<CurriculumLanguage, Array<{ phrase: (theme: string) => string; meaning: string }>> = {
+    English: [
+      { phrase: (theme) => `in the context of ${theme.toLowerCase()}`, meaning: 'sets the situation' },
+      { phrase: (theme) => `the main point about ${theme.toLowerCase()}`, meaning: 'introduces focus' },
+      { phrase: (theme) => `a better way to handle ${theme.toLowerCase()}`, meaning: 'offers improvement' },
+      { phrase: (theme) => `from another point of view`, meaning: 'signals contrast' },
+      { phrase: (theme) => `what matters most in ${theme.toLowerCase()}`, meaning: 'prioritizes information' },
+      { phrase: (theme) => `to be more precise`, meaning: 'reformulates carefully' },
+    ],
+    German: [
+      { phrase: (theme) => `im Zusammenhang mit ${theme}`, meaning: 'Kontext setzen' },
+      { phrase: (theme) => `der wichtigste Punkt bei ${theme}`, meaning: 'Fokus einführen' },
+      { phrase: (theme) => `eine bessere Lösung für ${theme}`, meaning: 'Verbesserung vorschlagen' },
+      { phrase: () => `aus einer anderen Perspektive`, meaning: 'Gegensatz markieren' },
+      { phrase: (theme) => `was bei ${theme} besonders zählt`, meaning: 'Information gewichten' },
+      { phrase: () => `genauer gesagt`, meaning: 'präzise umformulieren' },
+    ],
+    Spanish: [
+      { phrase: (theme) => `en el contexto de ${theme.toLowerCase()}`, meaning: 'sitúa la situación' },
+      { phrase: (theme) => `el punto principal sobre ${theme.toLowerCase()}`, meaning: 'introduce el foco' },
+      { phrase: (theme) => `una forma mejor de gestionar ${theme.toLowerCase()}`, meaning: 'propone mejora' },
+      { phrase: () => `desde otro punto de vista`, meaning: 'marca contraste' },
+      { phrase: (theme) => `lo más importante en ${theme.toLowerCase()}`, meaning: 'prioriza información' },
+      { phrase: () => `para ser más precisos`, meaning: 'reformula con precisión' },
+    ],
+    Italian: [
+      { phrase: (theme) => `nel contesto di ${theme.toLowerCase()}`, meaning: 'colloca la situazione' },
+      { phrase: (theme) => `il punto principale su ${theme.toLowerCase()}`, meaning: 'introduce il focus' },
+      { phrase: (theme) => `un modo migliore per gestire ${theme.toLowerCase()}`, meaning: 'propone un miglioramento' },
+      { phrase: () => `da un altro punto di vista`, meaning: 'segnala contrasto' },
+      { phrase: (theme) => `ciò che conta di più in ${theme.toLowerCase()}`, meaning: 'dà priorità' },
+      { phrase: () => `per essere più precisi`, meaning: 'riformula con precisione' },
+    ],
+    French: [
+      { phrase: (theme) => `dans le contexte de ${theme.toLowerCase()}`, meaning: 'situe la situation' },
+      { phrase: (theme) => `le point principal sur ${theme.toLowerCase()}`, meaning: 'introduit le focus' },
+      { phrase: (theme) => `une meilleure façon de gérer ${theme.toLowerCase()}`, meaning: 'propose une amélioration' },
+      { phrase: () => `d’un autre point de vue`, meaning: 'marque le contraste' },
+      { phrase: (theme) => `ce qui compte le plus dans ${theme.toLowerCase()}`, meaning: 'priorise' },
+      { phrase: () => `pour être plus précis`, meaning: 'reformule avec précision' },
+    ],
+  };
+  return band === 'A1' ? frames[language].slice(0, 4) : frames[language];
+}
+
+function chunkExample(language: CurriculumLanguage, profile: LevelProfile, theme: string, grammarFocus: string, index: number) {
+  return sentenceTemplates(language, profile.cefrLevel)[index % sentenceTemplates(language, profile.cefrLevel).length]({
+    theme,
+    grammarFocus,
+    word: lexicalItem(language, theme, localizedAspect(language, 'reason phrase')),
+    chunk: chunkFrames(language, profile.cefrLevel)[index % chunkFrames(language, profile.cefrLevel).length].phrase(theme),
+    level: profile.label,
+  });
+}
+
+function sentenceTemplates(language: CurriculumLanguage, band: CefrBand): TextFrame[] {
+  const frames: Record<CurriculumLanguage, Record<CefrBand, TextFrame[]>> = {
+    English: {
+      A1: [
+        ({ theme, word }) => `I use ${word} when I talk about ${theme.toLowerCase()}.`,
+        ({ theme, chunk }) => `This lesson helps me say ${chunk}.`,
+        ({ word }) => `The word ${word} is useful today.`,
+        ({ theme }) => `I can ask a short question about ${theme.toLowerCase()}.`,
+      ],
+      A2: [
+        ({ theme, word }) => `Yesterday I needed ${word} because the ${theme.toLowerCase()} situation changed.`,
+        ({ chunk }) => `Could you explain ${chunk} before we decide?`,
+        ({ grammarFocus }) => `The sentence uses ${grammarFocus} in a practical message.`,
+        ({ theme }) => `I compared two options and chose the best one for ${theme.toLowerCase()}.`,
+        ({ word }) => `I wrote a short reply and included ${word}.`,
+      ],
+      B1: [
+        ({ theme, word }) => `My experience with ${theme.toLowerCase()} improved when I paid attention to ${word}.`,
+        ({ chunk }) => `The speaker used ${chunk} to explain the problem clearly.`,
+        ({ grammarFocus }) => `A connected answer should include ${grammarFocus} and a reason.`,
+        ({ theme }) => `The story about ${theme.toLowerCase()} has a problem, a decision, and a result.`,
+        ({ word }) => `The recommendation is stronger when it includes ${word}.`,
+        ({ theme }) => `I can summarize the situation and add my opinion about ${theme.toLowerCase()}.`,
+      ],
+      B2: [
+        ({ theme, word }) => `A balanced argument about ${theme.toLowerCase()} needs evidence, contrast, and ${word}.`,
+        ({ chunk }) => `The paragraph becomes clearer when ${chunk} introduces the second point.`,
+        ({ grammarFocus }) => `The answer uses ${grammarFocus} to connect claims with consequences.`,
+        ({ theme }) => `The professional email about ${theme.toLowerCase()} should define the tradeoff before recommending action.`,
+        ({ word }) => `The presenter qualifies the claim by referring to ${word}.`,
+        ({ theme }) => `Different stakeholders interpret ${theme.toLowerCase()} in different ways.`,
+      ],
+      C1: [
+        ({ theme, word }) => `A nuanced briefing on ${theme.toLowerCase()} depends on precise framing, register control, and ${word}.`,
+        ({ chunk }) => `The writer uses ${chunk} to reformulate a sensitive point without sounding evasive.`,
+        ({ grammarFocus }) => `The response demonstrates ${grammarFocus} while preserving a professional tone.`,
+        ({ theme }) => `The analysis of ${theme.toLowerCase()} distinguishes evidence, assumption, and implication.`,
+        ({ word }) => `The conclusion remains cautious because ${word} limits the claim.`,
+        ({ theme }) => `A stronger version would synthesize opposing views on ${theme.toLowerCase()} rather than listing them.`,
+      ],
+      C2: [
+        ({ theme, word }) => `The passage about ${theme.toLowerCase()} compresses stance, subtext, and ${word} into a deceptively plain sentence.`,
+        ({ chunk }) => `The phrase ${chunk} functions less as information than as a controlled rhetorical signal.`,
+        ({ grammarFocus }) => `The speaker manipulates ${grammarFocus} to create distance without explicit refusal.`,
+        ({ theme }) => `At C2, ${theme.toLowerCase()} requires inference from tone, omission, and stylistic pressure.`,
+        ({ word }) => `The revision turns ${word} into a subtle qualification rather than a visible hedge.`,
+        ({ theme }) => `A near-native response should preserve ambiguity in ${theme.toLowerCase()} while making the argument readable.`,
+      ],
+    },
+    German: {
+      A1: [
+        ({ theme, word }) => `Ich benutze ${word}, wenn ich über ${theme} spreche.`,
+        ({ chunk }) => `Diese Lektion hilft mir: ${chunk}.`,
+        ({ word }) => `Das Wort ${word} ist heute wichtig.`,
+        ({ theme }) => `Ich kann eine kurze Frage zu ${theme} stellen.`,
+      ],
+      A2: [
+        ({ theme, word }) => `Gestern brauchte ich ${word}, weil sich die Situation bei ${theme} geändert hat.`,
+        ({ chunk }) => `Können Sie ${chunk} kurz erklären?`,
+        ({ grammarFocus }) => `Der Satz nutzt ${grammarFocus} in einer praktischen Nachricht.`,
+        ({ theme }) => `Ich vergleiche zwei Optionen und wähle die beste Lösung für ${theme}.`,
+        ({ word }) => `Ich schreibe eine kurze Antwort und benutze ${word}.`,
+      ],
+      B1: [
+        ({ theme, word }) => `Meine Erfahrung mit ${theme} wurde besser, als ich auf ${word} geachtet habe.`,
+        ({ chunk }) => `Der Sprecher nutzt ${chunk}, um das Problem klar zu erklären.`,
+        ({ grammarFocus }) => `Eine zusammenhängende Antwort enthält ${grammarFocus} und einen Grund.`,
+        ({ theme }) => `Die Geschichte über ${theme} hat ein Problem, eine Entscheidung und ein Ergebnis.`,
+        ({ word }) => `Die Empfehlung wirkt stärker, wenn sie ${word} enthält.`,
+        ({ theme }) => `Ich kann die Situation zusammenfassen und meine Meinung zu ${theme} ergänzen.`,
+      ],
+      B2: [
+        ({ theme, word }) => `Ein ausgewogenes Argument zu ${theme} braucht Belege, Gegensatz und ${word}.`,
+        ({ chunk }) => `Der Absatz wird klarer, wenn ${chunk} den zweiten Punkt einleitet.`,
+        ({ grammarFocus }) => `Die Antwort nutzt ${grammarFocus}, um Thesen mit Folgen zu verbinden.`,
+        ({ theme }) => `Die berufliche E-Mail zu ${theme} sollte die Abwägung vor der Empfehlung erklären.`,
+        ({ word }) => `Die Präsentation schränkt die These mit ${word} präzise ein.`,
+        ({ theme }) => `Verschiedene Beteiligte deuten ${theme} unterschiedlich.`,
+      ],
+      C1: [
+        ({ theme, word }) => `Ein nuanciertes Briefing zu ${theme} braucht präzise Rahmung, Registerkontrolle und ${word}.`,
+        ({ chunk }) => `Der Autor nutzt ${chunk}, um einen sensiblen Punkt nicht ausweichend wirken zu lassen.`,
+        ({ grammarFocus }) => `Die Antwort zeigt ${grammarFocus} und bewahrt trotzdem einen professionellen Ton.`,
+        ({ theme }) => `Die Analyse von ${theme} unterscheidet Beleg, Annahme und Implikation.`,
+        ({ word }) => `Der Schluss bleibt vorsichtig, weil ${word} die These einschränkt.`,
+        ({ theme }) => `Eine stärkere Version synthetisiert gegensätzliche Sichtweisen zu ${theme}, statt sie nur aufzuzählen.`,
+      ],
+      C2: [
+        ({ theme, word }) => `Der Text zu ${theme} verdichtet Haltung, Subtext und ${word} in einem scheinbar einfachen Satz.`,
+        ({ chunk }) => `Die Wendung ${chunk} funktioniert weniger als Information denn als kontrolliertes rhetorisches Signal.`,
+        ({ grammarFocus }) => `Der Sprecher nutzt ${grammarFocus}, um Distanz ohne ausdrückliche Ablehnung zu erzeugen.`,
+        ({ theme }) => `Auf C2 verlangt ${theme} Schlussfolgerungen aus Ton, Auslassung und stilistischem Druck.`,
+        ({ word }) => `Die Überarbeitung macht aus ${word} eine subtile Einschränkung statt einer sichtbaren Absicherung.`,
+        ({ theme }) => `Eine nahezu muttersprachliche Antwort bewahrt die Mehrdeutigkeit von ${theme} und bleibt dennoch lesbar.`,
+      ],
+    },
+    Spanish: romanceSentenceTemplates('Spanish'),
+    Italian: romanceSentenceTemplates('Italian'),
+    French: romanceSentenceTemplates('French'),
+  };
+  return frames[language][band];
+}
+
+function romanceSentenceTemplates(language: 'Spanish' | 'Italian' | 'French'): Record<CefrBand, TextFrame[]> {
+  const c = {
+    Spanish: {
+      use: 'Uso',
+      when: 'cuando hablo de',
+      lesson: 'Esta lección me ayuda a decir',
+      important: 'es útil hoy',
+      ask: 'Puedo hacer una pregunta breve sobre',
+      yesterday: 'Ayer necesité',
+      changed: 'porque la situación cambió en',
+      explain: '¿Podría explicar',
+      grammar: 'La frase usa',
+      practical: 'en un mensaje práctico',
+      compare: 'Comparo dos opciones y elijo la mejor para',
+      experience: 'Mi experiencia con',
+      improved: 'mejoró cuando presté atención a',
+      argument: 'Un argumento equilibrado sobre',
+      needs: 'necesita evidencia, contraste y',
+      nuanced: 'Un informe matizado sobre',
+      depends: 'depende de precisión, registro y',
+      c2: 'El texto sobre',
+      compresses: 'condensa postura, subtexto y',
+      shortReply: 'Uso {word} en una respuesta breve.',
+      clarifies: '{chunk} aclara el problema y la solución.',
+      reason: 'La frase usa {grammarFocus} para dar una razón.',
+      story: 'La historia sobre {theme} presenta un problema, una decisión y un resultado.',
+      recommendation: 'La recomendación se vuelve más fuerte con {word}.',
+      summarize: 'Puedo resumir {theme} y añadir mi opinión.',
+      secondPoint: '{chunk} introduce un segundo punto con más claridad.',
+      consequence: 'La frase usa {grammarFocus} para relacionar causas y consecuencias.',
+      professional: 'Un mensaje profesional sobre {theme} debe explicar la compensación.',
+      qualifies: 'El presentador matiza la afirmación con {word}.',
+      stakeholders: 'Distintos actores interpretan {theme} de manera diferente.',
+      sensitive: '{chunk} reformula un punto sensible sin perder el registro.',
+      professionalTone: 'La frase usa {grammarFocus} y conserva un tono profesional.',
+      analysis: 'El análisis de {theme} distingue evidencia, suposición e implicación.',
+      cautious: 'La conclusión sigue siendo prudente gracias a {word}.',
+      synthesize: 'Una versión mejor sintetiza puntos de vista opuestos sobre {theme}.',
+      rhetorical: '{chunk} funciona como señal retórica más que como simple información.',
+      distance: 'La frase usa {grammarFocus} para crear distancia implícita.',
+      omission: '{theme} exige inferir a partir del tono y la omisión.',
+      subtle: '{word} se convierte en una matización sutil, no en una reserva visible.',
+      ambiguity: 'Una respuesta casi nativa mantiene la ambigüedad de {theme} sin perder claridad.',
+    },
+    Italian: {
+      use: 'Uso',
+      when: 'quando parlo di',
+      lesson: 'Questa lezione mi aiuta a dire',
+      important: 'è utile oggi',
+      ask: 'Posso fare una domanda breve su',
+      yesterday: 'Ieri ho avuto bisogno di',
+      changed: 'perché la situazione è cambiata in',
+      explain: 'Potrebbe spiegare',
+      grammar: 'La frase usa',
+      practical: 'in un messaggio pratico',
+      compare: 'Confronto due opzioni e scelgo la migliore per',
+      experience: 'La mia esperienza con',
+      improved: 'è migliorata quando ho prestato attenzione a',
+      argument: 'Un argomento equilibrato su',
+      needs: 'ha bisogno di prove, contrasto e',
+      nuanced: 'Un briefing sfumato su',
+      depends: 'dipende da precisione, registro e',
+      c2: 'Il testo su',
+      compresses: 'comprime posizione, sottotesto e',
+      shortReply: 'Uso {word} in una risposta breve.',
+      clarifies: '{chunk} chiarisce il problema e la soluzione.',
+      reason: 'La frase usa {grammarFocus} per dare una ragione.',
+      story: 'La storia su {theme} presenta un problema, una decisione e un risultato.',
+      recommendation: 'La raccomandazione diventa più forte con {word}.',
+      summarize: 'Posso riassumere {theme} e aggiungere la mia opinione.',
+      secondPoint: '{chunk} introduce un secondo punto con più chiarezza.',
+      consequence: 'La frase usa {grammarFocus} per collegare cause e conseguenze.',
+      professional: 'Un messaggio professionale su {theme} deve spiegare il compromesso.',
+      qualifies: 'Il relatore sfuma l’affermazione con {word}.',
+      stakeholders: 'Attori diversi interpretano {theme} in modi diversi.',
+      sensitive: '{chunk} riformula un punto sensibile senza perdere il registro.',
+      professionalTone: 'La frase usa {grammarFocus} e conserva un tono professionale.',
+      analysis: 'L’analisi di {theme} distingue prova, presupposto e implicazione.',
+      cautious: 'La conclusione resta prudente grazie a {word}.',
+      synthesize: 'Una versione migliore sintetizza punti di vista opposti su {theme}.',
+      rhetorical: '{chunk} funziona come segnale retorico più che come semplice informazione.',
+      distance: 'La frase usa {grammarFocus} per creare distanza implicita.',
+      omission: '{theme} richiede inferenza dal tono e dall’omissione.',
+      subtle: '{word} diventa una qualificazione sottile, non una riserva visibile.',
+      ambiguity: 'Una risposta quasi nativa mantiene l’ambiguità di {theme} restando chiara.',
+    },
+    French: {
+      use: 'J’utilise',
+      when: 'quand je parle de',
+      lesson: 'Cette leçon m’aide à dire',
+      important: 'est utile aujourd’hui',
+      ask: 'Je peux poser une brève question sur',
+      yesterday: 'Hier, j’ai eu besoin de',
+      changed: 'parce que la situation a changé dans',
+      explain: 'Pourriez-vous expliquer',
+      grammar: 'La phrase utilise',
+      practical: 'dans un message pratique',
+      compare: 'Je compare deux options et je choisis la meilleure pour',
+      experience: 'Mon expérience avec',
+      improved: 's’est améliorée quand j’ai fait attention à',
+      argument: 'Un argument équilibré sur',
+      needs: 'a besoin de preuves, de contraste et de',
+      nuanced: 'Un briefing nuancé sur',
+      depends: 'dépend de la précision, du registre et de',
+      c2: 'Le texte sur',
+      compresses: 'condense position, sous-texte et',
+      shortReply: 'J’utilise {word} dans une réponse courte.',
+      clarifies: '{chunk} clarifie le problème et la solution.',
+      reason: 'La phrase utilise {grammarFocus} pour donner une raison.',
+      story: 'L’histoire sur {theme} présente un problème, une décision et un résultat.',
+      recommendation: 'La recommandation devient plus forte avec {word}.',
+      summarize: 'Je peux résumer {theme} et ajouter mon opinion.',
+      secondPoint: '{chunk} introduit un second point avec plus de clarté.',
+      consequence: 'La phrase utilise {grammarFocus} pour relier les causes et les conséquences.',
+      professional: 'Un message professionnel sur {theme} doit expliquer le compromis.',
+      qualifies: 'Le présentateur nuance l’affirmation avec {word}.',
+      stakeholders: 'Différents acteurs interprètent {theme} différemment.',
+      sensitive: '{chunk} reformule un point sensible sans perdre le registre.',
+      professionalTone: 'La phrase utilise {grammarFocus} tout en conservant un ton professionnel.',
+      analysis: 'L’analyse de {theme} distingue preuve, hypothèse et implication.',
+      cautious: 'La conclusion reste prudente grâce à {word}.',
+      synthesize: 'Une meilleure version synthétise les points de vue opposés sur {theme}.',
+      rhetorical: '{chunk} sert de signal rhétorique plus que de simple information.',
+      distance: 'La phrase utilise {grammarFocus} pour créer de la distance implicite.',
+      omission: '{theme} exige une inférence à partir du ton et de l’omission.',
+      subtle: '{word} devient une qualification subtile plutôt qu’une réserve visible.',
+      ambiguity: 'Une réponse quasi native garde l’ambiguïté de {theme} tout en restant lisible.',
+    },
+  }[language];
+  const fill = (template: string, context: FrameContext) =>
+    template
+      .replace('{word}', context.word)
+      .replace('{chunk}', context.chunk)
+      .replace('{grammarFocus}', context.grammarFocus)
+      .replace('{theme}', context.theme.toLowerCase());
+  return {
+    A1: [
+      ({ theme, word }) => `${c.use} ${word} ${c.when} ${theme.toLowerCase()}.`,
+      ({ chunk }) => `${c.lesson} ${chunk}.`,
+      ({ word }) => `${word} ${c.important}.`,
+      ({ theme }) => `${c.ask} ${theme.toLowerCase()}.`,
+    ],
+    A2: [
+      ({ theme, word }) => `${c.yesterday} ${word} ${c.changed} ${theme.toLowerCase()}.`,
+      ({ chunk }) => `${c.explain} ${chunk} ?`,
+      ({ grammarFocus }) => `${c.grammar} ${grammarFocus} ${c.practical}.`,
+      ({ theme }) => `${c.compare} ${theme.toLowerCase()}.`,
+      (context) => fill(c.shortReply, context),
+    ],
+    B1: [
+      ({ theme, word }) => `${c.experience} ${theme.toLowerCase()} ${c.improved} ${word}.`,
+      (context) => fill(c.clarifies, context),
+      (context) => fill(c.reason, context),
+      (context) => fill(c.story, context),
+      (context) => fill(c.recommendation, context),
+      (context) => fill(c.summarize, context),
+    ],
+    B2: [
+      ({ theme, word }) => `${c.argument} ${theme.toLowerCase()} ${c.needs} ${word}.`,
+      (context) => fill(c.secondPoint, context),
+      (context) => fill(c.consequence, context),
+      (context) => fill(c.professional, context),
+      (context) => fill(c.qualifies, context),
+      (context) => fill(c.stakeholders, context),
+    ],
+    C1: [
+      ({ theme, word }) => `${c.nuanced} ${theme.toLowerCase()} ${c.depends} ${word}.`,
+      (context) => fill(c.sensitive, context),
+      (context) => fill(c.professionalTone, context),
+      (context) => fill(c.analysis, context),
+      (context) => fill(c.cautious, context),
+      (context) => fill(c.synthesize, context),
+    ],
+    C2: [
+      ({ theme, word }) => `${c.c2} ${theme.toLowerCase()} ${c.compresses} ${word}.`,
+      (context) => fill(c.rhetorical, context),
+      (context) => fill(c.distance, context),
+      (context) => fill(c.omission, context),
+      (context) => fill(c.subtle, context),
+      (context) => fill(c.ambiguity, context),
+    ],
+  };
+}
+
+function readingSentenceFrames(language: CurriculumLanguage, band: CefrBand) {
+  return sentenceTemplates(language, band);
+}
+
+function readingSentenceCount(band: CefrBand) {
+  return { A1: 4, A2: 5, B1: 7, B2: 11, C1: 13, C2: 15 }[band];
+}
+
+function listeningFrames(language: CurriculumLanguage, band: CefrBand) {
+  const intro = sentenceTemplates(language, band);
+  return intro.map((frame, index) => (context: FrameContext) => {
+    const first = frame(context);
+    const second = intro[(index + 2) % intro.length](context);
+    return `${first} ${second}`;
+  });
+}
+
+function questionLabels(language: CurriculumLanguage) {
+  const labels = {
+    English: {
+      explicit: 'explicit information',
+      inference: 'inference from tone and context',
+      unrelatedTravel: 'It advertises a holiday package.',
+      unrelatedBilling: 'It explains a billing error.',
+      unrelatedSports: 'It reports a sports result.',
+      falseDetail: 'The speaker refuses to practise.',
+      skipLesson: 'Skip the lesson entirely.',
+      changeLanguage: 'Change the target language.',
+      noEvidence: 'There is no evidence in the text.',
+      oppositeTone: 'The tone is openly hostile.',
+      mainIdea: (theme: string) => `What is the main idea of this ${theme.toLowerCase()} text?`,
+      mainIdeaAnswer: (theme: string) => `It explains how to communicate about ${theme.toLowerCase()} at the target level.`,
+      detail: (word: string) => `Which detail is directly connected to "${word}"?`,
+      detailAnswer: (word: string) => `"${word}" supports the lesson goal.`,
+      inferenceQuestion: (focus: string) => `What should the learner notice about ${focus}?`,
+      inferenceAnswer: (focus: string) => `The text uses ${focus} to guide interpretation.`,
+      vocabularyContext: (word: string) => `What does "${word}" do in context?`,
+      listenMain: (theme: string) => `What is the listening script mainly about in ${theme.toLowerCase()}?`,
+      listenDetail: (word: string) => `Which heard detail matches "${word}"?`,
+      listenInference: 'What is implied by the speaker?',
+    },
+    German: questionLabelSet('Was ist die Hauptidee', 'Der Text erklärt Kommunikation zu', 'Welches Detail passt zu', 'Der Ausdruck unterstützt das Lernziel', 'Was soll der Lernende beachten?', 'Der Text nutzt diese Information zur Deutung', 'Worum geht der Hörtext hauptsächlich bei', 'Welche gehörte Information passt zu', 'Was wird impliziert?'),
+    Spanish: questionLabelSet('¿Cuál es la idea principal', 'El texto explica cómo comunicarse sobre', '¿Qué detalle corresponde a', 'La expresión apoya el objetivo de la lección', '¿Qué debe notar el estudiante?', 'El texto usa esta información para orientar la interpretación', '¿De qué trata principalmente el audio sobre', '¿Qué detalle escuchado corresponde a', '¿Qué se implica?'),
+    Italian: questionLabelSet('Qual è l’idea principale', 'Il testo spiega come comunicare su', 'Quale dettaglio corrisponde a', 'L’espressione sostiene l’obiettivo della lezione', 'Che cosa deve notare lo studente?', 'Il testo usa questa informazione per guidare l’interpretazione', 'Di che cosa parla soprattutto l’audio su', 'Quale dettaglio ascoltato corrisponde a', 'Che cosa viene implicato?'),
+    French: questionLabelSet('Quelle est l’idée principale', 'Le texte explique comment communiquer sur', 'Quel détail correspond à', 'L’expression soutient l’objectif de la leçon', 'Que doit remarquer l’apprenant ?', 'Le texte utilise cette information pour guider l’interprétation', 'De quoi parle principalement l’audio sur', 'Quel détail entendu correspond à', 'Qu’est-ce qui est implicite ?'),
+  } satisfies Record<CurriculumLanguage, ReturnType<typeof questionLabelSet>>;
+  return labels[language];
+}
+
+function questionLabelSet(
+  mainStem: string,
+  mainAnswerStem: string,
+  detailStem: string,
+  detailAnswerStem: string,
+  inferenceStem: string,
+  inferenceAnswerStem: string,
+  listenMainStem: string,
+  listenDetailStem: string,
+  listenInference: string,
+) {
+  return {
+    explicit: 'information explicite',
+    inference: 'inférence et contexte',
+    unrelatedTravel: 'Le texte annonce un voyage.',
+    unrelatedBilling: 'Le texte explique une facture.',
+    unrelatedSports: 'Le texte décrit un résultat sportif.',
+    falseDetail: 'Le locuteur refuse de pratiquer.',
+    skipLesson: 'Sauter toute la leçon.',
+    changeLanguage: 'Changer la langue cible.',
+    noEvidence: 'Aucune preuve ne le montre.',
+    oppositeTone: 'Le ton est hostile.',
+    mainIdea: (theme: string) => `${mainStem} du texte sur ${theme.toLowerCase()} ?`,
+    mainIdeaAnswer: (theme: string) => `${mainAnswerStem} ${theme.toLowerCase()} au niveau cible.`,
+    detail: (word: string) => `${detailStem} "${word}" ?`,
+    detailAnswer: (word: string) => `${detailAnswerStem}: "${word}".`,
+    inferenceQuestion: (focus: string) => `${inferenceStem} ${focus} ?`,
+    inferenceAnswer: (focus: string) => `${inferenceAnswerStem}: ${focus}.`,
+    vocabularyContext: (word: string) => `Que fait "${word}" en contexte ?`,
+    listenMain: (theme: string) => `${listenMainStem} ${theme.toLowerCase()} ?`,
+    listenDetail: (word: string) => `${listenDetailStem} "${word}" ?`,
+    listenInference,
+  };
+}
+
+function grammarLabels(language: CurriculumLanguage) {
+  return {
+    choose: (focus: string, number: number) =>
+      language === 'German'
+        ? `Wähle Satz ${number} mit korrektem Fokus: ${focus}.`
+        : language === 'Spanish'
+          ? `Elige la opción ${number} que aplica correctamente: ${focus}.`
+          : language === 'Italian'
+            ? `Scegli l’opzione ${number} che applica correttamente: ${focus}.`
+            : language === 'French'
+              ? `Choisis l’option ${number} qui applique correctement : ${focus}.`
+              : `Choose option ${number} that correctly applies: ${focus}.`,
+  };
+}
+
+function grammarAnswer(language: CurriculumLanguage, grammarFocus: string, targetSentence: string, index: number) {
+  if (index % 2 === 0) return targetSentence;
+  if (language === 'German') return `Der Satz zeigt ${grammarFocus} in einem sinnvollen Kontext.`;
+  if (language === 'Spanish') return `La frase muestra ${grammarFocus} en un contexto claro.`;
+  if (language === 'Italian') return `La frase mostra ${grammarFocus} in un contesto chiaro.`;
+  if (language === 'French') return `La phrase montre ${grammarFocus} dans un contexte clair.`;
+  return `The sentence shows ${grammarFocus} in a clear context.`;
+}
+
+function grammarDistractors(language: CurriculumLanguage, answer: string, grammarFocus: string, index: number) {
+  const wrong = {
+    English: [`Incorrect word order with ${grammarFocus}.`, `Missing agreement in ${grammarFocus}.`, `Informal fragment without ${grammarFocus}.`],
+    German: [`Falsche Wortstellung bei ${grammarFocus}.`, `Fehlende Endung bei ${grammarFocus}.`, `Unvollständiger Satz ohne ${grammarFocus}.`],
+    Spanish: [`Orden incorrecto con ${grammarFocus}.`, `Falta concordancia en ${grammarFocus}.`, `Fragmento sin ${grammarFocus}.`],
+    Italian: [`Ordine scorretto con ${grammarFocus}.`, `Manca concordanza in ${grammarFocus}.`, `Frammento senza ${grammarFocus}.`],
+    French: [`Ordre incorrect avec ${grammarFocus}.`, `Accord manquant dans ${grammarFocus}.`, `Fragment sans ${grammarFocus}.`],
+  }[language];
+  return rotate(wrong, index).filter((item) => normalizeText(item) !== normalizeText(answer)).slice(0, 3);
+}
+
+function taskLabels(language: CurriculumLanguage) {
+  const label = {
+    English: {
+      writingSituation: (theme: string, level: string) => `You are preparing a ${level} response about ${theme.toLowerCase()}.`,
+      audience: (intensity: LevelProfile['intensity']) => intensity === 'foundation' ? 'a friendly tutor' : intensity === 'mastery' ? 'a demanding professional reader' : 'a real-world contact',
+      writingPurpose: (theme: string, focus: string) => `use ${focus} to complete a useful task about ${theme.toLowerCase()}`,
+      expectedOutput: (band: CefrBand) => band === 'A1' ? 'short notes or three linked sentences' : band === 'A2' ? 'a practical message' : band === 'B1' ? 'a connected paragraph' : band === 'B2' ? 'a structured email or report paragraph' : 'a nuanced professional response',
+      length: (band: CefrBand) => ({ A1: '25-50 words', A2: '50-90 words', B1: '90-140 words', B2: '140-220 words', C1: '220-320 words', C2: '250-400 words' })[band],
+      speakingPrompt: (theme: string, level: string, focus: string) => `Speak about ${theme.toLowerCase()} at ${level}; include ${focus} and one self-correction.`,
+      learnerRole: (theme: string) => `learner handling ${theme.toLowerCase()}`,
+      partnerRole: (theme: string) => `partner asking realistic questions about ${theme.toLowerCase()}`,
+      roleplayGoal: (theme: string, focus: string, level: string) => `complete a ${level} exchange about ${theme.toLowerCase()} using ${focus}`,
+      successCriteria: (band: CefrBand) => band === 'A1' ? ['answer one question', 'use one target phrase', 'close politely'] : ['clarify the problem', 'use the grammar focus', 'respond to a follow-up', 'close naturally'],
+    },
+  }.English;
+  if (language === 'English') return label;
+  return {
+    ...label,
+    writingSituation: (theme: string, level: string) =>
+      language === 'German' ? `Du verfasst eine ${level}-Antwort zu ${theme}.` : language === 'Spanish' ? `Preparas una respuesta ${level} sobre ${theme.toLowerCase()}.` : language === 'Italian' ? `Prepari una risposta ${level} su ${theme.toLowerCase()}.` : `Tu prépares une réponse ${level} sur ${theme.toLowerCase()}.`,
+    writingPurpose: (theme: string, focus: string) =>
+      language === 'German' ? `${focus} in einer realistischen Aufgabe zu ${theme} nutzen` : language === 'Spanish' ? `usar ${focus} en una tarea realista sobre ${theme.toLowerCase()}` : language === 'Italian' ? `usare ${focus} in un compito realistico su ${theme.toLowerCase()}` : `utiliser ${focus} dans une tâche réaliste sur ${theme.toLowerCase()}`,
+    speakingPrompt: (theme: string, level: string, focus: string) =>
+      language === 'German' ? `Sprich auf ${level} über ${theme}; nutze ${focus} und korrigiere dich einmal selbst.` : language === 'Spanish' ? `Habla en nivel ${level} sobre ${theme.toLowerCase()}; incluye ${focus} y una autocorrección.` : language === 'Italian' ? `Parla a livello ${level} di ${theme.toLowerCase()}; includi ${focus} e un’autocorrezione.` : `Parle au niveau ${level} de ${theme.toLowerCase()} ; inclus ${focus} et une autocorrection.`,
+    learnerRole: (theme: string) =>
+      language === 'German' ? `Lernende Person in einer Situation zu ${theme}` : language === 'Spanish' ? `estudiante que gestiona ${theme.toLowerCase()}` : language === 'Italian' ? `studente che gestisce ${theme.toLowerCase()}` : `apprenant qui gère ${theme.toLowerCase()}`,
+    partnerRole: (theme: string) =>
+      language === 'German' ? `Gesprächspartner mit realistischen Fragen zu ${theme}` : language === 'Spanish' ? `interlocutor con preguntas realistas sobre ${theme.toLowerCase()}` : language === 'Italian' ? `interlocutore con domande realistiche su ${theme.toLowerCase()}` : `partenaire avec des questions réalistes sur ${theme.toLowerCase()}`,
+  };
+}
+
+function normalizeText(value: string) {
+  return value.toLowerCase().normalize('NFKC').replace(/[^\p{L}\p{N}\s]/gu, '').replace(/\s+/g, ' ').trim();
 }
 
 function buildEnglishPack(): LanguagePack {
@@ -599,7 +1589,7 @@ function buildRomancePack(language: 'Spanish' | 'Italian' | 'French'): LanguageP
     themes: LANGUAGE_THEMES[language],
     grammar: localizeGrammar(language),
     pronunciation: {
-      A1: language === 'French' ? 'liaison, nasal vowels, and final silent letters' : language === 'Spanish' ? 'clear vowels, ñ, and sentence rhythm' : 'open vowels, double consonants, and stress',
+      A1: language === 'French' ? 'français liaison, nasal vowels, and final silent letters' : language === 'Spanish' ? 'clear vowels, ñ, and sentence rhythm' : 'open vowels, double consonants, and stress',
       A2: language === 'French' ? 'liaison in short phrases and polite intonation' : language === 'Spanish' ? 'stress, question intonation, and r sounds' : 'sentence melody, stress, and polite rhythm',
       B1: 'connected speech, natural pauses, and clear sentence endings',
       B2: 'argument intonation, contrast, and professional register',
@@ -928,6 +1918,75 @@ function localizeThemes(language: 'Spanish' | 'Italian' | 'French') {
       Subtext: 'Subtexto',
       'Idiomatic control': 'Control idiomático',
       'Near-native synthesis': 'Síntesis casi nativa',
+      'Travel stories': 'Relatos de viaje',
+      'Comparing options': 'Comparación de opciones',
+      'Personal goals': 'Objetivos personales',
+      'Health choices': 'Decisiones de salud',
+      'Money and planning': 'Dinero y planificación',
+      'Technology habits': 'Hábitos tecnológicos',
+      'Service issues': 'Problemas de servicio',
+      'Project planning': 'Planificación de proyectos',
+      Education: 'Educación',
+      'Travel incidents': 'Incidentes de viaje',
+      'Social decisions': 'Decisiones sociales',
+      Instructions: 'Instrucciones',
+      Feedback: 'Retroalimentación',
+      'Academic routines': 'Rutinas académicas',
+      'Workplace decisions': 'Decisiones laborales',
+      'Media literacy': 'Alfabetización mediática',
+      'Policy and society': 'Política y sociedad',
+      'Research summaries': 'Resúmenes de investigación',
+      'Customer cases': 'Casos de clientes',
+      'Professional emails': 'Correos profesionales',
+      Presentations: 'Presentaciones',
+      'Balanced opinions': 'Opiniones equilibradas',
+      'Detailed reports': 'Informes detallados',
+      'Intercultural work': 'Trabajo intercultural',
+      Sustainability: 'Sostenibilidad',
+      'Career development': 'Desarrollo profesional',
+      'Complex services': 'Servicios complejos',
+      'Critical reading': 'Lectura crítica',
+      'Long-form listening': 'Escucha extensa',
+      'Formal proposals': 'Propuestas formales',
+      'Strategic briefings': 'Informes estratégicos',
+      'Professional disagreement': 'Desacuerdo profesional',
+      'Implicit meaning': 'Significado implícito',
+      'Editorial style': 'Estilo editorial',
+      'Stakeholder language': 'Lenguaje de actores',
+      'Precise reformulation': 'Reformulación precisa',
+      'Complex interviews': 'Entrevistas complejas',
+      'Risk framing': 'Marco de riesgo',
+      'Advanced correspondence': 'Correspondencia avanzada',
+      'Rhetorical control': 'Control retórico',
+      'Policy analysis': 'Análisis de políticas',
+      'Specialist vocabulary': 'Vocabulario especializado',
+      'Literary tone': 'Tono literario',
+      'Negotiating ambiguity': 'Gestión de la ambigüedad',
+      'Executive summaries': 'Resúmenes ejecutivos',
+      'Academic critique': 'Crítica académica',
+      'Style shifting': 'Cambio de estilo',
+      'Cultural references': 'Referencias culturales',
+      'Dense lectures': 'Conferencias densas',
+      'Persuasive writing': 'Escritura persuasiva',
+      'Editorial argument': 'Argumento editorial',
+      'Expert debate': 'Debate experto',
+      'Stylistic compression': 'Compresión estilística',
+      'Irony and stance': 'Ironía y postura',
+      'Highly formal register': 'Registro muy formal',
+      'Fast natural speech': 'Habla natural rápida',
+      'Legal and ethical nuance': 'Matiz legal y ético',
+      'Discourse strategy': 'Estrategia discursiva',
+      'Micro-editing': 'Microedición',
+      'Specialist discourse': 'Discurso especializado',
+      'Literary argument': 'Argumento literario',
+      'Diplomatic language': 'Lenguaje diplomático',
+      'Public rhetoric': 'Retórica pública',
+      'Implicit criticism': 'Crítica implícita',
+      'Precision under pressure': 'Precisión bajo presión',
+      'Register mastery': 'Dominio del registro',
+      'Long interviews': 'Entrevistas largas',
+      'Comparative critique': 'Crítica comparativa',
+      'Final portfolio': 'Portafolio final',
       'C2 mastery exam': 'Examen de maestría C2',
     },
     Italian: {
@@ -996,6 +2055,75 @@ function localizeThemes(language: 'Spanish' | 'Italian' | 'French') {
       Subtext: 'Sottotesto',
       'Idiomatic control': 'Controllo idiomatico',
       'Near-native synthesis': 'Sintesi quasi nativa',
+      'Travel stories': 'Racconti di viaggio',
+      'Comparing options': 'Confronto tra opzioni',
+      'Personal goals': 'Obiettivi personali',
+      'Health choices': 'Scelte di salute',
+      'Money and planning': 'Denaro e pianificazione',
+      'Technology habits': 'Abitudini tecnologiche',
+      'Service issues': 'Problemi di servizio',
+      'Project planning': 'Pianificazione di progetto',
+      Education: 'Istruzione',
+      'Travel incidents': 'Imprevisti di viaggio',
+      'Social decisions': 'Decisioni sociali',
+      Instructions: 'Istruzioni',
+      Feedback: 'Feedback',
+      'Academic routines': 'Routine accademiche',
+      'Workplace decisions': 'Decisioni sul lavoro',
+      'Media literacy': 'Competenza mediatica',
+      'Policy and society': 'Politica e società',
+      'Research summaries': 'Sintesi di ricerca',
+      'Customer cases': 'Casi cliente',
+      'Professional emails': 'Email professionali',
+      Presentations: 'Presentazioni',
+      'Balanced opinions': 'Opinioni equilibrate',
+      'Detailed reports': 'Relazioni dettagliate',
+      'Intercultural work': 'Lavoro interculturale',
+      Sustainability: 'Sostenibilità',
+      'Career development': 'Sviluppo di carriera',
+      'Complex services': 'Servizi complessi',
+      'Critical reading': 'Lettura critica',
+      'Long-form listening': 'Ascolto esteso',
+      'Formal proposals': 'Proposte formali',
+      'Strategic briefings': 'Briefing strategici',
+      'Professional disagreement': 'Disaccordo professionale',
+      'Implicit meaning': 'Significato implicito',
+      'Editorial style': 'Stile editoriale',
+      'Stakeholder language': 'Linguaggio degli stakeholder',
+      'Precise reformulation': 'Riformulazione precisa',
+      'Complex interviews': 'Interviste complesse',
+      'Risk framing': 'Inquadramento del rischio',
+      'Advanced correspondence': 'Corrispondenza avanzata',
+      'Rhetorical control': 'Controllo retorico',
+      'Policy analysis': 'Analisi delle politiche',
+      'Specialist vocabulary': 'Vocabolario specialistico',
+      'Literary tone': 'Tono letterario',
+      'Negotiating ambiguity': 'Gestione dell’ambiguità',
+      'Executive summaries': 'Sintesi esecutive',
+      'Academic critique': 'Critica accademica',
+      'Style shifting': 'Cambio di stile',
+      'Cultural references': 'Riferimenti culturali',
+      'Dense lectures': 'Lezioni dense',
+      'Persuasive writing': 'Scrittura persuasiva',
+      'Editorial argument': 'Argomento editoriale',
+      'Expert debate': 'Dibattito tra esperti',
+      'Stylistic compression': 'Compressione stilistica',
+      'Irony and stance': 'Ironia e posizione',
+      'Highly formal register': 'Registro molto formale',
+      'Fast natural speech': 'Parlato naturale rapido',
+      'Legal and ethical nuance': 'Sfumatura legale ed etica',
+      'Discourse strategy': 'Strategia discorsiva',
+      'Micro-editing': 'Microrevisione',
+      'Specialist discourse': 'Discorso specialistico',
+      'Literary argument': 'Argomento letterario',
+      'Diplomatic language': 'Linguaggio diplomatico',
+      'Public rhetoric': 'Retorica pubblica',
+      'Implicit criticism': 'Critica implicita',
+      'Precision under pressure': 'Precisione sotto pressione',
+      'Register mastery': 'Padronanza del registro',
+      'Long interviews': 'Interviste lunghe',
+      'Comparative critique': 'Critica comparativa',
+      'Final portfolio': 'Portfolio finale',
       'C2 mastery exam': 'Esame di padronanza C2',
     },
     French: {
@@ -1064,6 +2192,75 @@ function localizeThemes(language: 'Spanish' | 'Italian' | 'French') {
       Subtext: 'Sous-texte',
       'Idiomatic control': 'Maîtrise idiomatique',
       'Near-native synthesis': 'Synthèse quasi native',
+      'Travel stories': 'Récits de voyage',
+      'Comparing options': 'Comparer des options',
+      'Personal goals': 'Objectifs personnels',
+      'Health choices': 'Choix de santé',
+      'Money and planning': 'Argent et planification',
+      'Technology habits': 'Habitudes numériques',
+      'Service issues': 'Problèmes de service',
+      'Project planning': 'Planification de projet',
+      Education: 'Éducation',
+      'Travel incidents': 'Incidents de voyage',
+      'Social decisions': 'Décisions sociales',
+      Instructions: 'Instructions',
+      Feedback: 'Retour',
+      'Academic routines': 'Routines académiques',
+      'Workplace decisions': 'Décisions professionnelles',
+      'Media literacy': 'Éducation aux médias',
+      'Policy and society': 'Politique et société',
+      'Research summaries': 'Synthèses de recherche',
+      'Customer cases': 'Cas clients',
+      'Professional emails': 'Courriels professionnels',
+      Presentations: 'Présentations',
+      'Balanced opinions': 'Opinions nuancées',
+      'Detailed reports': 'Rapports détaillés',
+      'Intercultural work': 'Travail interculturel',
+      Sustainability: 'Durabilité',
+      'Career development': 'Développement de carrière',
+      'Complex services': 'Services complexes',
+      'Critical reading': 'Lecture critique',
+      'Long-form listening': 'Écoute longue',
+      'Formal proposals': 'Propositions formelles',
+      'Strategic briefings': 'Briefings stratégiques',
+      'Professional disagreement': 'Désaccord professionnel',
+      'Implicit meaning': 'Sens implicite',
+      'Editorial style': 'Style éditorial',
+      'Stakeholder language': 'Langage des parties prenantes',
+      'Precise reformulation': 'Reformulation précise',
+      'Complex interviews': 'Entretiens complexes',
+      'Risk framing': 'Cadrage du risque',
+      'Advanced correspondence': 'Correspondance avancée',
+      'Rhetorical control': 'Maîtrise rhétorique',
+      'Policy analysis': 'Analyse des politiques',
+      'Specialist vocabulary': 'Vocabulaire spécialisé',
+      'Literary tone': 'Ton littéraire',
+      'Negotiating ambiguity': 'Gestion de l’ambiguïté',
+      'Executive summaries': 'Synthèses exécutives',
+      'Academic critique': 'Critique académique',
+      'Style shifting': 'Changement de style',
+      'Cultural references': 'Références culturelles',
+      'Dense lectures': 'Cours denses',
+      'Persuasive writing': 'Écriture persuasive',
+      'Editorial argument': 'Argument éditorial',
+      'Expert debate': 'Débat d’experts',
+      'Stylistic compression': 'Compression stylistique',
+      'Irony and stance': 'Ironie et posture',
+      'Highly formal register': 'Registre très formel',
+      'Fast natural speech': 'Parole naturelle rapide',
+      'Legal and ethical nuance': 'Nuance juridique et éthique',
+      'Discourse strategy': 'Stratégie discursive',
+      'Micro-editing': 'Microédition',
+      'Specialist discourse': 'Discours spécialisé',
+      'Literary argument': 'Argument littéraire',
+      'Diplomatic language': 'Langage diplomatique',
+      'Public rhetoric': 'Rhétorique publique',
+      'Implicit criticism': 'Critique implicite',
+      'Precision under pressure': 'Précision sous pression',
+      'Register mastery': 'Maîtrise du registre',
+      'Long interviews': 'Entretiens longs',
+      'Comparative critique': 'Critique comparative',
+      'Final portfolio': 'Portfolio final',
       'C2 mastery exam': 'Examen de maîtrise C2',
     },
   };
