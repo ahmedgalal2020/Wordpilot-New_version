@@ -17,8 +17,9 @@
     "test:api-routes": "tsx scripts/api-route-smoke.ts",
     "test:curriculum": "tsx scripts/curriculum-smoke.ts",
     "test:curriculum-quality": "tsx scripts/curriculum-quality.ts",
+    "test:curriculum-naturalness": "tsx scripts/curriculum-naturalness-audit.ts",
     "test:dictation": "tsx scripts/dictation-analysis-smoke.ts",
-    "test": "npm run test:api-routes && npm run test:curriculum && npm run test:curriculum-quality && npm run test:dictation",
+    "test": "npm run test:api-routes && npm run test:curriculum && npm run test:curriculum-quality && npm run test:curriculum-naturalness && npm run test:dictation",
     "sync:curriculum-content": "tsx scripts/sync-curriculum-content.ts"
   },
   "dependencies": {
@@ -39,6 +40,10 @@
     "react-router-dom": "^7.14.0",
     "tailwind-merge": "^3.5.0",
     "vite": "^6.2.0"
+  },
+  "overrides": {
+    "browserslist": "^4.28.7",
+    "qs": "^6.16.0"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
