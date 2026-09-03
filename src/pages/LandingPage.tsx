@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowRight,
@@ -14,10 +14,10 @@ import {
   Trophy,
   Video,
 } from 'lucide-react';
-import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
 import { useI18n } from '../i18n';
+import { useHomepageAnimations } from '../hooks/useHomepageAnimations';
 
 const HERO_IMAGE =
   'https://lh3.googleusercontent.com/aida-public/AB6AXuDvP-Y4L4_Ivh3NL_B9rVLzERpgA5dKN7agCr8KMVg_aVI8g6FxMCNMy3dg7rldeA78jXrhbBTVffOSsqv2M6YLoft-2BMqaW_JfHLIGNxCJrSf0UwgwnmmieYa1JPzUnc5ktpAVwQG9Byvn13YEut3s9dPjmnaYvK9JXTViEbZrEZywzmHnnJePi9hcuXlrFLD-YbHEhKVSu6LzLoOhKS1Jbk8nj9J1EsKQBZ02rJMoq8oZf4ELfv0PyPDIgTvNXNoMqx9eKcW8xs';
@@ -201,15 +201,17 @@ const landingCopy = {
 };
 
 export default function LandingPage() {
+  const homepageRef = useRef<HTMLDivElement | null>(null);
   const { user } = useAuth();
   const { language } = useI18n();
   const copy = landingCopy[language];
   const primaryHref = user ? '/dashboard' : '/signup';
   const secondaryHref = user ? '/practice-path' : '/pricing';
+  useHomepageAnimations(homepageRef);
 
   return (
-    <div className="pt-16">
-      <section className="relative isolate overflow-hidden py-8 sm:py-10">
+    <div ref={homepageRef} className="overflow-hidden pt-16">
+      <section className="relative isolate overflow-hidden py-8 sm:py-10" data-homepage-hero>
         <div className="absolute inset-0 -z-10 bg-surface" />
         <div
           className="absolute inset-0 -z-10 bg-cover bg-center opacity-[0.16] grayscale"
@@ -220,11 +222,10 @@ export default function LandingPage() {
 
         <div className="wp-shell">
           <div className="flex flex-col gap-10 rounded-[2rem] border border-surface-container bg-surface-container-lowest/80 px-4 py-10 shadow-sm backdrop-blur sm:px-8 sm:py-14 lg:px-12 lg:py-16">
-          <motion.div
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.55 }}
+          <div
             className="mx-auto max-w-5xl text-center"
+            data-homepage-animate
+            data-homepage-hero-copy
           >
             <span className="inline-flex items-center gap-2 rounded-full bg-primary-container px-4 py-2 text-xs font-bold uppercase tracking-widest text-primary">
               <Sparkles className="h-4 w-4" />
@@ -236,7 +237,7 @@ export default function LandingPage() {
             <p className="mx-auto mt-6 max-w-3xl text-lg leading-8 text-on-surface-variant sm:text-xl">
               {copy.intro}
             </p>
-            <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row sm:flex-wrap">
+            <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row sm:flex-wrap" data-homepage-hero-actions>
               <Link
                 to={primaryHref}
                 className="primary-gradient inline-flex items-center justify-center gap-2 rounded-full px-6 py-3.5 font-headline text-base font-bold text-on-primary whisper-shadow transition hover:scale-[1.02] active:scale-[0.99] sm:px-8"
@@ -251,33 +252,31 @@ export default function LandingPage() {
                 {user ? copy.viewPath : copy.seePlans}
               </Link>
             </div>
-          </motion.div>
+          </div>
 
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.65, delay: 0.12 }}
+          <div
             className="grid gap-4 lg:grid-cols-[1.35fr_0.65fr]"
+            data-homepage-hero-stage
           >
             <ProductPreview />
-            <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
+            <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1" data-homepage-animate data-homepage-hero-metrics>
               {copy.proofMetrics.map((metric) => (
                 <ProofMetric key={metric.label} {...metric} />
               ))}
             </div>
-          </motion.div>
+          </div>
           </div>
         </div>
       </section>
 
-      <section className="py-14 sm:py-18 lg:py-20">
+      <section className="py-14 sm:py-18 lg:py-20" data-homepage-reveal data-homepage-animate>
         <div className="wp-shell">
           <SectionIntro
             eyebrow={copy.workflowEyebrow}
             title={copy.workflowTitle}
             body={copy.workflowBody}
           />
-          <div className="mt-10 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+          <div className="mt-10 grid gap-5 md:grid-cols-2 xl:grid-cols-4" data-homepage-stagger data-homepage-animate>
             {copy.productPillars.map((pillar) => (
               <PillarCard key={pillar.title} {...pillar} signedIn={Boolean(user)} />
             ))}
@@ -285,7 +284,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="bg-surface-container-low py-14 sm:py-18 lg:py-20">
+      <section className="bg-surface-container-low py-14 sm:py-18 lg:py-20" data-homepage-reveal data-homepage-animate>
         <div className="wp-shell grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
           <div>
             <SectionIntro
@@ -294,7 +293,7 @@ export default function LandingPage() {
               title={copy.pathTitle}
               body={copy.pathBody}
             />
-            <div className="mt-8 space-y-4">
+            <div className="mt-8 space-y-4" data-homepage-stagger data-homepage-animate>
               {copy.learningSteps.map((step) => (
                 <div key={step.number} className="grid grid-cols-[3.5rem_1fr] gap-4 rounded-3xl bg-surface-container-lowest p-5 whisper-shadow">
                   <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-sm font-bold text-on-primary">{step.number}</span>
@@ -310,14 +309,14 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="py-14 sm:py-18 lg:py-20">
+      <section className="py-14 sm:py-18 lg:py-20" data-homepage-reveal data-homepage-animate>
         <div className="wp-shell grid gap-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-stretch">
-          <div className="rounded-[2rem] bg-on-surface p-7 text-surface sm:p-9 lg:p-10">
+          <div className="rounded-[2rem] bg-on-surface p-7 text-surface sm:p-9 lg:p-10" data-homepage-float data-homepage-animate>
             <span className="text-xs font-bold uppercase tracking-widest text-primary-container">{copy.stayEyebrow}</span>
             <h2 className="mt-4 font-headline text-3xl font-extrabold leading-tight text-white sm:text-4xl">
               {copy.stayTitle}
             </h2>
-            <div className="mt-8 grid gap-3 sm:grid-cols-2">
+            <div className="mt-8 grid gap-3 sm:grid-cols-2" data-homepage-stagger data-homepage-animate>
               {copy.outcomes.map((outcome) => (
                 <div key={outcome} className="flex items-center gap-3 rounded-2xl bg-white/8 p-4 text-sm font-semibold text-white">
                   <CheckCircle className="h-5 w-5 shrink-0 text-primary-container" />
@@ -326,7 +325,7 @@ export default function LandingPage() {
               ))}
             </div>
           </div>
-          <div className="rounded-[2rem] border border-surface-container bg-surface-container-lowest p-7 whisper-shadow sm:p-9 lg:p-10">
+          <div className="rounded-[2rem] border border-surface-container bg-surface-container-lowest p-7 whisper-shadow sm:p-9 lg:p-10" data-homepage-float data-homepage-animate>
             <div className="flex items-center gap-3">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-tertiary-container text-tertiary">
                 <LineChart className="h-6 w-6" />
@@ -348,9 +347,9 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="pb-16 sm:pb-20 lg:pb-24">
+      <section className="pb-16 sm:pb-20 lg:pb-24" data-homepage-reveal data-homepage-animate>
         <div className="wp-shell">
-          <div className="overflow-hidden rounded-[2rem] primary-gradient px-6 py-12 text-center text-on-primary whisper-shadow sm:px-10 sm:py-16 lg:px-16">
+          <div className="overflow-hidden rounded-[2rem] primary-gradient px-6 py-12 text-center text-on-primary whisper-shadow sm:px-10 sm:py-16 lg:px-16" data-homepage-float data-homepage-animate>
           <span className="text-xs font-bold uppercase tracking-widest text-on-primary/75">{copy.ctaEyebrow}</span>
           <h2 className="mx-auto mt-4 max-w-3xl font-headline text-3xl font-extrabold leading-tight sm:text-5xl">
             {copy.ctaTitle}
@@ -385,7 +384,7 @@ function ProductPreview() {
   const copy = landingCopy[language];
 
   return (
-    <div className="rounded-[2rem] bg-surface-container-low p-3 whisper-shadow sm:p-4">
+    <div className="rounded-[2rem] bg-surface-container-low p-3 whisper-shadow sm:p-4" data-homepage-animate data-homepage-hero-visual>
       <div className="overflow-hidden rounded-3xl bg-surface-container-lowest">
         <div className="flex items-center justify-between border-b border-surface-container px-4 py-3 sm:px-5">
           <div className="flex items-center gap-2">
@@ -396,7 +395,7 @@ function ProductPreview() {
           <span className="rounded-full bg-primary-container px-3 py-1 text-xs font-bold text-primary">{copy.livePractice}</span>
         </div>
         <div className="grid gap-4 p-4 sm:p-5 lg:grid-cols-[0.9fr_1.1fr]">
-          <div className="space-y-4">
+          <div className="space-y-4" data-homepage-stagger data-homepage-animate>
             <PreviewCard icon={Sparkles} title={copy.productPillars[0].title} body={copy.productPillars[0].description} />
             <PreviewCard icon={Headphones} title={copy.productPillars[1].title} body={copy.productPillars[1].description} />
             <PreviewCard icon={Video} title={copy.productPillars[2].title} body={copy.productPillars[2].description} />
@@ -535,7 +534,7 @@ function JourneyPanel() {
   const copy = landingCopy[language];
 
   return (
-    <div className="rounded-[2rem] bg-surface-container-lowest p-5 whisper-shadow sm:p-7 lg:p-8">
+    <div className="rounded-[2rem] bg-surface-container-lowest p-5 whisper-shadow sm:p-7 lg:p-8" data-homepage-float data-homepage-animate>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-xs font-bold uppercase tracking-widest text-primary">{copy.routeEyebrow}</p>
@@ -546,7 +545,7 @@ function JourneyPanel() {
       <div className="mt-7 h-3 overflow-hidden rounded-full bg-surface-container-high">
         <div className="h-full w-[41%] rounded-full bg-primary" />
       </div>
-      <div className="mt-7 grid gap-4 md:grid-cols-3">
+      <div className="mt-7 grid gap-4 md:grid-cols-3" data-homepage-stagger data-homepage-animate>
         <PathTile icon={Headphones} label={language === 'de' ? 'Hören' : 'Listen'} value={language === 'de' ? '12 Aufgaben' : '12 tasks'} />
         <PathTile icon={Keyboard} label={language === 'de' ? 'Schreiben' : 'Write'} value={language === 'de' ? '8 Aufgaben' : '8 tasks'} />
         <PathTile icon={Mic2} label={language === 'de' ? 'Sprechen' : 'Speak'} value={language === 'de' ? '5 Aufgaben' : '5 tasks'} />
