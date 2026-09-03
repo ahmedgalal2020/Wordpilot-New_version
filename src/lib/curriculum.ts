@@ -676,15 +676,16 @@ function buildLessonVocabulary(
   grammarFocus: string,
   index: number,
 ): CurriculumVocabularyItem[] {
-  const source = realVocabularyItems(language, profile.cefrLevel, theme);
+  const source = [...realVocabularyItems(language, profile.cefrLevel, theme), ...expandedVocabularyItems(language, profile.cefrLevel)];
   const seed = `${language}-${profile.label}-${index}-${lessonTopic(language, theme)}`;
   const domain = lessonDomain(theme);
-  const items = [...source]
+  const ordered = [...source]
     .sort((left, right) => {
       const relevance = relevanceScore(domain, right.term) - relevanceScore(domain, left.term);
       return relevance || hashString(`${seed}-${left.term}`) - hashString(`${seed}-${right.term}`);
-    })
-    .slice(0, 9);
+    });
+  const offset = ((index + profile.levelNumber * 5) * 7) % ordered.length;
+  const items = rotate(ordered, offset).slice(0, 9);
   return items.map((item, itemIndex) => {
     const word = item.term;
     const translation = item.meaning;
@@ -717,7 +718,7 @@ function buildExampleSentences(
   index: number,
 ) {
   const scenario = lessonScenario(language, theme, profile.cefrLevel, index);
-  return authoredLessonLines(language, profile.cefrLevel, scenario.topic, scenario.setting, scenario.need, grammarFocus, vocabulary, chunks, index).slice(
+  return authoredLessonLines(language, profile.cefrLevel, scenario.topic, scenario.setting, scenario.need, grammarFocus, vocabulary, chunks, index + profile.levelNumber * 13).slice(
     0,
     profile.cefrLevel === 'A1' ? 4 : profile.cefrLevel === 'A2' ? 5 : 6,
   );
@@ -745,7 +746,7 @@ function buildLessonReading(
   index: number,
 ) {
   const scenario = lessonScenario(language, theme, profile.cefrLevel, index);
-  return authoredLessonLines(language, profile.cefrLevel, scenario.topic, scenario.setting, scenario.need, grammarFocus, vocabulary, chunks, index)
+  return authoredLessonLines(language, profile.cefrLevel, scenario.topic, scenario.setting, scenario.need, grammarFocus, vocabulary, chunks, index + profile.levelNumber * 13)
     .slice(0, readingSentenceCount(profile.cefrLevel))
     .join(' ');
 }
@@ -799,7 +800,7 @@ function buildListeningScript(
 ) {
   const scenario = lessonScenario(language, theme, profile.cefrLevel, index);
   const chunks = buildLessonChunks(language, profile, theme, grammarFocus, index);
-  const script = authoredLessonLines(language, profile.cefrLevel, scenario.topic, scenario.setting, scenario.need, grammarFocus, vocabulary, chunks, index)
+  const script = authoredLessonLines(language, profile.cefrLevel, scenario.topic, scenario.setting, scenario.need, grammarFocus, vocabulary, chunks, index + profile.levelNumber * 13)
     .slice(0, profile.cefrLevel === 'A1' ? 4 : 5)
     .join(' ');
   return `${script} ${listeningDetail(language, vocabulary[(index + 3) % vocabulary.length].word, index)}`;
@@ -1017,23 +1018,104 @@ function lexicalMeaning(language: CurriculumLanguage, topic: string, term: strin
   return `vocabulaire essentiel`;
 }
 
+function expandedVocabularyItems(language: CurriculumLanguage, band: CefrBand): LexicalEntry[] {
+  const terms = {
+    English: {
+      A1: ['first name', 'surname', 'postcode', 'flat', 'door', 'key', 'bread', 'milk', 'apple', 'cash', 'card', 'minute', 'today', 'tomorrow', 'left', 'right', 'near', 'open', 'closed', 'help'],
+      A2: ['boarding pass', 'single room', 'return ticket', 'lost property', 'health card', 'waiting room', 'invoice', 'refund', 'delivery', 'discount', 'weather forecast', 'invitation', 'deadline', 'colleague', 'shift', 'holiday request', 'confirmation email', 'appointment time', 'traffic jam', 'personal details'],
+      B1: ['maintenance issue', 'customer review', 'training course', 'team update', 'rent increase', 'public transport pass', 'insurance claim', 'job interview', 'workload', 'community project', 'volunteer work', 'energy bill', 'online banking', 'technical problem', 'follow-up email', 'pros and cons', 'shared responsibility', 'unexpected delay', 'practical compromise', 'clear recommendation'],
+      B2: ['feasibility', 'accountability', 'data privacy', 'cost estimate', 'implementation risk', 'long-term impact', 'stakeholder concern', 'legal requirement', 'environmental benefit', 'negotiating position', 'resource allocation', 'measurable outcome', 'quality assurance', 'public perception', 'strategic priority', 'evidence base', 'critical assumption', 'implementation timeline', 'balanced assessment', 'contingency plan'],
+      C1: ['implicit assumption', 'methodological limitation', 'institutional constraint', 'rhetorical framing', 'discursive shift', 'measured concession', 'strategic ambiguity', 'normative claim', 'evidential basis', 'policy rationale', 'register-sensitive phrasing', 'deliberate omission', 'countervailing evidence', 'interpretive pressure', 'qualified endorsement', 'analytical lens', 'professional discretion', 'critical distance', 'nuanced objection', 'synthesis paragraph'],
+      C2: ['pragmatic inference', 'semantic compression', 'rhetorical understatement', 'layered implication', 'ironic distance', 'stylistic economy', 'conceptual slippage', 'diplomatic hedging', 'epistemic caution', 'authorial stance', 'latent contradiction', 'forensic reading', 'register calibration', 'discursive asymmetry', 'elliptical phrasing', 'tonal ambiguity', 'subtle rebuke', 'metadiscursive cue', 'high-level mediation', 'interpretive restraint'],
+    },
+    German: {
+      A1: ['der Vorname', 'der Nachname', 'die Postleitzahl', 'die Wohnung', 'die Tür', 'der Schlüssel', 'das Brot', 'die Milch', 'der Apfel', 'das Bargeld', 'die Karte', 'die Minute', 'heute', 'morgen', 'links', 'rechts', 'in der Nähe', 'geöffnet', 'geschlossen', 'die Hilfe'],
+      A2: ['die Bordkarte', 'das Einzelzimmer', 'die Rückfahrkarte', 'das Fundbüro', 'die Gesundheitskarte', 'das Wartezimmer', 'die Rechnung', 'die Rückerstattung', 'die Lieferung', 'der Rabatt', 'die Wettervorhersage', 'die Einladung', 'die Frist', 'der Kollege', 'die Schicht', 'der Urlaubsantrag', 'die Bestätigungsmail', 'die Uhrzeit', 'der Stau', 'die persönlichen Daten'],
+      B1: ['das Wartungsproblem', 'die Kundenbewertung', 'der Fortbildungskurs', 'die Teamnachricht', 'die Mieterhöhung', 'das Monatsticket', 'der Versicherungsfall', 'das Vorstellungsgespräch', 'die Arbeitsbelastung', 'das Gemeinschaftsprojekt', 'die Freiwilligenarbeit', 'die Energierechnung', 'das Online-Banking', 'das technische Problem', 'die Rückfrage', 'die Vor- und Nachteile', 'die gemeinsame Verantwortung', 'die unerwartete Verzögerung', 'der praktische Kompromiss', 'die klare Empfehlung'],
+      B2: ['die Machbarkeit', 'die Rechenschaftspflicht', 'der Datenschutz', 'die Kostenschätzung', 'das Umsetzungsrisiko', 'die langfristige Wirkung', 'das Anliegen der Beteiligten', 'die rechtliche Vorgabe', 'der ökologische Nutzen', 'die Verhandlungsposition', 'die Ressourcenverteilung', 'das messbare Ergebnis', 'die Qualitätssicherung', 'die öffentliche Wahrnehmung', 'die strategische Priorität', 'die Beleggrundlage', 'die kritische Annahme', 'der Zeitplan für die Umsetzung', 'die ausgewogene Bewertung', 'der Notfallplan'],
+      C1: ['die implizite Annahme', 'die methodische Grenze', 'die institutionelle Einschränkung', 'die rhetorische Rahmung', 'der diskursive Wechsel', 'das abgewogene Zugeständnis', 'die strategische Mehrdeutigkeit', 'der normative Anspruch', 'die Belegbasis', 'die politische Begründung', 'die registersensible Formulierung', 'die bewusste Auslassung', 'der gegenläufige Befund', 'der Deutungsdruck', 'die eingeschränkte Zustimmung', 'die analytische Perspektive', 'das professionelle Ermessen', 'die kritische Distanz', 'der nuancierte Einwand', 'der synthetisierende Absatz'],
+      C2: ['die pragmatische Schlussfolgerung', 'die semantische Verdichtung', 'die rhetorische Untertreibung', 'die vielschichtige Implikation', 'die ironische Distanz', 'die stilistische Ökonomie', 'die begriffliche Verschiebung', 'die diplomatische Absicherung', 'die epistemische Vorsicht', 'die Autorhaltung', 'der latente Widerspruch', 'die forensische Lektüre', 'die Registerkalibrierung', 'die diskursive Asymmetrie', 'die elliptische Formulierung', 'die tonale Mehrdeutigkeit', 'der subtile Tadel', 'das metadiskursive Signal', 'die anspruchsvolle Vermittlung', 'die interpretative Zurückhaltung'],
+    },
+    Spanish: {
+      A1: ['el nombre de pila', 'el apellido', 'el código postal', 'el piso', 'la puerta', 'la llave', 'el pan', 'la leche', 'la manzana', 'el efectivo', 'la tarjeta', 'el minuto', 'hoy', 'mañana', 'a la izquierda', 'a la derecha', 'cerca', 'abierto', 'cerrado', 'la ayuda'],
+      A2: ['la tarjeta de embarque', 'la habitación individual', 'el billete de vuelta', 'la oficina de objetos perdidos', 'la tarjeta sanitaria', 'la sala de espera', 'la factura', 'el reembolso', 'la entrega', 'el descuento', 'la previsión del tiempo', 'la invitación', 'el plazo', 'el compañero', 'el turno', 'la solicitud de vacaciones', 'el correo de confirmación', 'la hora de la cita', 'el atasco', 'los datos personales'],
+      B1: ['el problema de mantenimiento', 'la reseña del cliente', 'el curso de formación', 'la actualización del equipo', 'la subida del alquiler', 'el abono de transporte', 'la reclamación al seguro', 'la entrevista de trabajo', 'la carga de trabajo', 'el proyecto comunitario', 'el voluntariado', 'la factura de energía', 'la banca en línea', 'el problema técnico', 'el correo de seguimiento', 'los pros y los contras', 'la responsabilidad compartida', 'el retraso imprevisto', 'el compromiso práctico', 'la recomendación clara'],
+      B2: ['la viabilidad', 'la rendición de cuentas', 'la privacidad de los datos', 'la estimación de costes', 'el riesgo de implementación', 'el impacto a largo plazo', 'la preocupación de los actores', 'el requisito legal', 'el beneficio ambiental', 'la posición negociadora', 'la asignación de recursos', 'el resultado medible', 'el control de calidad', 'la percepción pública', 'la prioridad estratégica', 'la base probatoria', 'la suposición crítica', 'el calendario de implementación', 'la evaluación equilibrada', 'el plan de contingencia'],
+      C1: ['la suposición implícita', 'la limitación metodológica', 'la restricción institucional', 'el encuadre retórico', 'el giro discursivo', 'la concesión medida', 'la ambigüedad estratégica', 'la afirmación normativa', 'la base empírica', 'la justificación política', 'la formulación sensible al registro', 'la omisión deliberada', 'la evidencia contraria', 'la presión interpretativa', 'el respaldo matizado', 'la lente analítica', 'la discreción profesional', 'la distancia crítica', 'la objeción matizada', 'el párrafo de síntesis'],
+      C2: ['la inferencia pragmática', 'la compresión semántica', 'la subestimación retórica', 'la implicación estratificada', 'la distancia irónica', 'la economía estilística', 'el deslizamiento conceptual', 'la cobertura diplomática', 'la cautela epistémica', 'la postura autoral', 'la contradicción latente', 'la lectura forense', 'la calibración del registro', 'la asimetría discursiva', 'la formulación elíptica', 'la ambigüedad tonal', 'el reproche sutil', 'la señal metadiscursiva', 'la mediación de alto nivel', 'la contención interpretativa'],
+    },
+    Italian: {
+      A1: ['il nome proprio', 'il cognome', 'il codice postale', 'l’appartamento', 'la porta', 'la chiave', 'il pane', 'il latte', 'la mela', 'i contanti', 'la carta', 'il minuto', 'oggi', 'domani', 'a sinistra', 'a destra', 'vicino', 'aperto', 'chiuso', 'l’aiuto'],
+      A2: ['la carta d’imbarco', 'la camera singola', 'il biglietto di ritorno', 'l’ufficio oggetti smarriti', 'la tessera sanitaria', 'la sala d’attesa', 'la fattura', 'il rimborso', 'la consegna', 'lo sconto', 'le previsioni del tempo', 'l’invito', 'la scadenza', 'il collega', 'il turno', 'la richiesta di ferie', 'l’email di conferma', 'l’orario dell’appuntamento', 'l’ingorgo', 'i dati personali'],
+      B1: ['il problema di manutenzione', 'la recensione del cliente', 'il corso di formazione', 'l’aggiornamento del team', 'l’aumento dell’affitto', 'l’abbonamento ai trasporti', 'la richiesta all’assicurazione', 'il colloquio di lavoro', 'il carico di lavoro', 'il progetto di comunità', 'il volontariato', 'la bolletta energetica', 'l’home banking', 'il problema tecnico', 'l’email di follow-up', 'i pro e i contro', 'la responsabilità condivisa', 'il ritardo imprevisto', 'il compromesso pratico', 'la raccomandazione chiara'],
+      B2: ['la fattibilità', 'la responsabilità pubblica', 'la privacy dei dati', 'la stima dei costi', 'il rischio di attuazione', 'l’impatto a lungo termine', 'la preoccupazione degli stakeholder', 'il requisito legale', 'il beneficio ambientale', 'la posizione negoziale', 'l’allocazione delle risorse', 'il risultato misurabile', 'il controllo qualità', 'la percezione pubblica', 'la priorità strategica', 'la base probatoria', 'il presupposto critico', 'il calendario di attuazione', 'la valutazione equilibrata', 'il piano di emergenza'],
+      C1: ['il presupposto implicito', 'il limite metodologico', 'il vincolo istituzionale', 'l’inquadramento retorico', 'lo spostamento discorsivo', 'la concessione misurata', 'l’ambiguità strategica', 'l’affermazione normativa', 'la base empirica', 'la giustificazione politica', 'la formulazione sensibile al registro', 'l’omissione deliberata', 'la prova contraria', 'la pressione interpretativa', 'l’approvazione qualificata', 'la lente analitica', 'la discrezionalità professionale', 'la distanza critica', 'l’obiezione sfumata', 'il paragrafo di sintesi'],
+      C2: ['l’inferenza pragmatica', 'la compressione semantica', 'l’understatement retorico', 'l’implicazione stratificata', 'la distanza ironica', 'l’economia stilistica', 'lo slittamento concettuale', 'la cautela diplomatica', 'la prudenza epistemica', 'la postura autoriale', 'la contraddizione latente', 'la lettura forense', 'la calibrazione del registro', 'l’asimmetria discorsiva', 'la formulazione ellittica', 'l’ambiguità tonale', 'il rimprovero sottile', 'il segnale metadiscorsivo', 'la mediazione di alto livello', 'la sobrietà interpretativa'],
+    },
+    French: {
+      A1: ['le prénom', 'le nom de famille', 'le code postal', 'l’appartement', 'la porte', 'la clé', 'le pain', 'le lait', 'la pomme', 'l’argent liquide', 'la carte', 'la minute', 'aujourd’hui', 'demain', 'à gauche', 'à droite', 'près d’ici', 'ouvert', 'fermé', 'l’aide'],
+      A2: ['la carte d’embarquement', 'la chambre simple', 'le billet retour', 'le bureau des objets trouvés', 'la carte vitale', 'la salle d’attente', 'la facture', 'le remboursement', 'la livraison', 'la réduction', 'la météo', 'l’invitation', 'le délai', 'le collègue', 'le service', 'la demande de congé', 'le courriel de confirmation', 'l’heure du rendez-vous', 'l’embouteillage', 'les données personnelles'],
+      B1: ['le problème d’entretien', 'l’avis client', 'la formation professionnelle', 'le point d’équipe', 'l’augmentation du loyer', 'l’abonnement de transport', 'la déclaration d’assurance', 'l’entretien d’embauche', 'la charge de travail', 'le projet associatif', 'le bénévolat', 'la facture d’énergie', 'la banque en ligne', 'le problème technique', 'le courriel de suivi', 'les avantages et les inconvénients', 'la responsabilité partagée', 'le retard imprévu', 'le compromis pratique', 'la recommandation claire'],
+      B2: ['la faisabilité', 'la redevabilité', 'la confidentialité des données', 'l’estimation des coûts', 'le risque de mise en oeuvre', 'l’impact à long terme', 'la préoccupation des parties prenantes', 'l’exigence juridique', 'le bénéfice environnemental', 'la position de négociation', 'l’allocation des ressources', 'le résultat mesurable', 'l’assurance qualité', 'la perception publique', 'la priorité stratégique', 'la base factuelle', 'l’hypothèse critique', 'le calendrier de mise en oeuvre', 'l’évaluation équilibrée', 'le plan de secours'],
+      C1: ['l’hypothèse implicite', 'la limite méthodologique', 'la contrainte institutionnelle', 'le cadrage rhétorique', 'le glissement discursif', 'la concession mesurée', 'l’ambiguïté stratégique', 'l’affirmation normative', 'la base empirique', 'la justification politique', 'la formulation sensible au registre', 'l’omission délibérée', 'la preuve contraire', 'la pression interprétative', 'l’approbation nuancée', 'la grille d’analyse', 'la marge d’appréciation professionnelle', 'la distance critique', 'l’objection nuancée', 'le paragraphe de synthèse'],
+      C2: ['l’inférence pragmatique', 'la compression sémantique', 'l’euphémisation rhétorique', 'l’implication stratifiée', 'la distance ironique', 'l’économie stylistique', 'le glissement conceptuel', 'la précaution diplomatique', 'la prudence épistémique', 'la posture auctoriale', 'la contradiction latente', 'la lecture forensique', 'le calibrage du registre', 'l’asymétrie discursive', 'la formulation elliptique', 'l’ambiguïté tonale', 'le reproche subtil', 'le signal métadiscursif', 'la médiation de haut niveau', 'la retenue interprétative'],
+    },
+  } satisfies Record<CurriculumLanguage, Record<CefrBand, string[]>>;
+  return terms[language][band].map((term) => ({ term, meaning: lexicalMeaning(language, '', term) }));
+}
+
 function lessonScenario(language: CurriculumLanguage, theme: string, band: CefrBand, index: number) {
   const topic = lessonTopic(language, theme);
   const settings = {
-    English: ['a front desk', 'a local train station', 'a course office', 'a clinic reception', 'a team meeting', 'an online application', 'a neighbourhood event', 'a customer support chat'],
-    German: ['an der Rezeption', 'am Bahnhof', 'im Kursbüro', 'in der Arztpraxis', 'in einer Teambesprechung', 'bei einer Online-Bewerbung', 'bei einer Veranstaltung im Viertel', 'im Kundendienst-Chat'],
-    Spanish: ['en recepción', 'en la estación', 'en la oficina del curso', 'en la consulta médica', 'en una reunión de equipo', 'en una solicitud en línea', 'en un evento del barrio', 'en un chat de atención al cliente'],
-    Italian: ['alla reception', 'in stazione', 'nell’ufficio del corso', 'in ambulatorio', 'in una riunione di team', 'in una domanda online', 'a un evento di quartiere', 'in una chat di assistenza'],
-    French: ['à l’accueil', 'à la gare', 'au secrétariat du cours', 'au cabinet médical', 'en réunion d’équipe', 'dans une candidature en ligne', 'lors d’un événement de quartier', 'dans un chat du service client'],
-  } satisfies Record<CurriculumLanguage, string[]>;
+    English: {
+      A1: ['at a cafe counter', 'in a small shop', 'at school', 'at the bus stop', 'at home', 'at a clinic desk', 'in a language class', 'at a ticket machine'],
+      A2: ['during a travel delay', 'in a hotel message', 'at a repair appointment', 'in a simple workplace chat', 'on a neighbourhood noticeboard', 'during a planning call', 'at a pharmacy', 'in an email thread'],
+      B1: ['in a workplace update', 'on a community forum', 'during a complaint call', 'in a job interview', 'at a housing office', 'in a project meeting', 'after a course feedback survey', 'in a customer support exchange'],
+      B2: ['in a negotiation meeting', 'inside a policy briefing', 'during a stakeholder review', 'in a formal proposal', 'in a data-privacy discussion', 'during a panel debate', 'in a risk assessment', 'in a professional report'],
+      C1: ['in an editorial response', 'during an academic seminar', 'inside a strategy memo', 'in a diplomatic email', 'during a tense board discussion', 'in a critical review', 'in a policy consultation', 'during a professional mediation'],
+      C2: ['in an expert panel', 'inside a literary commentary', 'during high-stakes mediation', 'in a subtle editorial', 'during a policy dispute', 'in a rhetorical critique', 'inside a legal-style argument', 'in a register-sensitive rewrite'],
+    },
+    German: {
+      A1: ['am Tresen im Café', 'in einem kleinen Geschäft', 'in der Schule', 'an der Bushaltestelle', 'zu Hause', 'am Empfang einer Praxis', 'im Sprachkurs', 'am Fahrkartenautomaten'],
+      A2: ['bei einer Reiseverspätung', 'in einer Hotelnachricht', 'bei einem Reparaturtermin', 'in einem einfachen Arbeitschat', 'auf einem Aushang im Viertel', 'in einem Planungsgespräch', 'in der Apotheke', 'in einem E-Mail-Verlauf'],
+      B1: ['in einer Arbeitsbesprechung', 'in einem Nachbarschaftsforum', 'bei einem Beschwerdeanruf', 'im Vorstellungsgespräch', 'im Wohnungsamt', 'in einer Projektbesprechung', 'nach einer Kursumfrage', 'im Kundendienstgespräch'],
+      B2: ['in einer Verhandlung', 'in einem politischen Briefing', 'bei einer Prüfung durch Beteiligte', 'in einem formellen Vorschlag', 'in einer Datenschutzdiskussion', 'in einer Podiumsdiskussion', 'in einer Risikoanalyse', 'in einem Fachbericht'],
+      C1: ['in einer redaktionellen Antwort', 'in einem akademischen Seminar', 'in einer Strategienotiz', 'in einer diplomatischen E-Mail', 'in einer angespannten Vorstandsrunde', 'in einer kritischen Rezension', 'in einer politischen Anhörung', 'in einer professionellen Mediation'],
+      C2: ['in einem Expertengremium', 'in einem literarischen Kommentar', 'in einer Vermittlung mit hohem Risiko', 'in einem subtilen Leitartikel', 'in einem politischen Streitgespräch', 'in einer rhetorischen Kritik', 'in einer juristisch geprägten Argumentation', 'bei einer registersensiblen Umformulierung'],
+    },
+    Spanish: {
+      A1: ['en la barra de una cafetería', 'en una tienda pequeña', 'en la escuela', 'en la parada del autobús', 'en casa', 'en recepción de una consulta', 'en una clase de idiomas', 'en una máquina de billetes'],
+      A2: ['durante un retraso de viaje', 'en un mensaje de hotel', 'en una cita de reparación', 'en un chat laboral sencillo', 'en un aviso del barrio', 'durante una llamada de planificación', 'en la farmacia', 'en un hilo de correo'],
+      B1: ['en una actualización laboral', 'en un foro comunitario', 'durante una llamada de queja', 'en una entrevista de trabajo', 'en una oficina de vivienda', 'en una reunión de proyecto', 'después de una encuesta del curso', 'en una conversación de atención al cliente'],
+      B2: ['en una reunión de negociación', 'en un informe de política', 'durante una revisión con actores implicados', 'en una propuesta formal', 'en una discusión sobre privacidad de datos', 'en un debate de panel', 'en una evaluación de riesgos', 'en un informe profesional'],
+      C1: ['en una respuesta editorial', 'durante un seminario académico', 'en un memorando estratégico', 'en un correo diplomático', 'durante una reunión directiva tensa', 'en una crítica cultural', 'en una consulta de política pública', 'durante una mediación profesional'],
+      C2: ['en un panel de expertos', 'en un comentario literario', 'durante una mediación de alto riesgo', 'en un editorial sutil', 'durante una disputa política', 'en una crítica retórica', 'en un argumento de estilo jurídico', 'en una reescritura sensible al registro'],
+    },
+    Italian: {
+      A1: ['al banco di un bar', 'in un piccolo negozio', 'a scuola', 'alla fermata dell’autobus', 'a casa', 'alla reception di uno studio medico', 'in un corso di lingua', 'alla biglietteria automatica'],
+      A2: ['durante un ritardo di viaggio', 'in un messaggio dell’hotel', 'a un appuntamento per una riparazione', 'in una semplice chat di lavoro', 'su un avviso di quartiere', 'durante una chiamata di pianificazione', 'in farmacia', 'in uno scambio di email'],
+      B1: ['in un aggiornamento di lavoro', 'in un forum di comunità', 'durante una chiamata di reclamo', 'a un colloquio di lavoro', 'in un ufficio casa', 'in una riunione di progetto', 'dopo un sondaggio del corso', 'in uno scambio con l’assistenza clienti'],
+      B2: ['in una riunione negoziale', 'in un briefing politico', 'durante una revisione con gli stakeholder', 'in una proposta formale', 'in una discussione sulla privacy dei dati', 'in un dibattito pubblico', 'in una valutazione dei rischi', 'in una relazione professionale'],
+      C1: ['in una risposta editoriale', 'durante un seminario accademico', 'in una nota strategica', 'in un’email diplomatica', 'durante una riunione direttiva tesa', 'in una recensione critica', 'in una consultazione politica', 'durante una mediazione professionale'],
+      C2: ['in un panel di esperti', 'in un commento letterario', 'durante una mediazione ad alta posta in gioco', 'in un editoriale sottile', 'durante una disputa politica', 'in una critica retorica', 'in un’argomentazione di taglio giuridico', 'in una riscrittura sensibile al registro'],
+    },
+    French: {
+      A1: ['au comptoir d’un café', 'dans une petite boutique', 'à l’école', 'à l’arrêt de bus', 'à la maison', 'à l’accueil d’un cabinet médical', 'dans un cours de langue', 'à un distributeur de billets'],
+      A2: ['pendant un retard de voyage', 'dans un message d’hôtel', 'lors d’un rendez-vous de réparation', 'dans un simple chat professionnel', 'sur une affiche de quartier', 'pendant un appel de planification', 'à la pharmacie', 'dans un échange de courriels'],
+      B1: ['dans un point d’équipe', 'sur un forum associatif', 'pendant un appel de réclamation', 'dans un entretien d’embauche', 'dans un bureau du logement', 'en réunion de projet', 'après une enquête de cours', 'dans un échange avec le service client'],
+      B2: ['en réunion de négociation', 'dans une note politique', 'pendant une revue avec les parties prenantes', 'dans une proposition formelle', 'dans une discussion sur la confidentialité des données', 'dans un débat public', 'dans une évaluation des risques', 'dans un rapport professionnel'],
+      C1: ['dans une réponse éditoriale', 'pendant un séminaire universitaire', 'dans une note stratégique', 'dans un courriel diplomatique', 'pendant une réunion de direction tendue', 'dans une critique culturelle', 'dans une consultation publique', 'pendant une médiation professionnelle'],
+      C2: ['dans un panel d’experts', 'dans un commentaire littéraire', 'pendant une médiation à forts enjeux', 'dans un éditorial subtil', 'pendant un différend politique', 'dans une critique rhétorique', 'dans une argumentation de style juridique', 'dans une réécriture sensible au registre'],
+    },
+  } satisfies Record<CurriculumLanguage, Record<CefrBand, string[]>>;
   const needs = {
-    English: ['ask for a clear answer', 'explain a change politely', 'compare two realistic options', 'report what happened', 'request a practical solution', 'summarize the decision'],
-    German: ['eine klare Antwort erfragen', 'eine Änderung höflich erklären', 'zwei realistische Optionen vergleichen', 'berichten, was passiert ist', 'um eine praktische Lösung bitten', 'die Entscheidung zusammenfassen'],
-    Spanish: ['pedir una respuesta clara', 'explicar un cambio con cortesía', 'comparar dos opciones realistas', 'contar lo que ocurrió', 'pedir una solución práctica', 'resumir la decisión'],
-    Italian: ['chiedere una risposta chiara', 'spiegare un cambiamento con cortesia', 'confrontare due opzioni realistiche', 'raccontare cosa è successo', 'chiedere una soluzione pratica', 'riassumere la decisione'],
-    French: ['demander une réponse claire', 'expliquer un changement poliment', 'comparer deux options réalistes', 'raconter ce qui s’est passé', 'demander une solution pratique', 'résumer la décision'],
+    English: ['get a clear answer', 'explain a small change politely', 'choose between two realistic options', 'report what happened', 'ask for a practical solution', 'summarize the decision'],
+    German: ['eine klare Antwort zu bekommen', 'eine kleine Änderung höflich zu erklären', 'zwischen zwei realistischen Optionen zu wählen', 'zu berichten, was passiert ist', 'um eine praktische Lösung zu bitten', 'die Entscheidung zusammenzufassen'],
+    Spanish: ['pedir una respuesta clara', 'explicar un pequeño cambio con cortesía', 'elegir entre dos opciones realistas', 'contar lo que ocurrió', 'pedir una solución práctica', 'resumir la decisión'],
+    Italian: ['chiedere una risposta chiara', 'spiegare un piccolo cambiamento con cortesia', 'scegliere tra due opzioni realistiche', 'raccontare che cosa è successo', 'chiedere una soluzione pratica', 'riassumere la decisione'],
+    French: ['demander une réponse claire', 'mieux expliquer un petit changement', 'choisir entre deux options réalistes', 'raconter ce qui s’est passé', 'demander une solution pratique', 'résumer la décision'],
   } satisfies Record<CurriculumLanguage, string[]>;
-  const setting = settings[language][index % settings[language].length];
+  const setting = settings[language][band][index % settings[language][band].length];
   const need = needs[language][index % needs[language].length];
   return {
     topic,
@@ -1270,58 +1352,304 @@ function authoredLessonLines(
       advanced ? `La meilleure réponse reste concise tout en préservant la nuance.` : `La personne qui écoute sait quoi faire ensuite.`,
     ],
   } satisfies Record<CurriculumLanguage, string[]>;
-  return [...sets[language], `${sets[language][1]} ${advanced ? sets[language][7] : sets[language][3]}`.replace(first, third)];
+  const base = sets[language];
+  return [readingOpening(language, band, topic, setting, index), ...base.slice(1), `${base[1]} ${advanced ? base[7] : base[3]}`.replace(first, third)];
 }
 
 function capitalizeFirst(value: string) {
   return value ? `${value.charAt(0).toLocaleUpperCase()}${value.slice(1)}` : value;
 }
 
+function readingOpening(language: CurriculumLanguage, band: CefrBand, topic: string, setting: string, index: number) {
+  const variants = {
+    English: {
+      A1: [`Text message: I am here now, and I need help with "${topic}".`, `Short note: Please bring the form and wait near the door.`, `Simple dialogue: "Hello. Is this the right place?"`, `Profile: My name is Lina, and I learn after work.`, `Sign: Open today from nine to five.`, `Invitation: Come at four and bring a small notebook.`, `Menu note: Coffee, water, and bread are ready.`, `Timetable: The next bus leaves in ten minutes.`],
+      A2: [`Voice message: The appointment has moved, so please check the new time.`, `Travel update: The platform changed after the delay.`, `Hotel email: Your room is ready, but payment is due at reception.`, `Review: The service was friendly, although the queue was long.`, `Instruction: Fill in your details before you send the request.`, `Complaint: The delivery arrived late and one item was missing.`, `Planning note: We can meet after work if the weather is good.`, `Story: Yesterday the ticket machine stopped working.`],
+      B1: [`Forum post: I solved the problem by asking for a written confirmation.`, `Workplace email: The team needs a clearer plan before Friday.`, `Experience report: The interview felt difficult at first, but the feedback helped.`, `Customer response: We understand the complaint and propose a practical solution.`, `Article: Many learners improve when practice is short but regular.`, `Community notice: Volunteers will discuss the schedule and responsibilities.`, `Opinion paragraph: The new route is useful, yet it creates a problem for older residents.`, `Narrative: The decision changed after everyone described their experience.`],
+      B2: [`Briefing: The proposal is feasible only if the cost estimate is realistic.`, `Debate excerpt: One side values speed, while the other stresses accountability.`, `Report: The data supports the policy, but the implementation risk remains high.`, `Formal email: We can approve the timeline if the privacy safeguards are clearer.`, `Review article: The public benefit is visible, though the tradeoff deserves attention.`, `Negotiation note: Both teams accept the goal but disagree about resources.`, `Risk memo: The strongest argument depends on an assumption that has not been tested.`, `Case analysis: The outcome looks positive, but the benchmark is weak.`],
+      C1: [`Editorial: The argument gains force by conceding uncertainty before making its claim.`, `Seminar note: The speaker distinguishes evidence from interpretation with unusual care.`, `Strategy memo: The recommendation is persuasive because it anticipates the strongest objection.`, `Diplomatic email: The wording preserves cooperation while refusing the original request.`, `Critical review: The text is elegant, but its central premise remains underexamined.`, `Policy consultation: Several stakeholders agree on the goal but contest the framing.`, `Professional mediation: The conflict softens once both sides name what they cannot concede.`, `Essay excerpt: The paragraph links credibility to restraint rather than certainty.`],
+      C2: [`Rhetorical commentary: The praise is so carefully limited that it becomes a warning.`, `Literary excerpt: What is omitted carries more weight than what is openly stated.`, `Expert panel: The disagreement turns on register, implication, and institutional memory.`, `Policy analysis: The compromise appears neutral, yet it redistributes responsibility quietly.`, `Satirical note: The politeness is flawless, which is precisely why the criticism lands.`, `Legal-style argument: The decisive clause narrows the claim without announcing retreat.`, `Mediation brief: The speaker must preserve ambiguity without sounding evasive.`, `Stylistic rewrite: A blunt refusal becomes a diplomatic reservation through syntax alone.`],
+    },
+    German: {
+      A1: [`SMS: Ich bin jetzt hier und brauche Hilfe mit "${topic}".`, `Kurze Notiz: Bitte bringen Sie das Formular mit und warten Sie an der Tür.`, `Einfacher Dialog: "Guten Tag. Bin ich hier richtig?"`, `Profil: Ich heiße Lina und lerne nach der Arbeit.`, `Schild: Heute von neun bis fünf geöffnet.`, `Einladung: Kommen Sie um vier und bringen Sie ein kleines Heft mit.`, `Menü-Notiz: Kaffee, Wasser und Brot sind fertig.`, `Fahrplan: Der nächste Bus fährt in zehn Minuten.`],
+      A2: [`Sprachnachricht: Der Termin wurde verschoben, bitte prüfen Sie die neue Uhrzeit.`, `Reisehinweis: Der Bahnsteig hat sich nach der Verspätung geändert.`, `Hotel-E-Mail: Ihr Zimmer ist bereit, aber die Zahlung erfolgt am Empfang.`, `Bewertung: Der Service war freundlich, obwohl die Warteschlange lang war.`, `Anweisung: Tragen Sie Ihre Daten ein, bevor Sie die Anfrage senden.`, `Beschwerde: Die Lieferung kam spät an und ein Artikel fehlte.`, `Planungsnotiz: Wir können uns nach der Arbeit treffen, wenn das Wetter gut ist.`, `Kurze Geschichte: Gestern funktionierte der Fahrkartenautomat nicht.`],
+      B1: [`Forenbeitrag: Ich löste das Problem, indem ich um eine schriftliche Bestätigung bat.`, `Arbeits-E-Mail: Das Team braucht vor Freitag einen klareren Plan.`, `Erfahrungsbericht: Das Gespräch war zuerst schwierig, aber das Feedback half.`, `Kundenantwort: Wir verstehen die Beschwerde und schlagen eine praktische Lösung vor.`, `Artikel: Viele Lernende machen Fortschritte, wenn die Übung kurz, aber regelmäßig ist.`, `Aushang: Freiwillige besprechen den Zeitplan und die Verantwortlichkeiten.`, `Meinungsabschnitt: Die neue Verbindung ist nützlich, schafft aber ein Problem für ältere Bewohner.`, `Erzählung: Die Entscheidung änderte sich, nachdem alle ihre Erfahrung beschrieben hatten.`],
+      B2: [`Briefing: Der Vorschlag ist nur machbar, wenn die Kostenschätzung realistisch ist.`, `Debattenauszug: Eine Seite legt Wert auf Tempo, die andere auf Rechenschaftspflicht.`, `Bericht: Die Daten stützen die Richtlinie, doch das Umsetzungsrisiko bleibt hoch.`, `Formelle E-Mail: Wir können den Zeitplan billigen, wenn der Datenschutz klarer ist.`, `Fachartikel: Der öffentliche Nutzen ist sichtbar, aber die Abwägung verdient Aufmerksamkeit.`, `Verhandlungsnotiz: Beide Teams akzeptieren das Ziel, streiten aber über Ressourcen.`, `Risikovermerk: Das stärkste Argument hängt von einer ungeprüften Annahme ab.`, `Fallanalyse: Das Ergebnis wirkt positiv, doch der Vergleichswert ist schwach.`],
+      C1: [`Leitartikel: Das Argument gewinnt an Kraft, weil es Unsicherheit einräumt, bevor es seine These formuliert.`, `Seminarnotiz: Die Sprecherin trennt Beleg und Deutung mit ungewöhnlicher Sorgfalt.`, `Strategienotiz: Die Empfehlung überzeugt, weil sie den stärksten Einwand vorwegnimmt.`, `Diplomatische E-Mail: Die Formulierung bewahrt Kooperation und lehnt den ursprünglichen Wunsch dennoch ab.`, `Kritische Rezension: Der Text ist elegant, doch seine zentrale Prämisse bleibt zu wenig geprüft.`, `Politische Anhörung: Mehrere Beteiligte teilen das Ziel, bestreiten aber die Rahmung.`, `Professionelle Mediation: Der Konflikt entspannt sich, sobald beide Seiten benennen, worauf sie nicht verzichten können.`, `Essayauszug: Der Absatz verbindet Glaubwürdigkeit mit Zurückhaltung statt mit Gewissheit.`],
+      C2: [`Rhetorischer Kommentar: Das Lob ist so sorgfältig begrenzt, dass es zur Warnung wird.`, `Literarischer Auszug: Was ausgelassen wird, wiegt schwerer als das ausdrücklich Gesagte.`, `Expertengremium: Der Dissens dreht sich um Register, Implikation und institutionelles Gedächtnis.`, `Politikanalyse: Der Kompromiss wirkt neutral und verteilt Verantwortung doch leise um.`, `Satirische Notiz: Die Höflichkeit ist makellos, und gerade deshalb trifft die Kritik.`, `Juristische Argumentation: Die entscheidende Klausel verengt die These, ohne Rückzug anzukündigen.`, `Mediationsbriefing: Die Sprecherin muss Mehrdeutigkeit bewahren, ohne ausweichend zu wirken.`, `Stilistische Umformulierung: Aus einer scharfen Ablehnung wird allein durch Syntax ein diplomatischer Vorbehalt.`],
+    },
+    Spanish: {
+      A1: [`Mensaje: Estoy aquí ahora y necesito ayuda con "${topic}".`, `Nota breve: Trae el formulario y espera junto a la puerta.`, `Diálogo sencillo: "Hola. ¿Es este el lugar correcto?"`, `Perfil: Me llamo Lina y estudio después del trabajo.`, `Cartel: Abierto hoy de nueve a cinco.`, `Invitación: Ven a las cuatro y trae un cuaderno pequeño.`, `Nota de menú: El café, el agua y el pan están listos.`, `Horario: El próximo autobús sale en diez minutos.`],
+      A2: [`Mensaje de voz: La cita cambió, así que revisa la nueva hora.`, `Aviso de viaje: El andén cambió después del retraso.`, `Correo del hotel: Tu habitación está lista, pero el pago se hace en recepción.`, `Reseña: El servicio fue amable, aunque la fila era larga.`, `Instrucción: Rellena tus datos antes de enviar la solicitud.`, `Queja: La entrega llegó tarde y faltaba un artículo.`, `Nota de planificación: Podemos vernos después del trabajo si hace buen tiempo.`, `Historia breve: Ayer la máquina de billetes dejó de funcionar.`],
+      B1: [`Entrada de foro: Resolví el problema pidiendo una confirmación por escrito.`, `Correo laboral: El equipo necesita un plan más claro antes del viernes.`, `Relato de experiencia: La entrevista fue difícil al principio, pero la opinión recibida ayudó.`, `Respuesta al cliente: Entendemos la queja y proponemos una solución práctica.`, `Artículo: Muchos estudiantes mejoran cuando la práctica es breve pero regular.`, `Aviso comunitario: Los voluntarios hablarán del horario y de las responsabilidades.`, `Párrafo de opinión: La nueva ruta es útil, pero crea un problema para los vecinos mayores.`, `Narración: La decisión cambió después de que todos contaran su experiencia.`],
+      B2: [`Informe breve: La propuesta es viable solo si la estimación de costes es realista.`, `Extracto de debate: Un lado valora la rapidez, mientras el otro insiste en la rendición de cuentas.`, `Reporte: Los datos apoyan la política, pero el riesgo de implementación sigue siendo alto.`, `Correo formal: Podemos aprobar el calendario si las garantías de privacidad son más claras.`, `Artículo de análisis: El beneficio público es visible, aunque la compensación merece atención.`, `Nota de negociación: Ambos equipos aceptan el objetivo, pero discrepan sobre los recursos.`, `Memorando de riesgo: El argumento más fuerte depende de una suposición no comprobada.`, `Análisis de caso: El resultado parece positivo, pero el indicador de referencia es débil.`],
+      C1: [`Editorial: El argumento gana fuerza al admitir incertidumbre antes de formular su tesis.`, `Nota de seminario: La ponente distingue evidencia e interpretación con especial cuidado.`, `Memorando estratégico: La recomendación convence porque anticipa la objeción más fuerte.`, `Correo diplomático: La redacción conserva la cooperación mientras rechaza la petición inicial.`, `Crítica cultural: El texto es elegante, pero su premisa central queda poco examinada.`, `Consulta pública: Varios actores comparten el objetivo, pero discuten el encuadre.`, `Mediación profesional: El conflicto se suaviza cuando ambas partes nombran lo que no pueden ceder.`, `Fragmento de ensayo: El párrafo vincula la credibilidad con la contención, no con la certeza.`],
+      C2: [`Comentario retórico: El elogio está tan cuidadosamente limitado que se convierte en advertencia.`, `Fragmento literario: Lo omitido pesa más que lo que se dice abiertamente.`, `Panel de expertos: El desacuerdo gira en torno al registro, la implicación y la memoria institucional.`, `Análisis político: El compromiso parece neutral, pero redistribuye la responsabilidad en silencio.`, `Nota satírica: La cortesía es impecable, y por eso mismo la crítica funciona.`, `Argumento jurídico: La cláusula decisiva estrecha la tesis sin anunciar retirada.`, `Informe de mediación: La hablante debe conservar la ambigüedad sin sonar evasiva.`, `Reescritura estilística: Una negativa directa se transforma en reserva diplomática solo por la sintaxis.`],
+    },
+    Italian: {
+      A1: [`Messaggio: Sono qui adesso e ho bisogno di aiuto con "${topic}".`, `Nota breve: Porta il modulo e aspetta vicino alla porta.`, `Dialogo semplice: "Buongiorno. È questo il posto giusto?"`, `Profilo: Mi chiamo Lina e studio dopo il lavoro.`, `Cartello: Aperto oggi dalle nove alle cinque.`, `Invito: Vieni alle quattro e porta un quaderno piccolo.`, `Nota del menu: Caffè, acqua e pane sono pronti.`, `Orario: Il prossimo autobus parte tra dieci minuti.`],
+      A2: [`Messaggio vocale: L’appuntamento è cambiato, quindi controlla il nuovo orario.`, `Avviso di viaggio: Il binario è cambiato dopo il ritardo.`, `Email dell’hotel: La camera è pronta, ma il pagamento si fa alla reception.`, `Recensione: Il servizio era gentile, anche se la fila era lunga.`, `Istruzione: Inserisci i tuoi dati prima di inviare la richiesta.`, `Reclamo: La consegna è arrivata tardi e mancava un articolo.`, `Nota di pianificazione: Possiamo incontrarci dopo il lavoro se il tempo è buono.`, `Breve storia: Ieri la biglietteria automatica ha smesso di funzionare.`],
+      B1: [`Post sul forum: Ho risolto il problema chiedendo una conferma scritta.`, `Email di lavoro: Il team ha bisogno di un piano più chiaro entro venerdì.`, `Racconto di esperienza: Il colloquio all’inizio era difficile, ma il feedback ha aiutato.`, `Risposta al cliente: Comprendiamo il reclamo e proponiamo una soluzione pratica.`, `Articolo: Molti studenti migliorano quando la pratica è breve ma regolare.`, `Avviso di comunità: I volontari discuteranno calendario e responsabilità.`, `Paragrafo di opinione: La nuova linea è utile, però crea un problema per i residenti anziani.`, `Narrazione: La decisione è cambiata dopo che tutti hanno descritto la propria esperienza.`],
+      B2: [`Briefing: La proposta è fattibile solo se la stima dei costi è realistica.`, `Estratto di dibattito: Una parte valorizza la rapidità, mentre l’altra insiste sulla responsabilità.`, `Relazione: I dati sostengono la politica, ma il rischio di attuazione resta alto.`, `Email formale: Possiamo approvare il calendario se le garanzie sulla privacy sono più chiare.`, `Articolo di analisi: Il beneficio pubblico è visibile, anche se il compromesso merita attenzione.`, `Nota negoziale: Entrambi i team accettano l’obiettivo, ma non concordano sulle risorse.`, `Promemoria sui rischi: L’argomento più forte dipende da un presupposto non verificato.`, `Analisi di caso: Il risultato sembra positivo, ma l’indicatore di riferimento è debole.`],
+      C1: [`Editoriale: L’argomento acquista forza perché ammette l’incertezza prima di formulare la tesi.`, `Nota di seminario: La relatrice distingue prova e interpretazione con particolare cura.`, `Nota strategica: La raccomandazione convince perché anticipa l’obiezione più forte.`, `Email diplomatica: La formulazione preserva la cooperazione pur respingendo la richiesta iniziale.`, `Recensione critica: Il testo è elegante, ma la premessa centrale resta poco esaminata.`, `Consultazione politica: Diversi stakeholder condividono l’obiettivo, ma contestano l’inquadramento.`, `Mediazione professionale: Il conflitto si attenua quando entrambe le parti nominano ciò a cui non possono rinunciare.`, `Estratto di saggio: Il paragrafo collega la credibilità alla cautela più che alla certezza.`],
+      C2: [`Commento retorico: L’elogio è così accuratamente limitato da diventare un avvertimento.`, `Estratto letterario: Ciò che viene omesso pesa più di ciò che viene dichiarato.`, `Panel di esperti: Il dissenso ruota attorno a registro, implicazione e memoria istituzionale.`, `Analisi politica: Il compromesso sembra neutrale, ma ridistribuisce silenziosamente la responsabilità.`, `Nota satirica: La cortesia è impeccabile, ed è proprio per questo che la critica colpisce.`, `Argomentazione giuridica: La clausola decisiva restringe la tesi senza annunciare una ritirata.`, `Brief di mediazione: Chi parla deve conservare l’ambiguità senza sembrare evasivo.`, `Riscrittura stilistica: Un rifiuto netto diventa una riserva diplomatica attraverso la sola sintassi.`],
+    },
+    French: {
+      A1: [`Message : Je suis ici maintenant et j’ai besoin d’aide avec "${topic}".`, `Petite note : Apportez le formulaire et attendez près de la porte.`, `Dialogue simple : "Bonjour. C’est bien ici ?"`, `Profil : Je m’appelle Lina et j’étudie après le travail.`, `Panneau : Ouvert aujourd’hui de neuf heures à cinq heures.`, `Invitation : Venez à quatre heures et apportez un petit cahier.`, `Note de menu : Le café, l’eau et le pain sont prêts.`, `Horaire : Le prochain bus part dans dix minutes.`],
+      A2: [`Message vocal : Le rendez-vous a changé, alors vérifiez la nouvelle heure.`, `Avis de voyage : Le quai a changé après le retard.`, `Courriel d’hôtel : Votre chambre est prête, mais le paiement se fait à l’accueil.`, `Avis : Le service était aimable, même si la file était longue.`, `Instruction : Remplissez vos données avant d’envoyer la demande.`, `Réclamation : La livraison est arrivée en retard et il manquait un article.`, `Note de planification : Nous pouvons nous voir après le travail s’il fait beau.`, `Petite histoire : Hier, le distributeur de billets ne fonctionnait plus.`],
+      B1: [`Message de forum : J’ai résolu le problème en demandant une confirmation écrite.`, `Courriel professionnel : L’équipe a besoin d’un plan plus clair avant vendredi.`, `Récit d’expérience : L’entretien semblait difficile au début, mais le retour a aidé.`, `Réponse client : Nous comprenons la réclamation et proposons une solution pratique.`, `Article : Beaucoup d’apprenants progressent quand la pratique est courte mais régulière.`, `Avis associatif : Les bénévoles discuteront du calendrier et des responsabilités.`, `Paragraphe d’opinion : Le nouvel itinéraire est utile, mais il crée un problème pour les habitants âgés.`, `Récit : La décision a changé après que chacun a décrit son expérience.`],
+      B2: [`Briefing : La proposition n’est faisable que si l’estimation des coûts est réaliste.`, `Extrait de débat : Un camp valorise la rapidité, tandis que l’autre insiste sur la redevabilité.`, `Rapport : Les données soutiennent la politique, mais le risque de mise en oeuvre reste élevé.`, `Courriel formel : Nous pouvons approuver le calendrier si les garanties de confidentialité sont plus claires.`, `Article d’analyse : Le bénéfice public est visible, même si le compromis mérite attention.`, `Note de négociation : Les deux équipes acceptent l’objectif, mais divergent sur les ressources.`, `Mémo de risque : L’argument le plus fort dépend d’une hypothèse non vérifiée.`, `Étude de cas : Le résultat paraît positif, mais l’indicateur de référence est faible.`],
+      C1: [`Éditorial : L’argument gagne en force parce qu’il admet l’incertitude avant d’énoncer sa thèse.`, `Note de séminaire : L’intervenante distingue preuve et interprétation avec une rare précision.`, `Note stratégique : La recommandation convainc parce qu’elle anticipe l’objection la plus solide.`, `Courriel diplomatique : La formulation maintient la coopération tout en refusant la demande initiale.`, `Critique culturelle : Le texte est élégant, mais sa prémisse centrale reste trop peu examinée.`, `Consultation publique : Plusieurs parties prenantes partagent l’objectif, mais contestent le cadrage.`, `Médiation professionnelle : Le conflit s’apaise quand les deux parties nomment ce qu’elles ne peuvent pas céder.`, `Extrait d’essai : Le paragraphe relie la crédibilité à la retenue plutôt qu’à la certitude.`],
+      C2: [`Commentaire rhétorique : L’éloge est si soigneusement limité qu’il devient un avertissement.`, `Extrait littéraire : Ce qui est omis pèse davantage que ce qui est déclaré.`, `Panel d’experts : Le désaccord porte sur le registre, l’implication et la mémoire institutionnelle.`, `Analyse politique : Le compromis paraît neutre, mais il redistribue discrètement la responsabilité.`, `Note satirique : La politesse est impeccable, et c’est précisément pourquoi la critique porte.`, `Argumentation juridique : La clause décisive resserre la thèse sans annoncer de recul.`, `Brief de médiation : La locutrice doit préserver l’ambiguïté sans paraître esquiver.`, `Réécriture stylistique : Un refus frontal devient une réserve diplomatique par la seule syntaxe.`],
+    },
+  } satisfies Record<CurriculumLanguage, Record<CefrBand, string[]>>;
+  return variants[language][band][index % variants[language][band].length];
+}
+
 function chunkFrames(language: CurriculumLanguage, band: CefrBand): Array<{ phrase: (theme: string) => string; meaning: string }> {
-  const frames: Record<CurriculumLanguage, Array<{ phrase: string; meaning: string }>> = {
-    English: [
-      { phrase: 'Could you repeat that, please?', meaning: 'asks for repetition politely' },
-      { phrase: 'I would like ...', meaning: 'makes a polite request' },
-      { phrase: 'That works for me.', meaning: 'accepts an option' },
-      { phrase: 'There is one problem.', meaning: 'introduces a problem' },
-      { phrase: 'On the other hand, ...', meaning: 'signals contrast' },
-      { phrase: 'To be more precise, ...', meaning: 'reformulates carefully' },
-    ],
-    German: [
-      { phrase: 'Könnten Sie das bitte wiederholen?', meaning: 'höflich um Wiederholung bitten' },
-      { phrase: 'Ich hätte gern ...', meaning: 'höflich bestellen oder bitten' },
-      { phrase: 'Das passt für mich.', meaning: 'eine Option annehmen' },
-      { phrase: 'Es gibt ein Problem.', meaning: 'ein Problem einleiten' },
-      { phrase: 'Andererseits ...', meaning: 'Gegensatz markieren' },
-      { phrase: 'Genauer gesagt ...', meaning: 'präzise umformulieren' },
-    ],
-    Spanish: [
-      { phrase: '¿Puedes repetirlo, por favor?', meaning: 'pide repetición con cortesía' },
-      { phrase: 'Me gustaría ...', meaning: 'formula una petición' },
-      { phrase: 'Me viene bien.', meaning: 'acepta una opción' },
-      { phrase: 'Hay un problema.', meaning: 'introduce un problema' },
-      { phrase: 'Por otro lado, ...', meaning: 'marca contraste' },
-      { phrase: 'Para ser más precisos, ...', meaning: 'reformula con precisión' },
-    ],
-    Italian: [
-      { phrase: 'Può ripetere, per favore?', meaning: 'chiede di ripetere con cortesia' },
-      { phrase: 'Vorrei ...', meaning: 'formula una richiesta' },
-      { phrase: 'Per me va bene.', meaning: 'accetta un’opzione' },
-      { phrase: 'C’è un problema.', meaning: 'introduce un problema' },
-      { phrase: 'D’altra parte, ...', meaning: 'segnala contrasto' },
-      { phrase: 'Per essere più precisi, ...', meaning: 'riformula con precisione' },
-    ],
-    French: [
-      { phrase: 'Vous pouvez répéter, s’il vous plaît ?', meaning: 'demande une répétition polie' },
-      { phrase: 'Je voudrais ...', meaning: 'formule une demande' },
-      { phrase: 'Ça me convient.', meaning: 'accepte une option' },
-      { phrase: 'Il y a un problème.', meaning: 'introduit un problème' },
-      { phrase: 'D’un autre côté, ...', meaning: 'marque le contraste' },
-      { phrase: 'Pour être plus précis, ...', meaning: 'reformule avec précision' },
-    ],
-  };
-  const selected = band === 'A1' ? frames[language].slice(0, 4) : frames[language];
-  return selected.map((frame) => ({ phrase: () => frame.phrase, meaning: frame.meaning }));
+  const frames = {
+    English: {
+      A1: [
+        { phrase: 'Could you repeat that, please?', meaning: 'asks for repetition politely' },
+        { phrase: 'I would like ...', meaning: 'makes a polite request' },
+        { phrase: 'That works for me.', meaning: 'accepts an option' },
+        { phrase: 'There is one problem.', meaning: 'introduces a simple problem' },
+      ],
+      A2: [
+        { phrase: 'I have to change the time.', meaning: 'explains a simple arrangement change' },
+        { phrase: 'Can we compare the two options?', meaning: 'starts a practical comparison' },
+        { phrase: 'The main reason is ...', meaning: 'introduces a reason' },
+        { phrase: 'I sent a short confirmation.', meaning: 'confirms an arrangement' },
+        { phrase: 'Could you let me know today?', meaning: 'requests a timely answer' },
+        { phrase: 'It was not available yesterday.', meaning: 'reports a simple problem in the past' },
+      ],
+      B1: [
+        { phrase: 'From my experience, ...', meaning: 'introduces a personal account' },
+        { phrase: 'The problem started when ...', meaning: 'narrates a cause' },
+        { phrase: 'That led to ...', meaning: 'connects events and consequences' },
+        { phrase: 'I would recommend ...', meaning: 'gives a recommendation' },
+        { phrase: 'The advantage is clear, but ...', meaning: 'balances a view' },
+        { phrase: 'Let me summarize the decision.', meaning: 'signals a summary' },
+      ],
+      B2: [
+        { phrase: 'The evidence suggests that ...', meaning: 'grounds an argument in evidence' },
+        { phrase: 'The tradeoff is worth naming.', meaning: 'introduces a balanced assessment' },
+        { phrase: 'From a stakeholder perspective, ...', meaning: 'frames a professional viewpoint' },
+        { phrase: 'If we assume that ..., then ...', meaning: 'builds a conditional argument' },
+        { phrase: 'I agree in principle; however, ...', meaning: 'disagrees constructively' },
+        { phrase: 'The risk can be mitigated by ...', meaning: 'proposes risk reduction' },
+      ],
+      C1: [
+        { phrase: 'That interpretation is plausible, provided that ...', meaning: 'qualifies a claim' },
+        { phrase: 'I would frame the issue differently.', meaning: 'signals analytical reframing' },
+        { phrase: 'The wording softens the objection without removing it.', meaning: 'discusses register and stance' },
+        { phrase: 'There is a tension between ... and ...', meaning: 'identifies conceptual tension' },
+        { phrase: 'A more measured formulation would be ...', meaning: 'reformulates diplomatically' },
+        { phrase: 'The implication is not stated, but it is hard to miss.', meaning: 'marks implied meaning' },
+      ],
+      C2: [
+        { phrase: 'The apparent concession is doing more work than it admits.', meaning: 'analyses rhetorical subtext' },
+        { phrase: 'The sentence withholds judgment while steering the reader toward it.', meaning: 'detects controlled ambiguity' },
+        { phrase: 'A literal paraphrase would flatten the irony.', meaning: 'protects stylistic nuance' },
+        { phrase: 'The register shift is strategic, not accidental.', meaning: 'explains advanced register control' },
+        { phrase: 'The understatement functions as a polite rebuke.', meaning: 'identifies indirect criticism' },
+        { phrase: 'Keep the ambiguity, but remove the evasiveness.', meaning: 'sets a high-level rewriting goal' },
+      ],
+    },
+    German: {
+      A1: [
+        { phrase: 'Könnten Sie das bitte wiederholen?', meaning: 'höflich um Wiederholung bitten' },
+        { phrase: 'Ich hätte gern ...', meaning: 'höflich bestellen oder bitten' },
+        { phrase: 'Das passt für mich.', meaning: 'eine Option annehmen' },
+        { phrase: 'Es gibt ein Problem.', meaning: 'ein einfaches Problem einleiten' },
+      ],
+      A2: [
+        { phrase: 'Ich muss die Uhrzeit ändern.', meaning: 'eine einfache Änderung erklären' },
+        { phrase: 'Können wir die zwei Optionen vergleichen?', meaning: 'einen praktischen Vergleich beginnen' },
+        { phrase: 'Der wichtigste Grund ist ...', meaning: 'einen Grund nennen' },
+        { phrase: 'Ich habe eine kurze Bestätigung geschickt.', meaning: 'eine Absprache bestätigen' },
+        { phrase: 'Könnten Sie mir heute Bescheid geben?', meaning: 'um eine zeitnahe Antwort bitten' },
+        { phrase: 'Das war gestern nicht verfügbar.', meaning: 'ein einfaches Problem in der Vergangenheit melden' },
+      ],
+      B1: [
+        { phrase: 'Aus meiner Erfahrung ...', meaning: 'eine persönliche Erfahrung einleiten' },
+        { phrase: 'Das Problem begann, als ...', meaning: 'eine Ursache erzählen' },
+        { phrase: 'Das führte dazu, dass ...', meaning: 'Folgen verbinden' },
+        { phrase: 'Ich würde empfehlen, ...', meaning: 'eine Empfehlung geben' },
+        { phrase: 'Der Vorteil ist klar, aber ...', meaning: 'eine Meinung abwägen' },
+        { phrase: 'Lassen Sie mich die Entscheidung zusammenfassen.', meaning: 'eine Zusammenfassung markieren' },
+      ],
+      B2: [
+        { phrase: 'Die Belege sprechen dafür, dass ...', meaning: 'ein Argument belegen' },
+        { phrase: 'Die Abwägung sollte ausdrücklich benannt werden.', meaning: 'eine ausgewogene Bewertung einleiten' },
+        { phrase: 'Aus Sicht der Beteiligten ...', meaning: 'eine professionelle Perspektive markieren' },
+        { phrase: 'Wenn wir davon ausgehen, dass ..., dann ...', meaning: 'hypothetisch argumentieren' },
+        { phrase: 'Grundsätzlich stimme ich zu; allerdings ...', meaning: 'konstruktiv widersprechen' },
+        { phrase: 'Das Risiko lässt sich mindern, indem ...', meaning: 'Risikominderung vorschlagen' },
+      ],
+      C1: [
+        { phrase: 'Diese Deutung ist plausibel, sofern ...', meaning: 'eine Aussage einschränken' },
+        { phrase: 'Ich würde die Frage anders rahmen.', meaning: 'analytisch umdeuten' },
+        { phrase: 'Die Formulierung schwächt den Einwand ab, ohne ihn aufzuheben.', meaning: 'Register und Haltung analysieren' },
+        { phrase: 'Es besteht eine Spannung zwischen ... und ...', meaning: 'konzeptuelle Spannung erkennen' },
+        { phrase: 'Eine abgewogenere Formulierung wäre ...', meaning: 'diplomatisch umformulieren' },
+        { phrase: 'Die Implikation wird nicht ausgesprochen, ist aber kaum zu übersehen.', meaning: 'implizite Bedeutung markieren' },
+      ],
+      C2: [
+        { phrase: 'Das scheinbare Zugeständnis leistet mehr, als es zugibt.', meaning: 'rhetorischen Subtext analysieren' },
+        { phrase: 'Der Satz enthält sich eines Urteils und lenkt doch darauf hin.', meaning: 'kontrollierte Mehrdeutigkeit erkennen' },
+        { phrase: 'Eine wörtliche Paraphrase würde die Ironie verflachen.', meaning: 'stilistische Nuance bewahren' },
+        { phrase: 'Der Registerwechsel ist strategisch, nicht zufällig.', meaning: 'fortgeschrittene Registerkontrolle erklären' },
+        { phrase: 'Die Untertreibung wirkt als höflicher Tadel.', meaning: 'indirekte Kritik erkennen' },
+        { phrase: 'Bewahren Sie die Mehrdeutigkeit, aber entfernen Sie das Ausweichende.', meaning: 'anspruchsvoll umformulieren' },
+      ],
+    },
+    Spanish: {
+      A1: [
+        { phrase: '¿Puedes repetirlo, por favor?', meaning: 'pide repetición con cortesía' },
+        { phrase: 'Me gustaría ...', meaning: 'formula una petición' },
+        { phrase: 'Me viene bien.', meaning: 'acepta una opción' },
+        { phrase: 'Hay un problema.', meaning: 'introduce un problema sencillo' },
+      ],
+      A2: [
+        { phrase: 'Tengo que cambiar la hora.', meaning: 'explica un cambio sencillo' },
+        { phrase: '¿Podemos comparar las dos opciones?', meaning: 'empieza una comparación práctica' },
+        { phrase: 'La razón principal es ...', meaning: 'introduce una razón' },
+        { phrase: 'Envié una confirmación breve.', meaning: 'confirma un acuerdo' },
+        { phrase: '¿Podría avisarme hoy?', meaning: 'pide una respuesta a tiempo' },
+        { phrase: 'Ayer no estaba disponible.', meaning: 'informa de un problema en pasado' },
+      ],
+      B1: [
+        { phrase: 'Según mi experiencia, ...', meaning: 'introduce una experiencia personal' },
+        { phrase: 'El problema empezó cuando ...', meaning: 'narra una causa' },
+        { phrase: 'Eso provocó que ...', meaning: 'relaciona hechos y consecuencias' },
+        { phrase: 'Recomendaría ...', meaning: 'da una recomendación' },
+        { phrase: 'La ventaja está clara, pero ...', meaning: 'equilibra una opinión' },
+        { phrase: 'Permítame resumir la decisión.', meaning: 'señala un resumen' },
+      ],
+      B2: [
+        { phrase: 'La evidencia indica que ...', meaning: 'fundamenta un argumento' },
+        { phrase: 'Conviene nombrar la compensación.', meaning: 'introduce una evaluación equilibrada' },
+        { phrase: 'Desde la perspectiva de los actores implicados, ...', meaning: 'enmarca una perspectiva profesional' },
+        { phrase: 'Si asumimos que ..., entonces ...', meaning: 'construye un argumento hipotético' },
+        { phrase: 'Estoy de acuerdo en principio; sin embargo, ...', meaning: 'disiente de forma constructiva' },
+        { phrase: 'El riesgo puede mitigarse mediante ...', meaning: 'propone reducir un riesgo' },
+      ],
+      C1: [
+        { phrase: 'Esa interpretación es plausible, siempre que ...', meaning: 'matiza una afirmación' },
+        { phrase: 'Yo encuadraría el problema de otra manera.', meaning: 'reformula analíticamente' },
+        { phrase: 'La formulación suaviza la objeción sin eliminarla.', meaning: 'analiza registro y postura' },
+        { phrase: 'Hay una tensión entre ... y ...', meaning: 'identifica una tensión conceptual' },
+        { phrase: 'Una formulación más medida sería ...', meaning: 'reformula con diplomacia' },
+        { phrase: 'La implicación no se dice, pero cuesta no verla.', meaning: 'marca significado implícito' },
+      ],
+      C2: [
+        { phrase: 'La concesión aparente hace más de lo que admite.', meaning: 'analiza el subtexto retórico' },
+        { phrase: 'La frase evita juzgar y aun así orienta al lector.', meaning: 'detecta ambigüedad controlada' },
+        { phrase: 'Una paráfrasis literal aplanaría la ironía.', meaning: 'protege el matiz estilístico' },
+        { phrase: 'El cambio de registro es estratégico, no accidental.', meaning: 'explica control avanzado del registro' },
+        { phrase: 'La subestimación funciona como reproche cortés.', meaning: 'identifica crítica indirecta' },
+        { phrase: 'Mantén la ambigüedad, pero elimina lo evasivo.', meaning: 'plantea una reescritura avanzada' },
+      ],
+    },
+    Italian: {
+      A1: [
+        { phrase: 'Può ripetere, per favore?', meaning: 'chiede di ripetere con cortesia' },
+        { phrase: 'Vorrei ...', meaning: 'formula una richiesta' },
+        { phrase: 'Per me va bene.', meaning: 'accetta un’opzione' },
+        { phrase: 'C’è un problema.', meaning: 'introduce un problema semplice' },
+      ],
+      A2: [
+        { phrase: 'Devo cambiare l’orario.', meaning: 'spiega un semplice cambiamento' },
+        { phrase: 'Possiamo confrontare le due opzioni?', meaning: 'avvia un confronto pratico' },
+        { phrase: 'Il motivo principale è ...', meaning: 'introduce una ragione' },
+        { phrase: 'Ho inviato una breve conferma.', meaning: 'conferma un accordo' },
+        { phrase: 'Potrebbe farmelo sapere oggi?', meaning: 'chiede una risposta in tempo' },
+        { phrase: 'Ieri non era disponibile.', meaning: 'segnala un problema al passato' },
+      ],
+      B1: [
+        { phrase: 'Secondo la mia esperienza, ...', meaning: 'introduce un’esperienza personale' },
+        { phrase: 'Il problema è iniziato quando ...', meaning: 'racconta una causa' },
+        { phrase: 'Questo ha portato a ...', meaning: 'collega eventi e conseguenze' },
+        { phrase: 'Consiglierei di ...', meaning: 'formula una raccomandazione' },
+        { phrase: 'Il vantaggio è chiaro, però ...', meaning: 'bilancia un’opinione' },
+        { phrase: 'Mi permetta di riassumere la decisione.', meaning: 'segnala una sintesi' },
+      ],
+      B2: [
+        { phrase: 'Le prove indicano che ...', meaning: 'fonda un argomento sulle prove' },
+        { phrase: 'Il compromesso va esplicitato.', meaning: 'introduce una valutazione equilibrata' },
+        { phrase: 'Dal punto di vista degli stakeholder, ...', meaning: 'inquadra una prospettiva professionale' },
+        { phrase: 'Se assumiamo che ..., allora ...', meaning: 'costruisce un ragionamento ipotetico' },
+        { phrase: 'Sono d’accordo in linea di principio; tuttavia ...', meaning: 'dissente in modo costruttivo' },
+        { phrase: 'Il rischio può essere mitigato attraverso ...', meaning: 'propone una riduzione del rischio' },
+      ],
+      C1: [
+        { phrase: 'Questa interpretazione è plausibile, purché ...', meaning: 'qualifica un’affermazione' },
+        { phrase: 'Inquadrerei la questione in modo diverso.', meaning: 'segnala una riformulazione analitica' },
+        { phrase: 'La formulazione attenua l’obiezione senza eliminarla.', meaning: 'analizza registro e postura' },
+        { phrase: 'C’è una tensione tra ... e ...', meaning: 'identifica una tensione concettuale' },
+        { phrase: 'Una formulazione più misurata sarebbe ...', meaning: 'riformula diplomaticamente' },
+        { phrase: 'L’implicazione non è dichiarata, ma è difficile ignorarla.', meaning: 'segnala significato implicito' },
+      ],
+      C2: [
+        { phrase: 'La concessione apparente fa più di quanto ammetta.', meaning: 'analizza il sottotesto retorico' },
+        { phrase: 'La frase sospende il giudizio eppure lo orienta.', meaning: 'individua ambiguità controllata' },
+        { phrase: 'Una parafrasi letterale appiattirebbe l’ironia.', meaning: 'protegge la sfumatura stilistica' },
+        { phrase: 'Il cambio di registro è strategico, non casuale.', meaning: 'spiega controllo avanzato del registro' },
+        { phrase: 'L’understatement funziona come rimprovero cortese.', meaning: 'identifica critica indiretta' },
+        { phrase: 'Mantieni l’ambiguità, ma elimina l’evasività.', meaning: 'definisce una riscrittura avanzata' },
+      ],
+    },
+    French: {
+      A1: [
+        { phrase: 'Vous pouvez répéter, s’il vous plaît ?', meaning: 'demande une répétition polie' },
+        { phrase: 'Je voudrais ...', meaning: 'formule une demande' },
+        { phrase: 'Ça me convient.', meaning: 'accepte une option' },
+        { phrase: 'Il y a un problème.', meaning: 'introduit un problème simple' },
+      ],
+      A2: [
+        { phrase: 'Je dois changer l’heure.', meaning: 'explique un changement simple' },
+        { phrase: 'On peut comparer les deux options ?', meaning: 'lance une comparaison pratique' },
+        { phrase: 'La raison principale, c’est ...', meaning: 'introduit une raison' },
+        { phrase: 'J’ai envoyé une courte confirmation.', meaning: 'confirme un accord' },
+        { phrase: 'Vous pouvez me répondre aujourd’hui ?', meaning: 'demande une réponse rapide' },
+        { phrase: 'Ce n’était pas disponible hier.', meaning: 'signale un problème au passé' },
+      ],
+      B1: [
+        { phrase: 'D’après mon expérience, ...', meaning: 'introduit une expérience personnelle' },
+        { phrase: 'Le problème a commencé quand ...', meaning: 'raconte une cause' },
+        { phrase: 'Cela a entraîné ...', meaning: 'relie des faits et des conséquences' },
+        { phrase: 'Je recommanderais de ...', meaning: 'donne une recommandation' },
+        { phrase: 'L’avantage est clair, mais ...', meaning: 'équilibre une opinion' },
+        { phrase: 'Permettez-moi de résumer la décision.', meaning: 'signale une synthèse' },
+      ],
+      B2: [
+        { phrase: 'Les preuves suggèrent que ...', meaning: 'fonde un argument sur des preuves' },
+        { phrase: 'Le compromis mérite d’être nommé.', meaning: 'introduit une évaluation équilibrée' },
+        { phrase: 'Du point de vue des parties prenantes, ...', meaning: 'cadre une perspective professionnelle' },
+        { phrase: 'Si l’on suppose que ..., alors ...', meaning: 'construit un raisonnement hypothétique' },
+        { phrase: 'Je suis d’accord sur le principe ; cependant ...', meaning: 'exprime un désaccord constructif' },
+        { phrase: 'Le risque peut être atténué par ...', meaning: 'propose une réduction du risque' },
+      ],
+      C1: [
+        { phrase: 'Cette interprétation est plausible, à condition que ...', meaning: 'nuance une affirmation' },
+        { phrase: 'Je cadrerais la question autrement.', meaning: 'signale un recadrage analytique' },
+        { phrase: 'La formulation atténue l’objection sans l’effacer.', meaning: 'analyse registre et posture' },
+        { phrase: 'Il existe une tension entre ... et ...', meaning: 'identifie une tension conceptuelle' },
+        { phrase: 'Une formulation plus mesurée serait ...', meaning: 'reformule diplomatiquement' },
+        { phrase: 'L’implicite n’est pas formulé, mais il est difficile à manquer.', meaning: 'marque le sens implicite' },
+      ],
+      C2: [
+        { phrase: 'La concession apparente fait plus qu’elle ne l’avoue.', meaning: 'analyse le sous-texte rhétorique' },
+        { phrase: 'La phrase suspend le jugement tout en l’orientant.', meaning: 'détecte une ambiguïté contrôlée' },
+        { phrase: 'Une paraphrase littérale écraserait l’ironie.', meaning: 'préserve la nuance stylistique' },
+        { phrase: 'Le changement de registre est stratégique, pas accidentel.', meaning: 'explique le contrôle avancé du registre' },
+        { phrase: 'L’euphémisation agit comme un reproche poli.', meaning: 'identifie une critique indirecte' },
+        { phrase: 'Gardez l’ambiguïté, mais retirez l’esquive.', meaning: 'fixe un objectif de réécriture avancé' },
+      ],
+    },
+  } satisfies Record<CurriculumLanguage, Record<CefrBand, Array<{ phrase: string; meaning: string }>>>;
+  return frames[language][band].map((frame) => ({ phrase: () => frame.phrase, meaning: frame.meaning }));
 }
 
 function chunkExample(language: CurriculumLanguage, profile: LevelProfile, theme: string, grammarFocus: string, index: number) {

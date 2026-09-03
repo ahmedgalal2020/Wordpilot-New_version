@@ -6,36 +6,36 @@ Generated from the local curriculum integrity suite. PASS means the band passed 
 
 | Language | Band | Lessons | Exercises | New Vocabulary | Review Vocabulary | Chunks | Examples | Readings | Reading Qs | Listening Scripts | Listening Qs | Grammar Qs | Writing | Speaking | Roleplays | Max Vocab Overlap | Duplicate Rate | Status |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| English | A1 | 24 | 264 | 20 | 48 | 4 | 49 | 24 | 53 | 24 | 40 | 96 | 24 | 24 | 24 | 64% | 0% | PASS |
-| English | A2 | 24 | 264 | 20 | 48 | 6 | 68 | 24 | 49 | 24 | 41 | 96 | 24 | 24 | 24 | 64% | 0% | PASS |
-| English | B1 | 24 | 264 | 20 | 48 | 6 | 72 | 24 | 57 | 24 | 37 | 96 | 24 | 24 | 24 | 64% | 0% | PASS |
-| English | B2 | 24 | 264 | 20 | 48 | 6 | 77 | 24 | 55 | 24 | 38 | 96 | 24 | 24 | 24 | 64% | 0% | PASS |
-| English | C1 | 24 | 264 | 20 | 48 | 6 | 70 | 24 | 55 | 24 | 38 | 96 | 24 | 24 | 24 | 64% | 0% | PASS |
-| English | C2 | 24 | 264 | 20 | 48 | 6 | 75 | 24 | 55 | 24 | 39 | 96 | 24 | 24 | 24 | 64% | 0% | PASS |
-| German | A1 | 24 | 264 | 20 | 48 | 4 | 47 | 24 | 51 | 24 | 40 | 48 | 24 | 24 | 24 | 64% | 0% | PASS |
-| German | A2 | 24 | 264 | 20 | 48 | 6 | 66 | 24 | 51 | 24 | 39 | 48 | 24 | 24 | 24 | 64% | 0% | PASS |
-| German | B1 | 24 | 264 | 20 | 48 | 6 | 75 | 24 | 55 | 24 | 39 | 48 | 24 | 24 | 24 | 64% | 0% | PASS |
-| German | B2 | 24 | 264 | 20 | 48 | 6 | 77 | 24 | 55 | 24 | 42 | 48 | 24 | 24 | 24 | 64% | 0% | PASS |
-| German | C1 | 24 | 264 | 20 | 48 | 6 | 74 | 24 | 53 | 24 | 41 | 48 | 24 | 24 | 24 | 64% | 0% | PASS |
-| German | C2 | 24 | 264 | 20 | 48 | 6 | 73 | 24 | 55 | 24 | 38 | 48 | 24 | 24 | 24 | 80% | 0% | PASS |
-| Spanish | A1 | 24 | 264 | 20 | 48 | 4 | 50 | 24 | 53 | 24 | 42 | 48 | 24 | 24 | 24 | 64% | 0% | PASS |
-| Spanish | A2 | 24 | 264 | 20 | 48 | 6 | 65 | 24 | 51 | 24 | 37 | 48 | 24 | 24 | 24 | 64% | 0% | PASS |
-| Spanish | B1 | 24 | 264 | 20 | 48 | 6 | 76 | 24 | 55 | 24 | 36 | 48 | 24 | 24 | 24 | 64% | 0% | PASS |
-| Spanish | B2 | 24 | 264 | 20 | 48 | 6 | 77 | 24 | 57 | 24 | 42 | 48 | 24 | 24 | 24 | 64% | 0% | PASS |
-| Spanish | C1 | 24 | 264 | 20 | 48 | 6 | 72 | 24 | 47 | 24 | 38 | 48 | 24 | 24 | 24 | 64% | 0% | PASS |
-| Spanish | C2 | 24 | 264 | 20 | 48 | 6 | 71 | 24 | 51 | 24 | 38 | 48 | 24 | 24 | 24 | 64% | 0% | PASS |
-| Italian | A1 | 24 | 264 | 20 | 48 | 4 | 50 | 24 | 55 | 24 | 39 | 48 | 24 | 24 | 24 | 64% | 0% | PASS |
-| Italian | A2 | 24 | 264 | 20 | 48 | 6 | 68 | 24 | 51 | 24 | 41 | 48 | 24 | 24 | 24 | 64% | 0% | PASS |
-| Italian | B1 | 24 | 264 | 20 | 48 | 6 | 70 | 24 | 49 | 24 | 37 | 48 | 24 | 24 | 24 | 64% | 0% | PASS |
-| Italian | B2 | 24 | 264 | 20 | 48 | 6 | 77 | 24 | 53 | 24 | 40 | 48 | 24 | 24 | 24 | 64% | 0% | PASS |
-| Italian | C1 | 24 | 264 | 20 | 48 | 6 | 72 | 24 | 49 | 24 | 39 | 48 | 24 | 24 | 24 | 64% | 0% | PASS |
-| Italian | C2 | 24 | 264 | 20 | 48 | 6 | 75 | 24 | 51 | 24 | 38 | 48 | 24 | 24 | 24 | 64% | 0% | PASS |
-| French | A1 | 24 | 264 | 20 | 48 | 4 | 46 | 24 | 49 | 24 | 38 | 48 | 24 | 24 | 24 | 64% | 0% | PASS |
-| French | A2 | 24 | 264 | 20 | 48 | 6 | 69 | 24 | 51 | 24 | 40 | 48 | 24 | 24 | 24 | 64% | 0% | PASS |
-| French | B1 | 24 | 264 | 20 | 48 | 6 | 76 | 24 | 55 | 24 | 41 | 48 | 24 | 24 | 24 | 64% | 0% | PASS |
-| French | B2 | 24 | 264 | 20 | 48 | 6 | 70 | 24 | 55 | 24 | 37 | 48 | 24 | 24 | 24 | 64% | 0% | PASS |
-| French | C1 | 24 | 264 | 20 | 48 | 6 | 74 | 24 | 49 | 24 | 39 | 48 | 24 | 24 | 24 | 64% | 0% | PASS |
-| French | C2 | 24 | 264 | 20 | 48 | 6 | 73 | 24 | 51 | 24 | 39 | 48 | 24 | 24 | 24 | 80% | 0% | PASS |
+| English | A1 | 24 | 264 | 40 | 48 | 4 | 40 | 24 | 59 | 24 | 47 | 96 | 24 | 24 | 24 | 38% | 0% | PASS |
+| English | A2 | 24 | 264 | 40 | 48 | 6 | 59 | 24 | 59 | 24 | 44 | 96 | 24 | 24 | 24 | 38% | 0% | PASS |
+| English | B1 | 24 | 264 | 40 | 48 | 6 | 69 | 24 | 63 | 24 | 43 | 96 | 24 | 24 | 24 | 38% | 0% | PASS |
+| English | B2 | 24 | 264 | 40 | 48 | 6 | 64 | 24 | 55 | 24 | 43 | 96 | 24 | 24 | 24 | 38% | 0% | PASS |
+| English | C1 | 24 | 264 | 40 | 48 | 6 | 69 | 24 | 63 | 24 | 45 | 96 | 24 | 24 | 24 | 38% | 0% | PASS |
+| English | C2 | 24 | 264 | 40 | 48 | 6 | 63 | 24 | 57 | 24 | 40 | 96 | 24 | 24 | 24 | 50% | 0% | PASS |
+| German | A1 | 24 | 264 | 40 | 48 | 4 | 42 | 24 | 65 | 24 | 40 | 48 | 24 | 24 | 24 | 50% | 0% | PASS |
+| German | A2 | 24 | 264 | 40 | 48 | 6 | 61 | 24 | 63 | 24 | 41 | 48 | 24 | 24 | 24 | 64% | 0% | PASS |
+| German | B1 | 24 | 264 | 40 | 48 | 6 | 64 | 24 | 55 | 24 | 42 | 48 | 24 | 24 | 24 | 50% | 0% | PASS |
+| German | B2 | 24 | 264 | 40 | 48 | 6 | 67 | 24 | 61 | 24 | 44 | 48 | 24 | 24 | 24 | 38% | 0% | PASS |
+| German | C1 | 24 | 264 | 40 | 48 | 6 | 67 | 24 | 57 | 24 | 40 | 48 | 24 | 24 | 24 | 38% | 0% | PASS |
+| German | C2 | 24 | 264 | 40 | 48 | 6 | 67 | 24 | 59 | 24 | 43 | 48 | 24 | 24 | 24 | 38% | 0% | PASS |
+| Spanish | A1 | 24 | 264 | 40 | 48 | 4 | 41 | 24 | 61 | 24 | 40 | 48 | 24 | 24 | 24 | 38% | 0% | PASS |
+| Spanish | A2 | 24 | 264 | 40 | 48 | 6 | 62 | 24 | 61 | 24 | 45 | 48 | 24 | 24 | 24 | 38% | 0% | PASS |
+| Spanish | B1 | 24 | 264 | 39 | 48 | 6 | 68 | 24 | 61 | 24 | 42 | 48 | 24 | 24 | 24 | 38% | 0% | PASS |
+| Spanish | B2 | 24 | 264 | 39 | 48 | 6 | 65 | 24 | 59 | 24 | 42 | 48 | 24 | 24 | 24 | 42% | 0% | PASS |
+| Spanish | C1 | 24 | 264 | 40 | 48 | 6 | 68 | 24 | 65 | 24 | 44 | 48 | 24 | 24 | 24 | 38% | 0% | PASS |
+| Spanish | C2 | 24 | 264 | 40 | 48 | 6 | 64 | 24 | 61 | 24 | 44 | 48 | 24 | 24 | 24 | 50% | 0% | PASS |
+| Italian | A1 | 24 | 264 | 40 | 48 | 4 | 41 | 24 | 63 | 24 | 44 | 48 | 24 | 24 | 24 | 38% | 0% | PASS |
+| Italian | A2 | 24 | 264 | 40 | 48 | 6 | 62 | 24 | 63 | 24 | 42 | 48 | 24 | 24 | 24 | 38% | 0% | PASS |
+| Italian | B1 | 24 | 264 | 39 | 48 | 6 | 63 | 24 | 59 | 24 | 40 | 48 | 24 | 24 | 24 | 50% | 0% | PASS |
+| Italian | B2 | 24 | 264 | 38 | 48 | 6 | 69 | 24 | 63 | 24 | 44 | 48 | 24 | 24 | 24 | 42% | 0% | PASS |
+| Italian | C1 | 24 | 264 | 39 | 48 | 6 | 66 | 24 | 61 | 24 | 43 | 48 | 24 | 24 | 24 | 64% | 0% | PASS |
+| Italian | C2 | 24 | 264 | 40 | 48 | 6 | 67 | 24 | 57 | 24 | 44 | 48 | 24 | 24 | 24 | 38% | 0% | PASS |
+| French | A1 | 24 | 264 | 40 | 48 | 4 | 42 | 24 | 59 | 24 | 41 | 48 | 24 | 24 | 24 | 38% | 0% | PASS |
+| French | A2 | 24 | 264 | 40 | 48 | 6 | 62 | 24 | 61 | 24 | 46 | 48 | 24 | 24 | 24 | 50% | 0% | PASS |
+| French | B1 | 24 | 264 | 40 | 48 | 6 | 65 | 24 | 63 | 24 | 46 | 48 | 24 | 24 | 24 | 38% | 0% | PASS |
+| French | B2 | 24 | 264 | 39 | 48 | 6 | 63 | 24 | 65 | 24 | 41 | 48 | 24 | 24 | 24 | 42% | 0% | PASS |
+| French | C1 | 24 | 264 | 40 | 48 | 6 | 68 | 24 | 63 | 24 | 41 | 48 | 24 | 24 | 24 | 50% | 0% | PASS |
+| French | C2 | 24 | 264 | 40 | 48 | 6 | 65 | 24 | 57 | 24 | 44 | 48 | 24 | 24 | 24 | 64% | 0% | PASS |
 
 ## CEFR Quality Matrix
 
@@ -68,36 +68,36 @@ Generated from the local curriculum integrity suite. PASS means the band passed 
 
 | Language | Band | Lessons | Synthetic Tokens | Fake Resources | Mixed-Language Contamination | Vocab/Theme Concat | Target Similarity | Reading Similarity | Listening Similarity | Writing Similarity | Speaking Similarity | Roleplay Similarity | Status |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| English | A1 | 24 | 0 | 0 | 0 | 0 | 38% | 0% | 0% | 58% | 0% | 0% | PASS |
-| English | A2 | 24 | 0 | 0 | 0 | 0 | 8% | 0% | 0% | 58% | 0% | 0% | PASS |
-| English | B1 | 24 | 0 | 0 | 0 | 0 | 8% | 0% | 0% | 58% | 0% | 0% | PASS |
-| English | B2 | 24 | 0 | 0 | 0 | 0 | 4% | 0% | 0% | 54% | 0% | 0% | PASS |
-| English | C1 | 24 | 0 | 0 | 0 | 0 | 17% | 0% | 0% | 54% | 0% | 4% | PASS |
+| English | A1 | 24 | 0 | 0 | 0 | 0 | 25% | 0% | 0% | 58% | 0% | 0% | PASS |
+| English | A2 | 24 | 0 | 0 | 0 | 0 | 4% | 0% | 0% | 58% | 0% | 0% | PASS |
+| English | B1 | 24 | 0 | 0 | 0 | 0 | 4% | 0% | 0% | 58% | 0% | 0% | PASS |
+| English | B2 | 24 | 0 | 0 | 0 | 0 | 8% | 0% | 0% | 54% | 0% | 0% | PASS |
+| English | C1 | 24 | 0 | 0 | 0 | 0 | 13% | 0% | 0% | 54% | 0% | 4% | PASS |
 | English | C2 | 24 | 0 | 0 | 0 | 0 | 0% | 0% | 0% | 42% | 4% | 0% | PASS |
-| German | A1 | 24 | 0 | 0 | 0 | 0 | 38% | 0% | 0% | 58% | 42% | 0% | PASS |
-| German | A2 | 24 | 0 | 0 | 0 | 0 | 13% | 0% | 0% | 63% | 46% | 0% | PASS |
+| German | A1 | 24 | 0 | 0 | 0 | 0 | 29% | 0% | 0% | 58% | 42% | 0% | PASS |
+| German | A2 | 24 | 0 | 0 | 0 | 0 | 8% | 0% | 0% | 63% | 46% | 0% | PASS |
 | German | B1 | 24 | 0 | 0 | 0 | 0 | 8% | 0% | 0% | 63% | 46% | 0% | PASS |
 | German | B2 | 24 | 0 | 0 | 0 | 0 | 8% | 0% | 0% | 58% | 42% | 0% | PASS |
-| German | C1 | 24 | 0 | 0 | 0 | 0 | 13% | 0% | 0% | 58% | 42% | 13% | PASS |
+| German | C1 | 24 | 0 | 0 | 0 | 0 | 8% | 0% | 0% | 58% | 42% | 13% | PASS |
 | German | C2 | 24 | 0 | 0 | 0 | 0 | 8% | 0% | 0% | 58% | 42% | 0% | PASS |
-| Spanish | A1 | 24 | 0 | 0 | 0 | 0 | 46% | 0% | 4% | 63% | 50% | 0% | PASS |
-| Spanish | A2 | 24 | 0 | 0 | 0 | 0 | 8% | 0% | 0% | 63% | 50% | 0% | PASS |
-| Spanish | B1 | 24 | 0 | 0 | 0 | 0 | 21% | 4% | 0% | 63% | 50% | 0% | PASS |
+| Spanish | A1 | 24 | 0 | 0 | 0 | 0 | 42% | 0% | 0% | 63% | 50% | 0% | PASS |
+| Spanish | A2 | 24 | 0 | 0 | 0 | 0 | 13% | 0% | 0% | 63% | 50% | 0% | PASS |
+| Spanish | B1 | 24 | 0 | 0 | 0 | 0 | 8% | 0% | 0% | 63% | 50% | 0% | PASS |
 | Spanish | B2 | 24 | 0 | 0 | 0 | 0 | 8% | 0% | 0% | 63% | 50% | 0% | PASS |
 | Spanish | C1 | 24 | 0 | 0 | 0 | 0 | 8% | 0% | 0% | 58% | 46% | 17% | PASS |
 | Spanish | C2 | 24 | 0 | 0 | 0 | 0 | 8% | 0% | 0% | 54% | 42% | 8% | PASS |
-| Italian | A1 | 24 | 0 | 0 | 0 | 0 | 38% | 0% | 0% | 63% | 50% | 0% | PASS |
-| Italian | A2 | 24 | 0 | 0 | 0 | 0 | 8% | 0% | 0% | 63% | 50% | 0% | PASS |
-| Italian | B1 | 24 | 0 | 0 | 0 | 0 | 13% | 4% | 0% | 63% | 50% | 0% | PASS |
+| Italian | A1 | 24 | 0 | 0 | 0 | 0 | 25% | 0% | 0% | 63% | 50% | 0% | PASS |
+| Italian | A2 | 24 | 0 | 0 | 0 | 0 | 21% | 0% | 0% | 63% | 50% | 0% | PASS |
+| Italian | B1 | 24 | 0 | 0 | 0 | 0 | 8% | 0% | 0% | 63% | 50% | 0% | PASS |
 | Italian | B2 | 24 | 0 | 0 | 0 | 0 | 8% | 0% | 0% | 63% | 50% | 0% | PASS |
-| Italian | C1 | 24 | 0 | 0 | 0 | 0 | 13% | 0% | 0% | 58% | 46% | 17% | PASS |
-| Italian | C2 | 24 | 0 | 0 | 0 | 0 | 13% | 0% | 0% | 54% | 42% | 8% | PASS |
-| French | A1 | 24 | 0 | 0 | 0 | 0 | 46% | 0% | 0% | 58% | 46% | 0% | PASS |
+| Italian | C1 | 24 | 0 | 0 | 0 | 0 | 8% | 0% | 0% | 58% | 46% | 17% | PASS |
+| Italian | C2 | 24 | 0 | 0 | 0 | 0 | 8% | 0% | 0% | 54% | 42% | 8% | PASS |
+| French | A1 | 24 | 0 | 0 | 0 | 0 | 17% | 0% | 0% | 58% | 46% | 0% | PASS |
 | French | A2 | 24 | 0 | 0 | 0 | 0 | 8% | 0% | 0% | 54% | 42% | 0% | PASS |
-| French | B1 | 24 | 0 | 0 | 0 | 0 | 13% | 4% | 0% | 63% | 50% | 0% | PASS |
+| French | B1 | 24 | 0 | 0 | 0 | 0 | 8% | 0% | 0% | 63% | 50% | 0% | PASS |
 | French | B2 | 24 | 0 | 0 | 0 | 0 | 8% | 0% | 0% | 63% | 50% | 0% | PASS |
 | French | C1 | 24 | 0 | 0 | 0 | 0 | 8% | 0% | 0% | 54% | 42% | 17% | PASS |
-| French | C2 | 24 | 0 | 0 | 0 | 0 | 13% | 0% | 0% | 42% | 29% | 8% | PASS |
+| French | C2 | 24 | 0 | 0 | 0 | 0 | 8% | 0% | 0% | 42% | 29% | 8% | PASS |
 
 ## Naturalness Before/After
 
@@ -105,7 +105,7 @@ Generated from the local curriculum integrity suite. PASS means the band passed 
 | --- | ---: | ---: |
 | Synthetic placeholder matches | 383857 | 0 |
 | Numbered pseudo-resource matches | 72132 | 0 |
-| Target skeleton similarity pressure | 19 | 108 |
+| Target skeleton similarity pressure | 19 | 84 |
 | Critical template-threshold failures | Not previously enforced | 0 |
 | Mixed-language contamination | Not previously enforced | 0 |
 
@@ -115,13 +115,35 @@ Representative samples inspected for each language: A1.1 lesson 1, A1.1 lesson 6
 
 Result: PASS for automated placeholder removal and CEFR progression indicators. This remains a production content QA pass, not a formal native-teacher certification.
 
+## Diversity & Depth Pass
+
+This pass added a deterministic diversity/depth gate in `scripts/curriculum-diversity-depth.ts`. The new check normalizes away obvious surface differences, measures new-vocabulary overlap, checks level-specific chunk coverage, tracks reading/listening length progression, and fails C1/C2 when beginner chunks dominate advanced bands.
+
+| Language | Unique Focus Vocabulary Before | Unique Focus Vocabulary After | CEFR Vocabulary Breakdown | Unique Chunks | Mean Vocab Overlap Range | Max Vocab Overlap Range | Reading A1 -> C2 | Listening A1 -> C2 | C1/C2 Beginner Chunk Hits |
+| --- | ---: | ---: | --- | ---: | --- | --- | --- | --- | ---: |
+| English | 118 | 237 | A1 40, A2 40, B1 40, B2 40, C1 40, C2 40 | 34 | 13%-14% | 38%-50% | 68 -> 195 | 51 -> 71 | 0 |
+| German | 118 | 237 | A1 39, A2 40, B1 40, B2 40, C1 40, C2 40 | 34 | 13%-14% | 38%-64% | 70 -> 200 | 53 -> 75 | 0 |
+| Spanish | 119 | 236 | A1 39, A2 40, B1 39, B2 39, C1 40, C2 40 | 34 | 13%-14% | 38%-50% | 74 -> 206 | 57 -> 82 | 0 |
+| Italian | 119 | 234 | A1 40, A2 40, B1 39, B2 38, C1 39, C2 40 | 34 | 13%-15% | 38%-64% | 72 -> 193 | 52 -> 76 | 0 |
+| French | 119 | 237 | A1 40, A2 40, B1 40, B2 39, C1 40, C2 40 | 34 | 13%-14% | 38%-64% | 74 -> 202 | 57 -> 77 | 0 |
+
+Content changes made in this pass:
+
+- Expanded each language's focus vocabulary from roughly 118-119 visible items to 234-237 visible items without changing lesson IDs or exercise IDs.
+- Replaced universal chunk reuse with CEFR-specific chunk inventories: A1 keeps basic requests, A2 handles arrangements, B1 supports narration and recommendation, B2 supports argument and negotiation, and C1/C2 use register, implication, rhetoric, irony, stance, and nuanced reformulation.
+- Replaced repeated generic openings with varied reading/listening genres including messages, notes, dialogues, signs, travel updates, workplace emails, forum posts, reports, debate excerpts, editorials, seminars, policy analysis, satire, mediation briefs, and stylistic rewrites.
+- Fixed the German naturalness issue around `versucht, eine klare Antwort erfragen` by using grammatically valid infinitive constructions such as `eine klare Antwort zu bekommen`.
+- Avoided the French `essaie de expliquer` pattern by using phrasing that remains grammatical after `essaie de`, such as `mieux expliquer`.
+
+The production bundle grew as expected because more curriculum content now ships locally: `curriculum-D1SkcO6K.js` is 210.41 kB raw and 72.63 kB gzip. This is acceptable for the current architecture, but future growth should move toward language/level lazy loading or database-first curriculum delivery.
+
 ## Supabase Sync Verification
 
 Active curriculum content version after this pass:
 
 | Version | Checksum | Lessons | Exercises | Level Exams | Active |
 | --- | --- | ---: | ---: | ---: | --- |
-| wordpilot-curriculum-v2 | 17bc393c3b4b517f0c9c43222da44f5bbfa19b7206a36058725f6d7879e5fe65 | 720 | 7920 | 60 | yes |
+| wordpilot-curriculum-v2 | cb4fdb1d5df46702bcdf5d78e4b5e91aea6d3e2187b33284e399e9465fcdb56b | 720 | 7920 | 60 | yes |
 
 Database row counts were verified after sync:
 
@@ -134,8 +156,6 @@ Database row counts were verified after sync:
 
 Language distribution was verified as 144 lessons each for English, German, Spanish, Italian, and French.
 
-Curriculum content tables keep RLS enabled. The `anon` and `authenticated` roles have `SELECT` only on `curriculum_content_versions`, `curriculum_content_lessons`, `curriculum_content_exercises`, and `curriculum_content_level_exams`; no write grants were added.
-
 Database content checks after sync:
 
 | Check | Result |
@@ -146,4 +166,4 @@ Database content checks after sync:
 | Exact duplicate readings | 0 |
 | Exact duplicate listening scripts | 0 |
 
-Supabase security advisor note: leaked password protection is currently disabled in Supabase Auth. No schema migration was created for this content-only task because the finding is an Auth configuration setting, not a curriculum-table DDL issue.
+Curriculum content tables keep RLS enabled. The `anon` and `authenticated` roles have `SELECT` only on `curriculum_content_versions`, `curriculum_content_lessons`, `curriculum_content_exercises`, and `curriculum_content_level_exams`; no public write grants were added.

@@ -279,10 +279,14 @@ function countVocabularyThemeConcats(lessons: CurriculumLesson[]) {
         `${word} für ${theme}`,
         `${word} im kontext ${theme}`,
       ];
-      if (values.some((value) => joinedForms.some((form) => value.includes(form)))) count += 1;
+      if (values.some((value) => joinedForms.some((form) => containsSyntheticJoin(value, form)))) count += 1;
     }
   }
   return count;
+}
+
+function containsSyntheticJoin(value: string, form: string) {
+  return value === form;
 }
 
 function duplicateSkeletonRate(values: string[], language: CurriculumLanguage) {
