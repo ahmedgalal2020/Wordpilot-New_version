@@ -1,6 +1,6 @@
 import type { CefrLevel, LearningLanguage, PracticeExercise, PracticeLesson } from '../../lib/learning';
 import type { WeeklyReport } from '../../hooks/useWeeklyReport';
-import type { getCurriculumLevel } from '../../lib/curriculum';
+import type { CurriculumLevelSummary } from '../../lib/curriculumRepository';
 
 export type PathCopy = {
   pageEyebrow: string;
@@ -43,7 +43,7 @@ export type PathCopy = {
   upgrade: string;
 };
 
-export type PracticePathLevelMap = NonNullable<ReturnType<typeof getCurriculumLevel>>;
+export type PracticePathLevelMap = CurriculumLevelSummary;
 
 export type PracticePathLesson = PracticeLesson;
 export type PracticePathExercise = PracticeExercise;
@@ -51,7 +51,7 @@ export type PracticePathExercise = PracticeExercise;
 export type PracticePathState = {
   selectedLanguage: LearningLanguage;
   selectedLevel: CefrLevel;
-  selectedLesson: PracticePathLesson;
+  selectedLesson: PracticePathLesson | null;
   lessons: PracticePathLesson[];
   exercises: PracticePathExercise[];
   completedCount: number;
@@ -60,6 +60,8 @@ export type PracticePathState = {
   report: WeeklyReport;
   pathCopy: PathCopy;
   phaseOneLevels: PracticePathLevelMap[];
+  contentLoading: boolean;
+  contentError: string | null;
   reportLoading: boolean;
   progressLoading: boolean;
   progressError: string | null;

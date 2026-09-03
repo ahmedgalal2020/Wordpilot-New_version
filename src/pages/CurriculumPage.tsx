@@ -8,14 +8,15 @@ import {
   buildReviewQueueItems,
   CURRICULUM_LEVELS,
   SUPPORTED_CURRICULUM_LANGUAGES,
-  getCurriculumLevel,
   type CurriculumExercise,
+  type CurriculumLevel,
   type CurriculumLanguage,
   type CurriculumLesson,
   type CurriculumSkill,
   type LessonStatus,
   type SkillScores,
-} from '../lib/curriculum';
+} from '../lib/curriculumCore';
+import { CurriculumRepositoryError, loadCurriculumLevel } from '../lib/curriculumRepository';
 
 type LessonProgressRow = {
   lesson_id: string;
@@ -45,9 +46,11 @@ export default function CurriculumPage() {
   const [progressRows, setProgressRows] = useState<LessonProgressRow[]>([]);
   const [attemptRows, setAttemptRows] = useState<ExerciseAttemptRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [contentLoading, setContentLoading] = useState(true);
+  const [contentError, setContentError] = useState<string | null>(null);
+  const [level, setLevel] = useState<CurriculumLevel | null>(null);
   const [status, setStatus] = useState<string | null>(null);
 
-  const level = getCurriculumLevel(language, levelNumber) ?? getCurriculumLevel(language, 1)!;
   const progressByLessonId = useMemo(
     () => new Map(progressRows.map((row) => [row.lesson_id, row])),
     [progressRows],
@@ -64,6 +67,7 @@ export default function CurriculumPage() {
   }, [attemptRows]);
   const lessonStatuses = useMemo(() => {
     const statuses = new Map<string, LessonStatus>();
+    if (!level) return statuses;
     level.lessons.forEach((lesson, index) => {
       const savedStatus = progressByLessonId.get(lesson.id)?.status;
       const previousLesson = level.lessons[index - 1];
@@ -71,19 +75,20 @@ export default function CurriculumPage() {
       statuses.set(lesson.id, savedStatus ?? (previousPassed ? 'available' : 'locked'));
     });
     return statuses;
-  }, [level.lessons, progressByLessonId]);
-  const selectedLesson = level.lessons.find((lesson) => lesson.id === selectedLessonId) ?? level.lessons[0];
-  const selectedExercise = selectedLesson.exercises.find((exercise) => exercise.id === selectedExerciseId) ?? selectedLesson.exercises[0];
-  const selectedLessonStatus = lessonStatuses.get(selectedLesson.id) ?? 'available';
-  const levelExamAvailable = level.lessons.every((lesson) => lessonStatuses.get(lesson.id) === 'passed');
-  const selectedLessonAttempts = selectedLesson.exercises.map((exercise) => attemptsByExerciseId.get(exercise.id)).filter(Boolean) as ExerciseAttemptRow[];
+  }, [level, progressByLessonId]);
+  const selectedLesson = level?.lessons.find((lesson) => lesson.id === selectedLessonId) ?? level?.lessons[0];
+  const selectedExercise = selectedLesson?.exercises.find((exercise) => exercise.id === selectedExerciseId) ?? selectedLesson?.exercises[0];
+  const selectedLessonStatus = selectedLesson ? lessonStatuses.get(selectedLesson.id) ?? 'available' : 'available';
+  const levelExamAvailable = Boolean(level?.lessons.every((lesson) => lessonStatuses.get(lesson.id) === 'passed'));
+  const selectedLessonAttempts =
+    (selectedLesson?.exercises.map((exercise) => attemptsByExerciseId.get(exercise.id)).filter(Boolean) as ExerciseAttemptRow[] | undefined) ?? [];
   const selectedLessonAverage = selectedLessonAttempts.length
     ? Math.round(selectedLessonAttempts.reduce((sum, attempt) => sum + attempt.score, 0) / selectedLessonAttempts.length)
     : 0;
-  const selectedLessonIndex = level.lessons.findIndex((lesson) => lesson.id === selectedLesson.id);
-  const selectedExerciseIndex = selectedLesson.exercises.findIndex((exercise) => exercise.id === selectedExercise.id);
-  const nextLesson = selectedLessonIndex >= 0 ? level.lessons[selectedLessonIndex + 1] : undefined;
-  const nextExercise = selectedExerciseIndex >= 0 ? selectedLesson.exercises[selectedExerciseIndex + 1] : undefined;
+  const selectedLessonIndex = level && selectedLesson ? level.lessons.findIndex((lesson) => lesson.id === selectedLesson.id) : -1;
+  const selectedExerciseIndex = selectedLesson && selectedExercise ? selectedLesson.exercises.findIndex((exercise) => exercise.id === selectedExercise.id) : -1;
+  const nextLesson = level && selectedLessonIndex >= 0 ? level.lessons[selectedLessonIndex + 1] : undefined;
+  const nextExercise = selectedLesson && selectedExerciseIndex >= 0 ? selectedLesson.exercises[selectedExerciseIndex + 1] : undefined;
   const hasNextExercise = Boolean(nextExercise || nextLesson?.exercises[0]);
 
   useEffect(() => {
@@ -99,8 +104,31 @@ export default function CurriculumPage() {
   }, [language, levelNumber]);
 
   useEffect(() => {
+    void loadContent();
+  }, [language, levelNumber]);
+
+  useEffect(() => {
     void loadProgress();
   }, [language, levelNumber, supabaseReady, user?.id]);
+
+  async function loadContent() {
+    setContentLoading(true);
+    setContentError(null);
+    try {
+      const nextLevel = await loadCurriculumLevel(language, levelNumber);
+      setLevel(nextLevel);
+      setSelectedLessonId((current) => (current && nextLevel.lessons.some((lesson) => lesson.id === current) ? current : nextLevel.lessons[0]?.id ?? null));
+      setSelectedExerciseId(null);
+    } catch (error) {
+      setLevel(null);
+      const message = error instanceof CurriculumRepositoryError
+        ? error.message
+        : 'Curriculum content is unavailable. Please retry.';
+      setContentError(message);
+    } finally {
+      setContentLoading(false);
+    }
+  }
 
   async function loadProgress() {
     if (!user || !supabaseReady) {
@@ -137,6 +165,7 @@ export default function CurriculumPage() {
   }
 
   function goToNextExercise() {
+    if (!selectedLesson) return;
     if (nextExercise) {
       setSelectedExerciseId(nextExercise.id);
       return;
@@ -149,6 +178,7 @@ export default function CurriculumPage() {
     }
   }
   async function completeExercise(exercise: CurriculumExercise, result: ExerciseResult) {
+    if (!selectedLesson) return;
     const attempt: ExerciseAttemptRow = {
       lesson_id: selectedLesson.id,
       exercise_id: exercise.id,
@@ -278,11 +308,25 @@ export default function CurriculumPage() {
         <aside className="xl:col-span-4 rounded-2xl bg-surface-container-lowest p-5 whisper-shadow">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-primary">{level.title}</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-primary">{level?.title ?? 'Loading curriculum'}</p>
               <h2 className="mt-1 font-headline font-black text-xl text-on-surface">Lessons</h2>
             </div>
-            {loading && <LoaderCircle className="h-5 w-5 animate-spin text-primary" />}
+            {(loading || contentLoading) && <LoaderCircle className="h-5 w-5 animate-spin text-primary" />}
           </div>
+          {contentError ? (
+            <div className="rounded-2xl border border-primary/10 bg-primary/5 p-4 text-sm text-on-surface">
+              <p>{contentError}</p>
+              <button type="button" onClick={() => void loadContent()} className="mt-3 inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-xs font-bold text-on-primary">
+                <RotateCcw className="h-4 w-4" />
+                Retry
+              </button>
+            </div>
+          ) : contentLoading || !level || !selectedLesson || !selectedExercise ? (
+            <div className="flex min-h-48 items-center justify-center rounded-2xl bg-surface-container-low text-sm font-semibold text-on-surface-variant">
+              <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+              Loading curriculum content...
+            </div>
+          ) : (
           <div className="space-y-3">
             {level.lessons.map((lesson) => {
               const status = lessonStatuses.get(lesson.id) ?? 'available';
@@ -334,10 +378,25 @@ export default function CurriculumPage() {
               </p>
             </button>
           </div>
+          )}
         </aside>
 
         <section className="xl:col-span-8 space-y-5">
-          {examOpen ? (
+          {contentError ? (
+            <div className="rounded-2xl bg-surface-container-lowest p-8 text-center whisper-shadow">
+              <h3 className="font-headline font-black text-xl text-on-surface">Content unavailable</h3>
+              <p className="mt-2 text-sm text-on-surface-variant">{contentError}</p>
+              <button type="button" onClick={() => void loadContent()} className="mt-5 inline-flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-bold text-on-primary">
+                <RotateCcw className="h-4 w-4" />
+                Retry
+              </button>
+            </div>
+          ) : contentLoading || !level || !selectedLesson || !selectedExercise ? (
+            <div className="flex min-h-80 items-center justify-center rounded-2xl bg-surface-container-lowest p-8 text-sm font-semibold text-on-surface-variant whisper-shadow">
+              <LoaderCircle className="mr-2 h-5 w-5 animate-spin text-primary" />
+              Loading selected level...
+            </div>
+          ) : examOpen ? (
             <div className="rounded-2xl bg-surface-container-lowest p-5 sm:p-6 whisper-shadow border border-outline-variant/10">
               <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary">Level exam</p>
               <h2 className="mt-2 font-headline font-black text-2xl text-on-surface">{level.levelExam.title}</h2>

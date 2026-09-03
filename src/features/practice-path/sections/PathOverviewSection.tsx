@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { CURRICULUM_LEVELS } from '../../../lib/curriculum';
+import { CURRICULUM_LEVELS } from '../../../lib/curriculumCore';
 import type { PathCopy, PracticePathLevelMap } from '../types';
 
 export function PathOverviewSection({ copy, phaseOneLevels }: { copy: PathCopy; phaseOneLevels: PracticePathLevelMap[] }) {

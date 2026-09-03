@@ -1,20 +1,19 @@
-import { CURRICULUM, CURRICULUM_LEVELS, getCurriculumLevel, type CurriculumLanguage, type CurriculumLesson } from '../../lib/curriculum';
+import { type CefrBand, type CurriculumLanguage, type CurriculumLesson } from '../../lib/curriculumCore';
 import type { CefrLevel, LearningLanguage, PracticeExercise, PracticeLesson, PracticeSkill } from '../../lib/learning';
+import { loadCurriculumLevelSummaries, loadCurriculumLevelsByBand } from '../../lib/curriculumRepository';
 import type { PracticePathLevelMap } from './types';
 
 const PRACTICE_PATH_SKILLS: PracticeSkill[] = ['Dictation', 'Reading', 'Listening', 'Writing'];
 
-export function getStructuredPracticeLessons(level: CefrLevel, language: LearningLanguage): PracticeLesson[] {
-  return CURRICULUM.filter((curriculumLevel) => curriculumLevel.language === toCurriculumLanguage(language) && curriculumLevel.cefrLevel === level)
+export async function loadStructuredPracticeLessons(level: CefrLevel, language: LearningLanguage): Promise<PracticeLesson[]> {
+  const curriculumLevels = await loadCurriculumLevelsByBand(toCurriculumLanguage(language), level as CefrBand);
+  return curriculumLevels
     .flatMap((curriculumLevel) => curriculumLevel.lessons)
     .map((lesson, index) => adaptStructuredLesson(lesson, index + 1));
 }
 
-export function getStructuredLevelMap(language: LearningLanguage): PracticePathLevelMap[] {
-  const curriculumLanguage = toCurriculumLanguage(language);
-  return CURRICULUM_LEVELS.map((_, index) => getCurriculumLevel(curriculumLanguage, index + 1)).filter(
-    (level): level is PracticePathLevelMap => Boolean(level),
-  );
+export async function loadStructuredLevelMap(language: LearningLanguage): Promise<PracticePathLevelMap[]> {
+  return loadCurriculumLevelSummaries(toCurriculumLanguage(language));
 }
 
 function adaptStructuredLesson(lesson: CurriculumLesson, number: number): PracticeLesson {

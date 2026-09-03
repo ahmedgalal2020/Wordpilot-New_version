@@ -20,8 +20,9 @@
     "test:curriculum-naturalness": "tsx scripts/curriculum-naturalness-audit.ts",
     "test:curriculum-diversity": "tsx scripts/curriculum-diversity-depth.ts",
     "test:curriculum-coherence": "tsx scripts/curriculum-semantic-coherence.ts",
+    "test:curriculum-repository": "tsx scripts/curriculum-repository-smoke.ts",
     "test:dictation": "tsx scripts/dictation-analysis-smoke.ts",
-    "test": "npm run test:api-routes && npm run test:curriculum && npm run test:curriculum-quality && npm run test:curriculum-naturalness && npm run test:curriculum-diversity && npm run test:curriculum-coherence && npm run test:dictation",
+    "test": "npm run test:api-routes && npm run test:curriculum && npm run test:curriculum-quality && npm run test:curriculum-naturalness && npm run test:curriculum-diversity && npm run test:curriculum-coherence && npm run test:curriculum-repository && npm run test:dictation",
     "sync:curriculum-content": "tsx scripts/sync-curriculum-content.ts"
   },
   "dependencies": {

@@ -1,9 +1,11 @@
+const viteEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env ?? {};
+
 const requiredClientEnv = {
-  supabaseUrl: import.meta.env.VITE_SUPABASE_URL,
-  supabaseAnonKey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+  supabaseUrl: viteEnv.VITE_SUPABASE_URL,
+  supabaseAnonKey: viteEnv.VITE_SUPABASE_ANON_KEY,
 };
 
-export const productionAppUrl = (import.meta.env.VITE_APP_URL ?? '').trim().replace(/\/$/, '');
+export const productionAppUrl = (viteEnv.VITE_APP_URL ?? '').trim().replace(/\/$/, '');
 
 export function getAppUrl() {
   if (productionAppUrl) {
@@ -33,7 +35,7 @@ export function hasSupabaseEnv() {
 }
 
 export function hasGeminiEnv() {
-  return import.meta.env.VITE_AI_GENERATION_ENABLED !== 'false';
+  return viteEnv.VITE_AI_GENERATION_ENABLED !== 'false';
 }
 
 export const clientEnv = {

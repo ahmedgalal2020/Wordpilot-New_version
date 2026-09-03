@@ -15,7 +15,7 @@ export function TrainingPlanSection({
 }: {
   copy: PathCopy;
   lessons: PracticePathLesson[];
-  selectedLesson: PracticePathLesson;
+  selectedLesson: PracticePathLesson | null;
   exercises: PracticePathExercise[];
   reportLoading: boolean;
   progressLoading: boolean;
@@ -42,7 +42,13 @@ export function TrainingPlanSection({
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-12 xl:items-start">
         <LessonList copy={copy} lessons={lessons} selectedLesson={selectedLesson} onSelectLesson={onSelectLesson} />
-        <LessonDetail copy={copy} selectedLesson={selectedLesson} exercises={exercises} onStartExercise={onStartExercise} />
+        {selectedLesson ? (
+          <LessonDetail copy={copy} selectedLesson={selectedLesson} exercises={exercises} onStartExercise={onStartExercise} />
+        ) : (
+          <div className="rounded-2xl border border-outline-variant/10 bg-surface-container-lowest p-8 text-center text-sm font-semibold text-on-surface-variant whisper-shadow xl:col-span-7">
+            {progressLoading ? copy.syncingPath : copy.levelMapFallback}
+          </div>
+        )}
       </div>
     </section>
   );
@@ -65,7 +71,7 @@ function LessonList({
 }: {
   copy: PathCopy;
   lessons: PracticePathLesson[];
-  selectedLesson: PracticePathLesson;
+  selectedLesson: PracticePathLesson | null;
   onSelectLesson: (lessonId: string) => void;
 }) {
   return (
@@ -82,7 +88,7 @@ function LessonList({
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {lessons.map((lesson) => (
           <div key={lesson.id}>
-            <LessonButton copy={copy} lesson={lesson} active={lesson.id === selectedLesson.id} onSelectLesson={onSelectLesson} />
+            <LessonButton copy={copy} lesson={lesson} active={lesson.id === selectedLesson?.id} onSelectLesson={onSelectLesson} />
           </div>
         ))}
       </div>
