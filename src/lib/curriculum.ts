@@ -463,21 +463,21 @@ function buildSeeds(language: CurriculumLanguage, profile: LevelProfile): Lesson
   const grammar = pack.grammar[profile.levelNumber] ?? BASE_GRAMMAR[profile.levelNumber];
 
   return themes.map((theme, index) => {
-    const grammarFocus = grammar[index % grammar.length];
+    const grammarFocus = coherentGrammarFocus(language, theme, grammar[index % grammar.length], profile.cefrLevel);
     const grammarFocusId = `${slug(language)}-${profile.label.toLowerCase()}-${slug(grammarFocus)}`;
     const newVocabulary = buildLessonVocabulary(language, profile, theme, grammarFocus, index);
     const reviewVocabulary = buildReviewVocabulary(pack.words[profile.cefrLevel], index, newVocabulary.map((item) => item.word));
     const vocabulary = [...newVocabulary, ...reviewVocabulary];
     const chunks = buildLessonChunks(language, profile, theme, grammarFocus, index);
-    const exampleSentences = buildExampleSentences(language, profile, theme, grammarFocus, vocabulary, chunks, index);
-    const targetSentence = buildTargetSentence(language, profile, theme, grammarFocus, vocabulary, index);
-    const readingText = buildLessonReading(language, profile, theme, grammarFocus, vocabulary, chunks, index);
-    const readingQuestions = buildLessonReadingQuestions(language, theme, readingText, vocabulary, profile);
-    const listeningScript = buildListeningScript(language, profile, theme, grammarFocus, vocabulary, index);
-    const listeningQuestions = buildLessonListeningQuestions(language, listeningScript, theme, vocabulary);
+    const exampleSentences = buildExampleSentences(language, profile, theme, grammarFocus, newVocabulary, chunks, index);
+    const targetSentence = buildTargetSentence(language, profile, theme, grammarFocus, newVocabulary, index);
+    const readingText = buildLessonReading(language, profile, theme, grammarFocus, newVocabulary, chunks, index);
+    const readingQuestions = buildLessonReadingQuestions(language, theme, readingText, newVocabulary, profile);
+    const listeningScript = buildListeningScript(language, profile, theme, grammarFocus, newVocabulary, index);
+    const listeningQuestions = buildLessonListeningQuestions(language, listeningScript, theme, newVocabulary);
     const grammarItems = buildLessonGrammarItems(language, grammarFocus, grammarFocusId, targetSentence, index);
-    const writingTask = buildWritingTaskObject(language, theme, profile, grammarFocus, vocabulary, chunks, index);
-    const speakingTask = buildSpeakingTaskObject(language, theme, profile, grammarFocus, vocabulary, index);
+    const writingTask = buildWritingTaskObject(language, theme, profile, grammarFocus, newVocabulary, chunks, index);
+    const speakingTask = buildSpeakingTaskObject(language, theme, profile, grammarFocus, newVocabulary, index);
     const roleplay = buildRoleplayTaskObject(language, theme, profile, grammarFocus, index);
 
     return {
@@ -506,6 +506,58 @@ function buildSeeds(language: CurriculumLanguage, profile: LevelProfile): Lesson
       roleplay,
     };
   });
+}
+
+function coherentGrammarFocus(language: CurriculumLanguage, theme: string, fallback: string, band: CefrBand) {
+  const domain = lessonDomain(theme);
+  const byDomain = {
+    English: {
+      planning: band === 'A1' ? 'want to and future time' : 'time clauses and scheduling language',
+      digital: band === 'A1' ? 'email openings and closings' : 'digital instructions and polite requests',
+      travel: 'prepositions and travel connectors',
+      shopping: 'polite questions and articles',
+      health: 'symptoms, have, and polite requests',
+      work: 'formal requests and workplace register',
+      education: 'learning routines and reason clauses',
+    },
+    German: {
+      planning: band === 'A1' ? 'Zeitangaben und möchte' : 'Terminabsprachen und Nebensätze',
+      digital: band === 'A1' ? 'E-Mail-Formeln' : 'digitale Anweisungen und höfliche Bitten',
+      travel: 'Wegbeschreibung und Präpositionen',
+      shopping: 'höfliche Fragen und Artikel',
+      health: 'Körper, haben und höfliche Bitten',
+      work: 'formelle Bitten und berufliches Register',
+      education: 'Lernroutinen und weil-Sätze',
+    },
+    Spanish: {
+      planning: band === 'A1' ? 'querer y tiempo futuro' : 'citas y oraciones temporales',
+      digital: band === 'A1' ? 'fórmulas de correo' : 'instrucciones digitales y peticiones corteses',
+      travel: 'preposiciones y conectores de viaje',
+      shopping: 'preguntas corteses y artículos',
+      health: 'cuerpo, tener y peticiones corteses',
+      work: 'peticiones formales y registro laboral',
+      education: 'rutinas de aprendizaje y porque',
+    },
+    Italian: {
+      planning: band === 'A1' ? 'volere e tempo futuro' : 'appuntamenti e frasi temporali',
+      digital: band === 'A1' ? 'formule email' : 'istruzioni digitali e richieste cortesi',
+      travel: 'preposizioni e connettori di viaggio',
+      shopping: 'domande cortesi e articoli',
+      health: 'corpo, avere e richieste cortesi',
+      work: 'richieste formali e registro lavorativo',
+      education: 'routine di apprendimento e perché',
+    },
+    French: {
+      planning: band === 'A1' ? 'vouloir et futur proche' : 'rendez-vous et propositions temporelles',
+      digital: band === 'A1' ? 'formules de courriel' : 'instructions numériques et demandes polies',
+      travel: 'prépositions et connecteurs de voyage',
+      shopping: 'questions polies et articles',
+      health: 'corps, avoir et demandes polies',
+      work: 'demandes formelles et registre professionnel',
+      education: 'routines d’apprentissage et parce que',
+    },
+  } satisfies Record<CurriculumLanguage, Partial<Record<string, string>>>;
+  return byDomain[language][domain] ?? fallback;
 }
 
 function buildLesson(
@@ -676,21 +728,40 @@ function buildLessonVocabulary(
   grammarFocus: string,
   index: number,
 ): CurriculumVocabularyItem[] {
-  const source = [...realVocabularyItems(language, profile.cefrLevel, theme), ...expandedVocabularyItems(language, profile.cefrLevel)];
-  const seed = `${language}-${profile.label}-${index}-${lessonTopic(language, theme)}`;
   const domain = lessonDomain(theme);
+  const constrainedDomain = domain === 'planning' || domain === 'digital';
+  const semanticallyRelated = [
+    ...domainVocabularyItems(language, profile.cefrLevel, domain),
+    ...realVocabularyItems(language, profile.cefrLevel, theme),
+    ...expandedVocabularyItems(language, profile.cefrLevel).filter((item) => relevanceScore(domain, item.term) > 0),
+  ];
+  const fallback = [...realVocabularyItems(language, profile.cefrLevel, theme), ...expandedVocabularyItems(language, profile.cefrLevel)];
+  const source = constrainedDomain ? dedupeLexicalEntries(semanticallyRelated.length >= 12 ? semanticallyRelated : [...semanticallyRelated, ...fallback]) : dedupeLexicalEntries(fallback);
+  const seed = `${language}-${profile.label}-${index}-${lessonTopic(language, theme)}`;
   const ordered = [...source]
     .sort((left, right) => {
       const relevance = relevanceScore(domain, right.term) - relevanceScore(domain, left.term);
       return relevance || hashString(`${seed}-${left.term}`) - hashString(`${seed}-${right.term}`);
     });
-  const offset = ((index + profile.levelNumber * 5) * 7) % ordered.length;
-  const items = rotate(ordered, offset).slice(0, 9);
+  const relevant = constrainedDomain ? ordered.filter((item) => relevanceScore(domain, item.term) > 0) : ordered;
+  const pool = relevant.length >= 9 ? relevant : ordered;
+  const offset = ((index + profile.levelNumber * 5) * 7) % pool.length;
+  const items = rotate(pool, offset).slice(0, 9);
   return items.map((item, itemIndex) => {
     const word = item.term;
     const translation = item.meaning;
     const example = vocabularyExample(language, profile, theme, grammarFocus, word, itemIndex);
     return { word, translation, example, audioText: word };
+  });
+}
+
+function dedupeLexicalEntries(entries: LexicalEntry[]) {
+  const seen = new Set<string>();
+  return entries.filter((entry) => {
+    const key = normalizeText(entry.term);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
   });
 }
 
@@ -704,7 +775,7 @@ function buildLessonChunks(
   return rotate(chunkFrames(language, profile.cefrLevel), index).slice(0, 5).map((frame, frameIndex) => ({
     phrase: frame.phrase(theme),
     meaning: frame.meaning,
-    example: chunkExample(language, profile, theme, grammarFocus, frameIndex),
+    example: chunkExample(language, profile, frame.phrase(theme), frameIndex),
   }));
 }
 
@@ -809,11 +880,11 @@ function buildListeningScript(
 function listeningDetail(language: CurriculumLanguage, word: string, index: number) {
   const detail = targetLexeme(language, '', word);
   const variants = {
-    English: [`Please listen for the keyword "${detail}" before you answer.`, `The speaker mentions the keyword "${detail}" near the end.`, `The final message includes the word "${detail}".`],
-    German: [`Achten Sie vor der Antwort auf das Stichwort "${detail}".`, `Die sprechende Person nennt am Ende das Stichwort "${detail}".`, `Die letzte Nachricht enthält das Wort "${detail}".`],
-    Spanish: [`Escucha la palabra clave "${detail}" antes de responder.`, `La persona menciona la palabra clave "${detail}" al final.`, `El último mensaje incluye la palabra "${detail}".`],
-    Italian: [`Ascolta la parola chiave "${detail}" prima di rispondere.`, `La persona menziona la parola chiave "${detail}" alla fine.`, `L’ultimo messaggio include la parola "${detail}".`],
-    French: [`Écoutez le mot-clé "${detail}" avant de répondre.`, `La personne mentionne le mot-clé "${detail}" à la fin.`, `Le dernier message contient le mot "${detail}".`],
+    English: [`Please call me back today if "${detail}" changes.`, `I will send another message after three about "${detail}".`, `Please confirm "${detail}" before the end of the day.`],
+    German: [`Bitte rufen Sie mich heute zurück, falls sich "${detail}" ändert.`, `Ich schicke nach drei Uhr noch eine Nachricht zu "${detail}".`, `Bitte bestätigen Sie "${detail}" bis zum Ende des Tages.`],
+    Spanish: [`Llámame hoy si cambia "${detail}".`, `Enviaré otro mensaje después de las tres sobre "${detail}".`, `Confirma "${detail}" antes del final del día.`],
+    Italian: [`Chiamami oggi se cambia "${detail}".`, `Manderò un altro messaggio dopo le tre su "${detail}".`, `Conferma "${detail}" entro la fine della giornata.`],
+    French: [`Rappelez-moi aujourd’hui si "${detail}" change.`, `J’enverrai un autre message après quinze heures au sujet de "${detail}".`, `Confirmez "${detail}" avant la fin de la journée.`],
   } satisfies Record<CurriculumLanguage, string[]>;
   return variants[language][index % variants[language].length];
 }
@@ -919,6 +990,46 @@ function formatRoleplay(task: RoleplayTask) {
 type FrameContext = { theme: string; grammarFocus: string; word: string; chunk: string; level: string };
 type TextFrame = (context: FrameContext) => string;
 type LexicalEntry = { term: string; meaning: string };
+
+function domainVocabularyItems(language: CurriculumLanguage, band: CefrBand, domain: string): LexicalEntry[] {
+  const shared = {
+    English: {
+      planning: [['plan', 'plan'], ['appointment', 'appointment'], ['calendar', 'calendar'], ['tomorrow', 'tomorrow'], ['next week', 'next week'], ['available', 'available'], ['confirm', 'confirm'], ['change', 'change'], ['cancel', 'cancel'], ['meeting', 'meeting'], ['time slot', 'time slot'], ['deadline', 'deadline']],
+      digital: [['account', 'account'], ['password', 'password'], ['email', 'email'], ['attachment', 'attachment'], ['message', 'message'], ['screen', 'screen'], ['login', 'login'], ['download', 'download'], ['file', 'file'], ['link', 'link'], ['notification', 'notification'], ['settings', 'settings']],
+    },
+    German: {
+      planning: [['der Plan', 'plan'], ['der Termin', 'appointment'], ['der Kalender', 'calendar'], ['morgen', 'tomorrow'], ['nächste Woche', 'next week'], ['verfügbar', 'available'], ['bestätigen', 'confirm'], ['verschieben', 'move'], ['absagen', 'cancel'], ['die Besprechung', 'meeting'], ['das Zeitfenster', 'time slot'], ['die Frist', 'deadline']],
+      digital: [['das Konto', 'account'], ['das Passwort', 'password'], ['die E-Mail', 'email'], ['der Anhang', 'attachment'], ['die Nachricht', 'message'], ['der Bildschirm', 'screen'], ['sich anmelden', 'log in'], ['herunterladen', 'download'], ['die Datei', 'file'], ['der Link', 'link'], ['die Benachrichtigung', 'notification'], ['die Einstellungen', 'settings']],
+    },
+    Spanish: {
+      planning: [['el plan', 'plan'], ['la cita', 'appointment'], ['el calendario', 'calendar'], ['mañana', 'tomorrow'], ['la próxima semana', 'next week'], ['disponible', 'available'], ['confirmar', 'confirm'], ['cambiar', 'change'], ['cancelar', 'cancel'], ['la reunión', 'meeting'], ['la franja horaria', 'time slot'], ['el plazo', 'deadline']],
+      digital: [['la cuenta', 'account'], ['la contraseña', 'password'], ['el correo', 'email'], ['el archivo adjunto', 'attachment'], ['el mensaje', 'message'], ['la pantalla', 'screen'], ['iniciar sesión', 'log in'], ['descargar', 'download'], ['el archivo', 'file'], ['el enlace', 'link'], ['la notificación', 'notification'], ['los ajustes', 'settings']],
+    },
+    Italian: {
+      planning: [['il piano', 'plan'], ['l’appuntamento', 'appointment'], ['il calendario', 'calendar'], ['domani', 'tomorrow'], ['la prossima settimana', 'next week'], ['disponibile', 'available'], ['confermare', 'confirm'], ['spostare', 'move'], ['annullare', 'cancel'], ['la riunione', 'meeting'], ['la fascia oraria', 'time slot'], ['la scadenza', 'deadline']],
+      digital: [['l’account', 'account'], ['la password', 'password'], ['l’email', 'email'], ['l’allegato', 'attachment'], ['il messaggio', 'message'], ['lo schermo', 'screen'], ['accedere', 'log in'], ['scaricare', 'download'], ['il file', 'file'], ['il link', 'link'], ['la notifica', 'notification'], ['le impostazioni', 'settings']],
+    },
+    French: {
+      planning: [['le projet', 'plan'], ['le rendez-vous', 'appointment'], ['le calendrier', 'calendar'], ['demain', 'tomorrow'], ['la semaine prochaine', 'next week'], ['disponible', 'available'], ['confirmer', 'confirm'], ['déplacer', 'move'], ['annuler', 'cancel'], ['la réunion', 'meeting'], ['le créneau', 'time slot'], ['le délai', 'deadline']],
+      digital: [['le compte', 'account'], ['le mot de passe', 'password'], ['le courriel', 'email'], ['la pièce jointe', 'attachment'], ['le message', 'message'], ['l’écran', 'screen'], ['se connecter', 'log in'], ['télécharger', 'download'], ['le fichier', 'file'], ['le lien', 'link'], ['la notification', 'notification'], ['les paramètres', 'settings']],
+    },
+  } satisfies Record<CurriculumLanguage, Record<'planning' | 'digital', Array<[string, string]>>>;
+
+  const byDomain = {
+    identity: realVocabularyItems(language, band, 'Introductions'),
+    travel: realVocabularyItems(language, band, 'Travel'),
+    shopping: realVocabularyItems(language, band, 'Shopping'),
+    health: realVocabularyItems(language, band, 'Health'),
+    work: realVocabularyItems(language, band, 'Work'),
+    education: realVocabularyItems(language, band, 'Education'),
+    advanced: expandedVocabularyItems(language, band),
+    planning: shared[language].planning.map(([term, meaning]) => ({ term, meaning })),
+    digital: shared[language].digital.map(([term, meaning]) => ({ term, meaning })),
+    general: realVocabularyItems(language, band, 'Review'),
+  } satisfies Record<string, LexicalEntry[]>;
+
+  return byDomain[domain] ?? byDomain.general;
+}
 
 function realVocabularyItems(language: CurriculumLanguage, band: CefrBand, theme: string): LexicalEntry[] {
   const topic = lessonTopic(language, theme);
@@ -1115,7 +1226,8 @@ function lessonScenario(language: CurriculumLanguage, theme: string, band: CefrB
     Italian: ['chiedere una risposta chiara', 'spiegare un piccolo cambiamento con cortesia', 'scegliere tra due opzioni realistiche', 'raccontare che cosa è successo', 'chiedere una soluzione pratica', 'riassumere la decisione'],
     French: ['demander une réponse claire', 'mieux expliquer un petit changement', 'choisir entre deux options réalistes', 'raconter ce qui s’est passé', 'demander une solution pratique', 'résumer la décision'],
   } satisfies Record<CurriculumLanguage, string[]>;
-  const setting = settings[language][band][index % settings[language][band].length];
+  const domainSettings = scenarioSettingsForDomain(language, lessonDomain(theme));
+  const setting = domainSettings.length > 0 ? domainSettings[index % domainSettings.length] : settings[language][band][index % settings[language][band].length];
   const need = needs[language][index % needs[language].length];
   return {
     topic,
@@ -1125,48 +1237,75 @@ function lessonScenario(language: CurriculumLanguage, theme: string, band: CefrB
   };
 }
 
-function naturalTargetSentence(language: CurriculumLanguage, band: CefrBand, topic: string, setting: string, need: string, word: string) {
-  const term = targetLexeme(language, topic, word);
-  const frames: Record<CurriculumLanguage, Record<CefrBand, string>> = {
+function scenarioSettingsForDomain(language: CurriculumLanguage, domain: string) {
+  const settings = {
     English: {
-      A1: `In "${topic}", excuse me, is the word "${term}" correct here?`,
-      A2: `In "${topic}", I changed my plan at ${setting} because I could not confirm the ${term} yesterday.`,
-      B1: `In "${topic}", when the ${term} caused a problem at ${setting}, I explained what had happened and asked for help.`,
-      B2: `In "${topic}", although the ${term} looked convenient at ${setting}, the team chose the safer option after comparing the evidence.`,
-      C1: `In "${topic}", the manager at ${setting} acknowledged the value of the ${term}, but argued that its impact had been overstated.`,
-      C2: `In "${topic}", what sounded like praise for the ${term} at ${setting} was actually a carefully phrased warning about the whole proposal.`,
+      planning: ['during a planning call', 'in a calendar message', 'after an appointment change'],
+      digital: ['in an email thread', 'during a support chat', 'on an account settings screen'],
     },
     German: {
-      A1: `In der Situation "${topic}" frage ich: Ist das Wort "${term}" hier richtig?`,
-      A2: `In der Situation "${topic}" habe ich meinen Plan ${setting} geändert, weil ${term} gestern nicht verfügbar war.`,
-      B1: `In der Situation "${topic}" verursachte ${term} ${setting} ein Problem; danach bat ich um Hilfe.`,
-      B2: `In der Situation "${topic}" wirkte ${term} ${setting} praktisch, doch das Team wählte nach dem Vergleich der Belege die sicherere Option.`,
-      C1: `In der Situation "${topic}" räumte die Leitung ${setting} ein, dass ${term} nützlich sei, betonte jedoch, die Wirkung werde überschätzt.`,
-      C2: `In der Situation "${topic}" klang ${term} ${setting} zunächst positiv, doch es war eine vorsichtig formulierte Warnung.`,
+      planning: ['in einem Planungsgespräch', 'in einer Kalendernachricht', 'nach einer Terminänderung'],
+      digital: ['in einem E-Mail-Verlauf', 'in einem Support-Chat', 'auf der Seite mit den Kontoeinstellungen'],
     },
     Spanish: {
-      A1: `En la situación "${topic}", perdón, ¿la palabra "${term}" está bien aquí?`,
-      A2: `En la situación "${topic}", cambié mi plan ${setting} porque ${term} no estaba disponible ayer.`,
-      B1: `En la situación "${topic}", cuando ${term} causó un problema ${setting}, expliqué lo que había pasado y pedí ayuda.`,
-      B2: `En la situación "${topic}", aunque ${term} parecía conveniente ${setting}, el equipo eligió la opción más segura tras comparar la evidencia.`,
-      C1: `En la situación "${topic}", la directora ${setting} admitió que ${term} podía ser útil, pero sostuvo que su impacto se había exagerado.`,
-      C2: `En la situación "${topic}", al principio ${term} parecía un elogio ${setting}, pero era una advertencia cuidadosamente formulada.`,
+      planning: ['durante una llamada de planificación', 'en un mensaje de calendario', 'después de un cambio de cita'],
+      digital: ['en un hilo de correo', 'en un chat de soporte', 'en la pantalla de ajustes de la cuenta'],
     },
     Italian: {
-      A1: `Nella situazione "${topic}", scusi, la parola "${term}" va bene qui?`,
-      A2: `Nella situazione "${topic}", ho cambiato il mio piano ${setting} perché ${term} ieri non era disponibile.`,
-      B1: `Nella situazione "${topic}", quando ${term} ha creato un problema ${setting}, ho spiegato che cosa era successo e ho chiesto aiuto.`,
-      B2: `Nella situazione "${topic}", sebbene ${term} sembrasse conveniente ${setting}, il team ha scelto l’opzione più sicura dopo aver confrontato le prove.`,
-      C1: `Nella situazione "${topic}", la responsabile ${setting} ha ammesso che ${term} poteva essere utile, ma ha detto che il suo impatto era stato sopravvalutato.`,
-      C2: `Nella situazione "${topic}", all’inizio ${term} sembrava un elogio ${setting}, ma era un avvertimento formulato con cautela.`,
+      planning: ['durante una chiamata di pianificazione', 'in un messaggio di calendario', 'dopo un cambio di appuntamento'],
+      digital: ['in una conversazione email', 'in una chat di assistenza', 'nella schermata delle impostazioni dell’account'],
     },
     French: {
-      A1: `Dans la situation "${topic}", excusez-moi, le mot "${term}" convient ici ?`,
-      A2: `Dans la situation "${topic}", j’ai changé mon projet ${setting} parce que ${term} n’était pas disponible hier.`,
-      B1: `Dans la situation "${topic}", quand ${term} a posé problème ${setting}, j’ai expliqué ce qui s’était passé et j’ai demandé de l’aide.`,
-      B2: `Dans la situation "${topic}", même si ${term} semblait pratique ${setting}, l’équipe a choisi l’option la plus sûre après avoir comparé les preuves.`,
-      C1: `Dans la situation "${topic}", la responsable ${setting} a reconnu que ${term} pouvait être utile, mais a estimé que son impact avait été exagéré.`,
-      C2: `Dans la situation "${topic}", au début ${term} ressemblait à un éloge ${setting}, mais c’était un avertissement soigneusement formulé.`,
+      planning: ['pendant un appel de planification', 'dans un message de calendrier', 'après un changement de rendez-vous'],
+      digital: ['dans un fil de courriels', 'dans un chat d’assistance', 'sur l’écran des paramètres du compte'],
+    },
+  } satisfies Record<CurriculumLanguage, Record<'planning' | 'digital', string[]>>;
+  return domain === 'planning' || domain === 'digital' ? settings[language][domain] : [];
+}
+
+function naturalTargetSentence(language: CurriculumLanguage, band: CefrBand, topic: string, setting: string, need: string, word: string) {
+  const term = targetLexeme(language, topic, word);
+  const context = `${setting}`;
+  const frames: Record<CurriculumLanguage, Record<CefrBand, string>> = {
+    English: {
+      A1: `Can you help me with "${term}" ${context}?`,
+      A2: `I changed the plan ${context} because "${term}" was not confirmed yesterday.`,
+      B1: `When "${term}" caused a problem ${context}, I explained what had happened and asked for help.`,
+      B2: `Although "${term}" looked convenient ${context}, the team chose the safer option after comparing the evidence.`,
+      C1: `The manager ${context} acknowledged the value of "${term}", but argued that its impact had been overstated.`,
+      C2: `What sounded like praise for "${term}" ${context} was actually a carefully phrased warning about the whole proposal.`,
+    },
+    German: {
+      A1: `Können Sie mir ${context} bei "${term}" helfen?`,
+      A2: `Ich habe den Plan ${context} geändert, weil "${term}" gestern nicht bestätigt wurde.`,
+      B1: `Als "${term}" ${context} ein Problem verursachte, erklärte ich den Ablauf und bat um Hilfe.`,
+      B2: `Obwohl "${term}" ${context} praktisch wirkte, wählte das Team nach dem Vergleich der Belege die sicherere Option.`,
+      C1: `Die Leitung ${context} erkannte den Wert von "${term}" an, betonte jedoch, die Wirkung werde überschätzt.`,
+      C2: `Was ${context} wie Lob für "${term}" klang, war eigentlich eine vorsichtig formulierte Warnung.`,
+    },
+    Spanish: {
+      A1: `¿Me puedes ayudar ${context} con "${term}"?`,
+      A2: `Cambié el plan ${context} porque "${term}" no se confirmó ayer.`,
+      B1: `Cuando "${term}" causó un problema ${context}, expliqué lo que había pasado y pedí ayuda.`,
+      B2: `Aunque "${term}" parecía conveniente ${context}, el equipo eligió la opción más segura tras comparar la evidencia.`,
+      C1: `La directora ${context} reconoció el valor de "${term}", pero sostuvo que su impacto se había exagerado.`,
+      C2: `Lo que sonaba a elogio de "${term}" ${context} era en realidad una advertencia cuidadosamente formulada.`,
+    },
+    Italian: {
+      A1: `Può aiutarmi ${context} con "${term}"?`,
+      A2: `Ho cambiato il piano ${context} perché "${term}" ieri non è stato confermato.`,
+      B1: `Quando "${term}" ha creato un problema ${context}, ho spiegato che cosa era successo e ho chiesto aiuto.`,
+      B2: `Sebbene "${term}" sembrasse conveniente ${context}, il team ha scelto l’opzione più sicura dopo aver confrontato le prove.`,
+      C1: `La responsabile ${context} ha riconosciuto il valore di "${term}", ma ha detto che il suo impatto era stato sopravvalutato.`,
+      C2: `Quello che sembrava un elogio di "${term}" ${context} era in realtà un avvertimento formulato con cautela.`,
+    },
+    French: {
+      A1: `Vous pouvez m’aider ${context} avec "${term}" ?`,
+      A2: `J’ai changé le projet ${context} parce que "${term}" n’a pas été confirmé hier.`,
+      B1: `Quand "${term}" a posé problème ${context}, j’ai expliqué ce qui s’était passé et j’ai demandé de l’aide.`,
+      B2: `Même si "${term}" semblait pratique ${context}, l’équipe a choisi l’option la plus sûre après avoir comparé les preuves.`,
+      C1: `La responsable ${context} a reconnu la valeur de "${term}", mais a estimé que son impact avait été exagéré.`,
+      C2: `Ce qui ressemblait à un éloge de "${term}" ${context} était en fait un avertissement soigneusement formulé.`,
     },
   };
   return frames[language][band].replace('  ', ' ');
@@ -1198,6 +1337,8 @@ function hashString(value: string) {
 function lessonDomain(theme: string) {
   const value = normalizeText(theme);
   if (/(intro|vorstellung|presenta|présent|nome|name|famil|personal)/i.test(value)) return 'identity';
+  if (/(plan|project|appointment|schedule|calendar|termin|tagesplan|pläne|projets|cita|appuntament|rendez|calendrier|horaire)/i.test(value)) return 'planning';
+  if (/(digital|email|e mail|courriel|correo|mail|technik|technology|tecnolog|numérique|account|konto|compte)/i.test(value)) return 'digital';
   if (/(city|stadt|ciudad|città|ville|direction|weg|ruta|stazione|station|gare|reisen|travel|viaj|viagg)/i.test(value)) return 'travel';
   if (/(food|essen|comida|cibo|repas|café|restaurant|shopping|shop|tienda|negozio|magasin|precio|price|preis)/i.test(value)) return 'shopping';
   if (/(health|arzt|médic|medic|farmacia|apotheke|doctor|clinic|santé|salud)/i.test(value)) return 'health';
@@ -1214,6 +1355,8 @@ function relevanceScore(domain: string, term: string) {
     travel: ['station', 'ticket', 'street', 'bus stop', 'route', 'platform', 'connection', 'delay', 'bahnhof', 'fahrkarte', 'straße', 'haltestelle', 'weg', 'bahnsteig', 'verbindung', 'verspätung', 'estación', 'billete', 'calle', 'parada', 'ruta', 'andén', 'conexión', 'retraso', 'stazione', 'biglietto', 'strada', 'fermata', 'percorso', 'binario', 'coincidenza', 'ritardo', 'gare', 'billet', 'rue', 'arrêt', 'itinéraire', 'quai', 'correspondance', 'retard'],
     shopping: ['shop', 'meal', 'water', 'coffee', 'price', 'receipt', 'reservation', 'queue', 'geschäft', 'essen', 'wasser', 'kaffee', 'preis', 'quittung', 'reservierung', 'warteschlange', 'tienda', 'comida', 'agua', 'café', 'precio', 'recibo', 'reserva', 'fila', 'negozio', 'pasto', 'acqua', 'caffè', 'prezzo', 'scontrino', 'prenotazione', 'fila', 'magasin', 'repas', 'eau', 'café', 'prix', 'reçu', 'réservation', 'file'],
     health: ['doctor', 'appointment', 'chemist', 'clinic', 'arzt', 'termin', 'apotheke', 'cita', 'farmacia', 'visita', 'farmacia', 'rendez', 'pharmacie'],
+    planning: ['plan', 'appointment', 'calendar', 'tomorrow', 'next week', 'available', 'confirm', 'change', 'cancel', 'meeting', 'time slot', 'deadline', 'termin', 'kalender', 'morgen', 'nächste woche', 'verfügbar', 'bestätigen', 'verschieben', 'absagen', 'besprechung', 'zeitfenster', 'frist', 'cita', 'calendario', 'mañana', 'próxima semana', 'disponible', 'confirmar', 'cambiar', 'cancelar', 'reunión', 'franja', 'plazo', 'appuntamento', 'calendario', 'domani', 'prossima settimana', 'confermare', 'spostare', 'annullare', 'riunione', 'fascia', 'scadenza', 'rendez', 'calendrier', 'demain', 'semaine prochaine', 'confirmer', 'déplacer', 'annuler', 'créneau', 'délai'],
+    digital: ['account', 'password', 'email', 'attachment', 'message', 'screen', 'login', 'download', 'file', 'link', 'notification', 'settings', 'konto', 'passwort', 'e mail', 'anhang', 'nachricht', 'bildschirm', 'anmelden', 'herunterladen', 'datei', 'benachrichtigung', 'einstellungen', 'cuenta', 'contraseña', 'correo', 'archivo', 'adjunto', 'pantalla', 'sesión', 'descargar', 'enlace', 'notificación', 'ajustes', 'account', 'password', 'email', 'allegato', 'messaggio', 'schermo', 'accedere', 'scaricare', 'notifica', 'impostazioni', 'compte', 'mot de passe', 'courriel', 'pièce jointe', 'écran', 'connecter', 'télécharger', 'fichier', 'lien', 'notification', 'paramètres'],
     work: ['meeting', 'deadline', 'feedback', 'budget', 'schedule', 'request', 'decision', 'proposal', 'briefing', 'besprechung', 'frist', 'bewerbung', 'zeitplan', 'anfrage', 'entscheidung', 'vorschlag', 'reunión', 'plazo', 'solicitud', 'presupuesto', 'calendario', 'petición', 'decisión', 'propuesta', 'riunione', 'scadenza', 'candidatura', 'calendario', 'richiesta', 'decisione', 'proposta', 'réunion', 'délai', 'candidature', 'calendrier', 'demande', 'décision', 'proposition'],
     education: ['school', 'training', 'application', 'advice', 'support', 'community', 'schule', 'fortbildung', 'bewerbung', 'rat', 'unterstützung', 'escuela', 'formación', 'solicitud', 'consejo', 'apoyo', 'scuola', 'formazione', 'candidatura', 'consiglio', 'sostegno', 'école', 'formation', 'candidature', 'conseil', 'soutien'],
     advanced: ['nuance', 'register', 'synthesis', 'implication', 'stance', 'ambiguity', 'subtext', 'rhetoric', 'irony', 'precision', 'credibility', 'mitigation', 'alignment', 'framing', 'rationale', 'qualification', 'cohesion', 'emphasis', 'concession', 'premise', 'interpretation', 'nuance', 'register', 'synthese', 'implikation', 'haltung', 'mehrdeutigkeit', 'subtext', 'rhetorik', 'ironie', 'präzision', 'glaubwürdigkeit', 'minderung', 'abstimmung', 'rahmung', 'begründung', 'einschränkung', 'kohärenz', 'betonung', 'zugeständnis', 'prämisse', 'deutung', 'matiz', 'registro', 'síntesis', 'implicación', 'postura', 'ambigüedad', 'subtexto', 'retórica', 'ironía', 'precisión', 'credibilidad', 'mitigación', 'alineación', 'encuadre', 'justificación', 'matización', 'cohesión', 'énfasis', 'concesión', 'premisa', 'interpretación', 'sfumatura', 'registro', 'sintesi', 'implicazione', 'posizione', 'ambiguità', 'sottotesto', 'retorica', 'ironia', 'precisione', 'credibilità', 'mitigazione', 'allineamento', 'inquadramento', 'giustificazione', 'qualificazione', 'coesione', 'enfasi', 'concessione', 'premessa', 'interpretazione', 'sous texte', 'registre', 'synthèse', 'implication', 'posture', 'ambiguïté', 'rhétorique', 'ironie', 'précision', 'crédibilité', 'atténuation', 'alignement', 'cadrage', 'justification', 'qualification', 'cohésion', 'emphase', 'concession', 'prémisse', 'interprétation'],
@@ -1253,103 +1396,82 @@ function authoredLessonLines(
   chunks: CurriculumChunk[],
   index: number,
 ) {
-  const first = keyword(language, vocabulary[index % vocabulary.length].word);
-  const second = keyword(language, vocabulary[(index + 2) % vocabulary.length].word);
-  const third = keyword(language, vocabulary[(index + 4) % vocabulary.length].word);
+  const first = targetLexeme(language, topic, vocabulary[index % vocabulary.length].word);
+  const second = targetLexeme(language, topic, vocabulary[(index + 2) % vocabulary.length].word);
+  const third = targetLexeme(language, topic, vocabulary[(index + 4) % vocabulary.length].word);
   const phrase = chunks[index % chunks.length].phrase;
-  const sentenceSetting = capitalizeFirst(setting);
   const advanced = band === 'C1' || band === 'C2';
   const upper = band === 'B2' || advanced;
   const sets = {
     English: [
       `Excuse me, I have a question about "${topic}".`,
-      `At ${setting}, the speaker listens carefully before answering.`,
-      `The speaker uses ${first} to keep the message specific.`,
-      `A second person asks for clarification and says, "${phrase}".`,
-      `The learner checks ${second} and gives a short, useful answer.`,
-      `The exchange stays polite because the speaker tries to ${need}.`,
-      upper ? `The final answer compares two options before recommending a practical next step.` : `The final answer gives one next step.`,
-      advanced ? `The speaker adjusts the register so the response sounds precise without becoming cold.` : `The message is clear and easy to repeat.`,
-      advanced ? `A careful listener can notice the speaker's hesitation and infer why the safer option is preferred.` : `The listener can answer by repeating the important detail.`,
-      `The answer stays organized: first the situation, then the reason, then the next step.`,
-      `The speaker refers to ${third} only when it helps the listener act.`,
-      upper ? `One detail is deliberately left open, so the answer has to be tactful.` : `The final sentence is polite and direct.`,
-      advanced ? `The text rewards attention to stance, implication, and register rather than isolated words.` : `The short exchange prepares the learner for a similar reply.`,
-      advanced ? `A strong response would acknowledge uncertainty before giving a recommendation.` : `The useful phrase can be reused in a real conversation.`,
-      advanced ? `Nothing in the exchange is dramatic; the difficulty lies in reading the intention accurately.` : `The learner can practise the same pattern with a new detail.`,
-      advanced ? `The best answer keeps the message concise while preserving the nuance.` : `The listener knows what to do next.`,
+      `${capitalizeFirst(setting)}, a short message about ${topic.toLowerCase()} arrives just before the plan changes.`,
+      `The message mentions "${first}" and asks for a clear answer today.`,
+      `The reply begins with "${phrase}" because one detail is still missing.`,
+      `The detail "${second}" is important for the next step, so the answer stays specific.`,
+      `The request stays polite while the person tries to ${need}.`,
+      upper ? `Two options are compared before one practical next step is recommended.` : `The final line gives one practical next step.`,
+      advanced ? `The wording is precise, but it avoids sounding cold or defensive.` : `The message is clear and easy to repeat.`,
+      advanced ? `A slight hesitation suggests that the safer option is preferred for a reason not stated directly.` : `The important detail is repeated at the end.`,
+      `The reply stays organized: situation, reason, then next step.`,
+      `"${third}" appears only where it helps the other person act.`,
+      upper ? `One detail remains open, so the final sentence needs a tactful tone.` : `The final sentence is polite and direct.`,
     ],
     German: [
       `Guten Tag, ich habe eine Frage zu "${topic}".`,
-      `${sentenceSetting} hört die Person zuerst genau zu.`,
-      `Die sprechende Person nutzt ${first}, damit die Nachricht konkret bleibt.`,
-      `Eine zweite Person bittet um Klärung und sagt: "${phrase}".`,
-      `Die lernende Person prüft ${second} und gibt eine kurze, nützliche Antwort.`,
+      `${capitalizeFirst(setting)} kommt kurz vor der Änderung eine Nachricht zu ${topic} an.`,
+      `In der Nachricht steht "${first}", und heute wird eine klare Antwort gebraucht.`,
+      `Die Antwort beginnt mit: "${phrase}", weil noch ein Detail fehlt.`,
+      `Das Detail "${second}" ist wichtig für den nächsten Schritt, deshalb bleibt die Antwort konkret.`,
       `Das Gespräch bleibt höflich, weil die Person versucht, ${need}.`,
-      upper ? `Am Ende vergleicht die Antwort zwei Möglichkeiten und empfiehlt den nächsten sinnvollen Schritt.` : `Am Ende nennt die Antwort einen nächsten Schritt.`,
-      advanced ? `Die sprechende Person passt das Register an, damit die Antwort präzise, aber nicht kühl wirkt.` : `Die Nachricht ist klar und lässt sich gut wiederholen.`,
-      advanced ? `Aufmerksame Zuhörende erkennen das Zögern und verstehen, warum die sichere Option besser passt.` : `Zuhörende können mit dem wichtigsten Detail antworten.`,
-      `Die Antwort bleibt geordnet: zuerst die Situation, dann der Grund, dann der nächste Schritt.`,
-      `Die sprechende Person erwähnt ${third} nur, wenn es für die nächste Handlung hilft.`,
+      upper ? `Am Ende werden zwei Möglichkeiten verglichen und ein sinnvoller nächster Schritt empfohlen.` : `Am Ende wird ein nächster Schritt genannt.`,
+      advanced ? `Die Formulierung ist präzise, wirkt aber weder kalt noch abwehrend.` : `Die Nachricht ist klar und lässt sich gut wiederholen.`,
+      advanced ? `Ein kurzes Zögern deutet an, dass die sicherere Option aus einem nicht direkt genannten Grund besser passt.` : `Das wichtige Detail wird am Ende wiederholt.`,
+      `Die Antwort bleibt geordnet: Situation, Grund, nächster Schritt.`,
+      `"${third}" erscheint nur dort, wo es für die nächste Handlung hilft.`,
       upper ? `Ein Detail bleibt bewusst offen, deshalb muss die Antwort taktvoll sein.` : `Der letzte Satz ist höflich und direkt.`,
-      advanced ? `Der Text belohnt Aufmerksamkeit für Haltung, Implikation und Register statt für einzelne Wörter.` : `Der kurze Austausch bereitet auf eine ähnliche Antwort vor.`,
-      advanced ? `Eine starke Antwort erkennt Unsicherheit an und gibt danach eine Empfehlung.` : `Die nützliche Wendung lässt sich in einem echten Gespräch wiederverwenden.`,
-      advanced ? `Nichts an der Situation ist dramatisch; die Schwierigkeit liegt in der genauen Deutung der Absicht.` : `Die lernende Person kann dasselbe Muster mit einem neuen Detail üben.`,
-      advanced ? `Die beste Antwort bleibt knapp und bewahrt trotzdem die Nuance.` : `Zuhörende wissen, was als Nächstes zu tun ist.`,
     ],
     Spanish: [
       `Buenos días, tengo una pregunta sobre "${topic}".`,
-      `${sentenceSetting}, la persona escucha con atención antes de responder.`,
-      `La persona que habla usa ${first} para que el mensaje sea concreto.`,
-      `Otra persona pide una aclaración y dice: "${phrase}".`,
-      `El estudiante comprueba ${second} y da una respuesta breve y útil.`,
+      `${capitalizeFirst(setting)}, llega un mensaje breve sobre ${topic.toLowerCase()} justo antes del cambio de plan.`,
+      `El mensaje menciona "${first}" y pide una respuesta clara hoy.`,
+      `La respuesta empieza con "${phrase}" porque todavía falta un detalle.`,
+      `El dato "${second}" es importante para el siguiente paso, así que la respuesta se mantiene concreta.`,
       `El intercambio sigue siendo cortés porque intenta ${need}.`,
-      upper ? `Al final, la respuesta compara dos opciones y recomienda el siguiente paso práctico.` : `Al final, la respuesta propone un siguiente paso.`,
-      advanced ? `La persona adapta el registro para sonar precisa sin resultar fría.` : `El mensaje es claro y fácil de repetir.`,
-      advanced ? `Quien escucha con atención nota la duda y entiende por qué se prefiere la opción más segura.` : `Quien escucha puede responder repitiendo el detalle importante.`,
-      `La respuesta queda ordenada: primero la situación, luego la razón y después el siguiente paso.`,
-      `La persona menciona ${third} solo cuando ayuda a actuar.`,
+      upper ? `Al final, se comparan dos opciones y se recomienda un siguiente paso práctico.` : `Al final, se propone un siguiente paso.`,
+      advanced ? `El registro es preciso sin resultar frío ni defensivo.` : `El mensaje es claro y fácil de repetir.`,
+      advanced ? `Una breve duda sugiere que se prefiere la opción más segura por una razón implícita.` : `El detalle importante se repite al final.`,
+      `La respuesta queda ordenada: situación, razón y siguiente paso.`,
+      `"${third}" aparece solo cuando ayuda a actuar.`,
       upper ? `Un detalle queda abierto a propósito, por eso la respuesta debe ser diplomática.` : `La última frase es cortés y directa.`,
-      advanced ? `El texto premia la atención a la postura, la implicación y el registro, no a palabras aisladas.` : `El intercambio breve prepara una respuesta parecida.`,
-      advanced ? `Una buena respuesta reconoce la incertidumbre antes de recomendar algo.` : `La expresión útil puede reutilizarse en una conversación real.`,
-      advanced ? `La situación no es dramática; la dificultad está en interpretar bien la intención.` : `El estudiante puede practicar el mismo patrón con un detalle nuevo.`,
-      advanced ? `La mejor respuesta conserva el matiz sin dejar de ser concisa.` : `Quien escucha sabe qué hacer después.`,
     ],
     Italian: [
       `Buongiorno, ho una domanda su "${topic}".`,
-      `${sentenceSetting}, la persona ascolta con attenzione prima di rispondere.`,
-      `Chi parla usa ${first} per rendere il messaggio concreto.`,
-      `Un’altra persona chiede un chiarimento e dice: "${phrase}".`,
-      `Lo studente controlla ${second} e dà una risposta breve e utile.`,
+      `${capitalizeFirst(setting)}, arriva un breve messaggio su ${topic.toLowerCase()} poco prima del cambio di programma.`,
+      `Il messaggio menziona "${first}" e chiede una risposta chiara entro oggi.`,
+      `La risposta comincia con "${phrase}" perché manca ancora un dettaglio.`,
+      `Il dettaglio "${second}" è importante per il prossimo passo, quindi la risposta resta concreta.`,
       `Lo scambio resta cortese perché la persona cerca di ${need}.`,
-      upper ? `Alla fine, la risposta confronta due opzioni e consiglia il prossimo passo pratico.` : `Alla fine, la risposta indica un prossimo passo.`,
-      advanced ? `La persona adatta il registro per essere precisa senza sembrare fredda.` : `Il messaggio è chiaro e facile da ripetere.`,
-      advanced ? `Chi ascolta con attenzione nota l’esitazione e capisce perché l’opzione più sicura è preferibile.` : `Chi ascolta può rispondere ripetendo il dettaglio importante.`,
-      `La risposta resta ordinata: prima la situazione, poi il motivo e infine il prossimo passo.`,
-      `La persona menziona ${third} solo quando aiuta ad agire.`,
+      upper ? `Alla fine, si confrontano due opzioni e si consiglia il prossimo passo pratico.` : `Alla fine, viene indicato un prossimo passo.`,
+      advanced ? `Il registro è preciso senza sembrare freddo o difensivo.` : `Il messaggio è chiaro e facile da ripetere.`,
+      advanced ? `Una breve esitazione lascia intendere che l’opzione più sicura è preferibile per un motivo implicito.` : `Il dettaglio importante viene ripetuto alla fine.`,
+      `La risposta resta ordinata: situazione, motivo e prossimo passo.`,
+      `"${third}" compare solo quando aiuta ad agire.`,
       upper ? `Un dettaglio resta volutamente aperto, quindi la risposta deve essere diplomatica.` : `L’ultima frase è cortese e diretta.`,
-      advanced ? `Il testo premia l’attenzione a posizione, implicazione e registro, non alle parole isolate.` : `Il breve scambio prepara una risposta simile.`,
-      advanced ? `Una buona risposta riconosce l’incertezza prima di dare una raccomandazione.` : `L’espressione utile può essere riutilizzata in una conversazione reale.`,
-      advanced ? `La situazione non è drammatica; la difficoltà sta nel leggere correttamente l’intenzione.` : `Lo studente può praticare lo stesso modello con un nuovo dettaglio.`,
-      advanced ? `La risposta migliore conserva la sfumatura pur restando concisa.` : `Chi ascolta sa che cosa fare dopo.`,
     ],
     French: [
       `Bonjour, j’ai une question sur "${topic}".`,
-      `${sentenceSetting}, la personne écoute attentivement avant de répondre.`,
-      `La personne qui parle utilise ${first} pour rendre le message concret.`,
-      `Une autre personne demande une précision et dit : "${phrase}".`,
-      `L’apprenant vérifie ${second} et donne une réponse courte et utile.`,
+      `${capitalizeFirst(setting)}, un court message sur ${topic.toLowerCase()} arrive juste avant le changement de projet.`,
+      `Le message mentionne "${first}" et demande une réponse claire aujourd’hui.`,
+      `La réponse commence par : "${phrase}", car il manque encore un détail.`,
+      `Le détail "${second}" compte pour la prochaine étape, donc la réponse reste précise.`,
       `L’échange reste poli parce que la personne essaie de ${need}.`,
-      upper ? `À la fin, la réponse compare deux options et recommande la prochaine étape pratique.` : `À la fin, la réponse propose une prochaine étape.`,
-      advanced ? `La personne adapte le registre pour paraître précise sans sembler froide.` : `Le message est clair et facile à répéter.`,
-      advanced ? `Une écoute attentive permet de remarquer l’hésitation et de comprendre pourquoi l’option la plus sûre est préférable.` : `La personne qui écoute peut répondre en répétant le détail important.`,
-      `La réponse reste structurée : d’abord la situation, puis la raison, puis la prochaine étape.`,
-      `La personne mentionne ${third} seulement quand cela aide à agir.`,
+      upper ? `À la fin, deux options sont comparées et une prochaine étape pratique est recommandée.` : `À la fin, une prochaine étape est proposée.`,
+      advanced ? `Le registre est précis sans paraître froid ni défensif.` : `Le message est clair et facile à répéter.`,
+      advanced ? `Une légère hésitation laisse entendre que l’option la plus sûre est préférable pour une raison implicite.` : `Le détail important est répété à la fin.`,
+      `La réponse reste structurée : situation, raison, prochaine étape.`,
+      `"${third}" apparaît seulement quand cela aide à agir.`,
       upper ? `Un détail reste volontairement ouvert, donc la réponse doit être diplomatique.` : `La dernière phrase est polie et directe.`,
-      advanced ? `Le texte récompense l’attention portée à la posture, à l’implicite et au registre, pas aux mots isolés.` : `Le bref échange prépare une réponse similaire.`,
-      advanced ? `Une bonne réponse reconnaît l’incertitude avant de formuler une recommandation.` : `L’expression utile peut être réutilisée dans une vraie conversation.`,
-      advanced ? `La situation n’est pas dramatique ; la difficulté consiste à bien interpréter l’intention.` : `L’apprenant peut pratiquer le même modèle avec un nouveau détail.`,
-      advanced ? `La meilleure réponse reste concise tout en préservant la nuance.` : `La personne qui écoute sait quoi faire ensuite.`,
     ],
   } satisfies Record<CurriculumLanguage, string[]>;
   const base = sets[language];
@@ -1361,6 +1483,9 @@ function capitalizeFirst(value: string) {
 }
 
 function readingOpening(language: CurriculumLanguage, band: CefrBand, topic: string, setting: string, index: number) {
+  const domain = lessonDomain(topic);
+  const domainOpenings = domainReadingOpenings(language, domain);
+  if (domainOpenings.length > 0) return domainOpenings[(index + (band === 'A1' ? 0 : band === 'A2' ? 1 : band === 'B1' ? 2 : band === 'B2' ? 3 : band === 'C1' ? 4 : 5)) % domainOpenings.length];
   const variants = {
     English: {
       A1: [`Text message: I am here now, and I need help with "${topic}".`, `Short note: Please bring the form and wait near the door.`, `Simple dialogue: "Hello. Is this the right place?"`, `Profile: My name is Lina, and I learn after work.`, `Sign: Open today from nine to five.`, `Invitation: Come at four and bring a small notebook.`, `Menu note: Coffee, water, and bread are ready.`, `Timetable: The next bus leaves in ten minutes.`],
@@ -1404,6 +1529,32 @@ function readingOpening(language: CurriculumLanguage, band: CefrBand, topic: str
     },
   } satisfies Record<CurriculumLanguage, Record<CefrBand, string[]>>;
   return variants[language][band][index % variants[language][band].length];
+}
+
+function domainReadingOpenings(language: CurriculumLanguage, domain: string) {
+  const openings = {
+    English: {
+      planning: ['Calendar note: The appointment has moved to Friday morning.', 'Short message: I can meet tomorrow, but only after ten.', 'Planning chat: Please confirm the new time before lunch.'],
+      digital: ['Email: I cannot open the attachment on my phone.', 'Support chat: The password works, but the screen stays blank.', 'Notification: Please confirm your account before you download the file.'],
+    },
+    German: {
+      planning: ['Kalendernotiz: Der Termin wurde auf Freitagmorgen verschoben.', 'Kurze Nachricht: Ich kann mich morgen treffen, aber erst nach zehn Uhr.', 'Planungschat: Bitte bestätigen Sie die neue Uhrzeit vor der Mittagspause.'],
+      digital: ['E-Mail: Ich kann den Anhang auf meinem Handy nicht öffnen.', 'Support-Chat: Das Passwort funktioniert, aber der Bildschirm bleibt leer.', 'Benachrichtigung: Bitte bestätigen Sie Ihr Konto, bevor Sie die Datei herunterladen.'],
+    },
+    Spanish: {
+      planning: ['Nota de calendario: La cita pasó al viernes por la mañana.', 'Mensaje breve: Puedo quedar mañana, pero solo después de las diez.', 'Chat de planificación: Confirma la nueva hora antes del almuerzo.'],
+      digital: ['Correo: No puedo abrir el archivo adjunto en el móvil.', 'Chat de soporte: La contraseña funciona, pero la pantalla queda en blanco.', 'Notificación: Confirma tu cuenta antes de descargar el archivo.'],
+    },
+    Italian: {
+      planning: ['Nota di calendario: L’appuntamento è stato spostato a venerdì mattina.', 'Messaggio breve: Posso incontrarti domani, ma solo dopo le dieci.', 'Chat di pianificazione: Conferma il nuovo orario prima di pranzo.'],
+      digital: ['Email: Non riesco ad aprire l’allegato sul telefono.', 'Chat di supporto: La password funziona, ma lo schermo resta vuoto.', 'Notifica: Conferma l’account prima di scaricare il file.'],
+    },
+    French: {
+      planning: ['Note de calendrier : Le rendez-vous a été déplacé à vendredi matin.', 'Message court : Je peux te voir demain, mais seulement après dix heures.', 'Discussion de planification : Confirmez la nouvelle heure avant midi.'],
+      digital: ['Courriel : Je n’arrive pas à ouvrir la pièce jointe sur mon téléphone.', 'Chat d’assistance : Le mot de passe fonctionne, mais l’écran reste vide.', 'Notification : Confirmez votre compte avant de télécharger le fichier.'],
+    },
+  } satisfies Record<CurriculumLanguage, Record<'planning' | 'digital', string[]>>;
+  return domain === 'planning' || domain === 'digital' ? openings[language][domain] : [];
 }
 
 function chunkFrames(language: CurriculumLanguage, band: CefrBand): Array<{ phrase: (theme: string) => string; meaning: string }> {
@@ -1652,15 +1803,14 @@ function chunkFrames(language: CurriculumLanguage, band: CefrBand): Array<{ phra
   return frames[language][band].map((frame) => ({ phrase: () => frame.phrase, meaning: frame.meaning }));
 }
 
-function chunkExample(language: CurriculumLanguage, profile: LevelProfile, theme: string, grammarFocus: string, index: number) {
-  const word = realVocabularyItems(language, profile.cefrLevel, theme)[index % realVocabularyItems(language, profile.cefrLevel, theme).length].term;
-  const chunk = chunkFrames(language, profile.cefrLevel)[index % chunkFrames(language, profile.cefrLevel).length].phrase(theme);
+function chunkExample(language: CurriculumLanguage, profile: LevelProfile, chunk: string, _index: number) {
+  const advanced = profile.cefrLevel === 'C1' || profile.cefrLevel === 'C2';
   const examples = {
-    English: `At the desk, I say "${chunk}" and point to "${targetLexeme(language, theme, word)}".`,
-    German: `Am Schalter sage ich: "${chunk}" und zeige auf "${targetLexeme(language, theme, word)}".`,
-    Spanish: `En el mostrador digo: "${chunk}" y señalo "${targetLexeme(language, theme, word)}".`,
-    Italian: `Allo sportello dico: "${chunk}" e indico "${targetLexeme(language, theme, word)}".`,
-    French: `Au guichet, je dis : "${chunk}" et je montre "${targetLexeme(language, theme, word)}".`,
+    English: advanced ? `In the final response, I write "${chunk}" to keep the tone precise.` : `In a short reply, I say "${chunk}" before adding the missing detail.`,
+    German: advanced ? `In der abschließenden Antwort schreibe ich: "${chunk}", damit der Ton präzise bleibt.` : `In einer kurzen Antwort sage ich: "${chunk}" und ergänze dann das fehlende Detail.`,
+    Spanish: advanced ? `En la respuesta final escribo "${chunk}" para mantener un tono preciso.` : `En una respuesta breve digo "${chunk}" antes de añadir el dato que falta.`,
+    Italian: advanced ? `Nella risposta finale scrivo "${chunk}" per mantenere un tono preciso.` : `In una risposta breve dico "${chunk}" prima di aggiungere il dettaglio mancante.`,
+    French: advanced ? `Dans la réponse finale, j’écris : "${chunk}" pour garder un ton précis.` : `Dans une réponse courte, je dis : "${chunk}" avant d’ajouter le détail manquant.`,
   } satisfies Record<CurriculumLanguage, string>;
   return examples[language];
 }
@@ -2132,17 +2282,17 @@ function grammarDistractors(language: CurriculumLanguage, answer: string, gramma
 function taskLabels(language: CurriculumLanguage) {
   const labels = {
     English: {
-      writingSituation: (theme: string, level: string, setting: string) => `A colleague at ${setting} needs a short ${level} message about ${theme.toLowerCase()}. Write the message with the details they need to act.`,
+      writingSituation: (theme: string, level: string, setting: string) => `Context: ${setting}. Write a short ${level} message about ${theme.toLowerCase()} with the details needed for a real next step.`,
       audience: (intensity: LevelProfile['intensity']) => intensity === 'foundation' ? 'a patient language tutor' : intensity === 'mastery' ? 'a senior editor who expects precision' : 'a real contact who needs a practical answer',
       writingPurpose: (_theme: string, focus: string, need: string) => `Complete the situation by trying to ${need}; let ${focus} appear naturally.`,
       expectedOutput: (band: CefrBand) => band === 'A1' ? 'three short connected sentences' : band === 'A2' ? 'a useful everyday message' : band === 'B1' ? 'a clear paragraph with context and next action' : band === 'B2' ? 'a structured email or report paragraph' : 'a nuanced professional response',
       length: (band: CefrBand) => ({ A1: '25-50 words', A2: '50-90 words', B1: '90-140 words', B2: '140-220 words', C1: '220-320 words', C2: '250-400 words' })[band],
       duration: (band: CefrBand) => ({ A1: '20 seconds', A2: '30 seconds', B1: '60 seconds', B2: '90 seconds', C1: '2 minutes', C2: '2-3 minutes' })[band],
-      speakingPrompt: (theme: string, _level: string, focus: string, setting: string, need: string) => `You are at ${setting}. Explain the ${theme.toLowerCase()} situation, say what happened, and try to ${need}. Use ${focus} only where it sounds natural.`,
-      roleplayScenario: (theme: string, setting: string) => `A realistic ${theme.toLowerCase()} conversation takes place at ${setting}.`,
+      speakingPrompt: (theme: string, _level: string, focus: string, setting: string, need: string) => `Situation: ${setting}. Explain the ${theme.toLowerCase()} issue, say what happened, and try to ${need}. Use ${focus} only where it sounds natural.`,
+      roleplayScenario: (theme: string, setting: string) => `A realistic ${theme.toLowerCase()} conversation happens ${setting}.`,
       learnerRole: (_theme: string, need: string) => `You need to ${need} without sounding rushed.`,
-      partnerRole: (_theme: string, setting: string) => `The other person works at ${setting} and asks for one missing detail.`,
-      roleplayGoal: (_theme: string, focus: string, level: string, need: string) => `Reach a clear ${level} outcome, respond to the follow-up, and use ${focus} if it helps you ${need}.`,
+      partnerRole: (_theme: string, setting: string) => `The other person is connected to the situation ${setting} and asks for one missing detail.`,
+      roleplayGoal: (theme: string, focus: string, level: string, need: string) => `Reach a clear ${level} outcome for ${theme.toLowerCase()}, respond to the follow-up, and use ${focus} if it helps you ${need}.`,
       successCriteria: (band: CefrBand) => band === 'A1' ? ['answer one direct question', 'use a useful phrase', 'finish politely'] : ['explain the situation', 'answer a follow-up', 'use precise vocabulary', 'close naturally'],
       assessmentDimensions: ['task completion', 'grammar accuracy', 'vocabulary range', 'coherence', 'register'],
       speakingDimensions: ['pronunciation clarity', 'task completion', 'fluency', 'grammar accuracy'],
@@ -2156,9 +2306,9 @@ function taskLabels(language: CurriculumLanguage) {
       duration: (band: CefrBand) => ({ A1: '20 Sekunden', A2: '30 Sekunden', B1: '60 Sekunden', B2: '90 Sekunden', C1: '2 Minuten', C2: '2-3 Minuten' })[band],
       speakingPrompt: (theme: string, _level: string, focus: string, setting: string, need: string) => `Du bist ${setting}. Erkläre die Situation zu ${theme}, sage, was passiert ist, und versuche, ${need}. Nutze ${focus} nur dort, wo es natürlich klingt.`,
       roleplayScenario: (theme: string, setting: string) => `Ein realistisches Gespräch zu ${theme} findet ${setting} statt.`,
-      learnerRole: (_theme: string, need: string) => `Du musst ${need}, ohne gehetzt zu klingen.`,
+      learnerRole: (_theme: string, need: string) => `Dein Ziel ist es, ${need}, ohne gehetzt zu klingen.`,
       partnerRole: (_theme: string, setting: string) => `Die andere Person arbeitet ${setting} und fragt nach einem fehlenden Detail.`,
-      roleplayGoal: (_theme: string, focus: string, level: string, need: string) => `Erreiche ein klares Ergebnis auf ${level}, reagiere auf eine Rückfrage und nutze ${focus}, wenn es dir bei "${need}" hilft.`,
+      roleplayGoal: (theme: string, focus: string, level: string, need: string) => `Erreiche ein klares Ergebnis auf ${level} zu ${theme}, reagiere auf eine Rückfrage und nutze ${focus}, wenn es dir bei "${need}" hilft.`,
       successCriteria: (band: CefrBand) => band === 'A1' ? ['eine direkte Frage beantworten', 'eine nützliche Wendung verwenden', 'höflich abschließen'] : ['die Situation erklären', 'auf eine Rückfrage reagieren', 'präzisen Wortschatz verwenden', 'natürlich abschließen'],
       assessmentDimensions: ['Aufgabenerfüllung', 'Grammatikgenauigkeit', 'Wortschatzbreite', 'Kohärenz', 'Register'],
       speakingDimensions: ['Ausspracheklarheit', 'Aufgabenerfüllung', 'Flüssigkeit', 'Grammatikgenauigkeit'],
@@ -2170,11 +2320,11 @@ function taskLabels(language: CurriculumLanguage) {
       expectedOutput: (band: CefrBand) => band === 'A1' ? 'tres frases breves conectadas' : band === 'A2' ? 'un mensaje cotidiano útil' : band === 'B1' ? 'un párrafo claro con contexto y próximo paso' : band === 'B2' ? 'un correo estructurado o un párrafo de informe' : 'una respuesta profesional matizada',
       length: (band: CefrBand) => ({ A1: '25-50 palabras', A2: '50-90 palabras', B1: '90-140 palabras', B2: '140-220 palabras', C1: '220-320 palabras', C2: '250-400 palabras' })[band],
       duration: (band: CefrBand) => ({ A1: '20 segundos', A2: '30 segundos', B1: '60 segundos', B2: '90 segundos', C1: '2 minutos', C2: '2-3 minutos' })[band],
-      speakingPrompt: (theme: string, _level: string, focus: string, setting: string, need: string) => `Estás ${setting}. Explica la situación de ${theme.toLowerCase()}, cuenta lo que pasó e intenta ${need}. Usa ${focus} solo si suena natural.`,
+      speakingPrompt: (theme: string, _level: string, focus: string, setting: string, need: string) => `Estás ${setting}. Explica la situación sobre ${theme.toLowerCase()}, cuenta lo que pasó e intenta ${need}. Usa ${focus} solo si suena natural.`,
       roleplayScenario: (theme: string, setting: string) => `Una conversación realista sobre ${theme.toLowerCase()} ocurre ${setting}.`,
       learnerRole: (_theme: string, need: string) => `Necesitas ${need} sin parecer apurado.`,
-      partnerRole: (_theme: string, setting: string) => `La otra persona trabaja ${setting} y pide un dato que falta.`,
-      roleplayGoal: (_theme: string, focus: string, level: string, need: string) => `Llega a un resultado claro de nivel ${level}, responde a una pregunta adicional y usa ${focus} si ayuda a ${need}.`,
+      partnerRole: (_theme: string, setting: string) => `La otra persona participa en la situación ${setting} y pide un dato que falta.`,
+      roleplayGoal: (theme: string, focus: string, level: string, need: string) => `Llega a un resultado claro de nivel ${level} sobre ${theme.toLowerCase()}, responde a una pregunta adicional y mantén este objetivo: ${need}. Usa ${focus} solo si ayuda.`,
       successCriteria: (band: CefrBand) => band === 'A1' ? ['responder una pregunta directa', 'usar una expresión útil', 'cerrar con cortesía'] : ['explicar la situación', 'responder a una pregunta adicional', 'usar vocabulario preciso', 'cerrar con naturalidad'],
       assessmentDimensions: ['cumplimiento de la tarea', 'precisión gramatical', 'variedad léxica', 'coherencia', 'registro'],
       speakingDimensions: ['claridad de pronunciación', 'cumplimiento de la tarea', 'fluidez', 'precisión gramatical'],
@@ -2189,8 +2339,8 @@ function taskLabels(language: CurriculumLanguage) {
       speakingPrompt: (theme: string, _level: string, focus: string, setting: string, need: string) => `Sei ${setting}. Spiega la situazione di ${theme.toLowerCase()}, racconta che cosa è successo e cerca di ${need}. Usa ${focus} solo dove suona naturale.`,
       roleplayScenario: (theme: string, setting: string) => `Una conversazione realistica su ${theme.toLowerCase()} si svolge ${setting}.`,
       learnerRole: (_theme: string, need: string) => `Devi ${need} senza sembrare frettoloso.`,
-      partnerRole: (_theme: string, setting: string) => `L’altra persona lavora ${setting} e chiede un dettaglio mancante.`,
-      roleplayGoal: (_theme: string, focus: string, level: string, need: string) => `Raggiungi un risultato chiaro di livello ${level}, rispondi a una domanda di follow-up e usa ${focus} se aiuta a ${need}.`,
+      partnerRole: (_theme: string, setting: string) => `L’altra persona partecipa alla situazione ${setting} e chiede un dettaglio mancante.`,
+      roleplayGoal: (theme: string, focus: string, level: string, need: string) => `Raggiungi un risultato chiaro di livello ${level} su ${theme.toLowerCase()}, rispondi a una domanda di follow-up e usa ${focus} se aiuta a ${need}.`,
       successCriteria: (band: CefrBand) => band === 'A1' ? ['rispondere a una domanda diretta', 'usare un’espressione utile', 'chiudere con cortesia'] : ['spiegare la situazione', 'rispondere a una domanda di follow-up', 'usare lessico preciso', 'chiudere in modo naturale'],
       assessmentDimensions: ['completamento del compito', 'accuratezza grammaticale', 'varietà lessicale', 'coerenza', 'registro'],
       speakingDimensions: ['chiarezza della pronuncia', 'completamento del compito', 'fluidità', 'accuratezza grammaticale'],
@@ -2202,11 +2352,11 @@ function taskLabels(language: CurriculumLanguage) {
       expectedOutput: (band: CefrBand) => band === 'A1' ? 'trois phrases courtes reliées' : band === 'A2' ? 'un message quotidien utile' : band === 'B1' ? 'un paragraphe clair avec contexte et prochaine action' : band === 'B2' ? 'un courriel structuré ou un paragraphe de rapport' : 'une réponse professionnelle nuancée',
       length: (band: CefrBand) => ({ A1: '25-50 mots', A2: '50-90 mots', B1: '90-140 mots', B2: '140-220 mots', C1: '220-320 mots', C2: '250-400 mots' })[band],
       duration: (band: CefrBand) => ({ A1: '20 secondes', A2: '30 secondes', B1: '60 secondes', B2: '90 secondes', C1: '2 minutes', C2: '2-3 minutes' })[band],
-      speakingPrompt: (theme: string, _level: string, focus: string, setting: string, need: string) => `Tu es ${setting}. Explique la situation liée à ${theme.toLowerCase()}, raconte ce qui s’est passé et essaie de ${need}. Utilise ${focus} seulement si cela paraît naturel.`,
+      speakingPrompt: (theme: string, _level: string, focus: string, setting: string, need: string) => `Tu es ${setting}. Explique la situation sur ${theme.toLowerCase()}, raconte ce qui s’est passé et essaie de ${need}. Utilise ${focus} seulement si cela paraît naturel.`,
       roleplayScenario: (theme: string, setting: string) => `Une conversation réaliste sur ${theme.toLowerCase()} a lieu ${setting}.`,
       learnerRole: (_theme: string, need: string) => `Tu dois ${need} sans paraître pressé.`,
-      partnerRole: (_theme: string, setting: string) => `L’autre personne travaille ${setting} et demande une information manquante.`,
-      roleplayGoal: (_theme: string, focus: string, level: string, need: string) => `Obtiens un résultat clair de niveau ${level}, réponds à une question de suivi et utilise ${focus} si cela aide à ${need}.`,
+      partnerRole: (_theme: string, setting: string) => `L’autre personne participe à la situation ${setting} et demande une information manquante.`,
+      roleplayGoal: (theme: string, focus: string, level: string, need: string) => `Obtiens un résultat clair de niveau ${level} sur ${theme.toLowerCase()}, réponds à une question de suivi et utilise ${focus} si cela aide à ${need}.`,
       successCriteria: (band: CefrBand) => band === 'A1' ? ['répondre à une question directe', 'utiliser une expression utile', 'terminer poliment'] : ['expliquer la situation', 'répondre à une question de suivi', 'utiliser un vocabulaire précis', 'terminer naturellement'],
       assessmentDimensions: ['réalisation de la tâche', 'précision grammaticale', 'variété lexicale', 'cohérence', 'registre'],
       speakingDimensions: ['clarté de la prononciation', 'réalisation de la tâche', 'fluidité', 'précision grammaticale'],
