@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle, Mic, Play, RotateCcw, Volume2 } from 'lucide-react';
+import { Award, CheckCircle, Mic, Play, RotateCcw, Sparkles, Target, Volume2 } from 'lucide-react';
 import { CURRICULUM_SPEECH_LOCALES, type CurriculumExercise, type CurriculumLanguage, type ExerciseType, type ScoringRubric } from '../lib/curriculumCore';
 import { cn } from '../lib/utils';
 
@@ -124,6 +124,7 @@ export function ExerciseRenderer({ exercise, onComplete, onNext, hasNext = false
     const result = scoreExercise(exercise, model, response);
     setLastResult(result);
     onComplete(result);
+    void celebrateExerciseResult(result.score);
 
     if (result.passed && hasNext && autoAdvanceOnPass && onNext) {
       clearAutoAdvanceTimer();
@@ -144,6 +145,9 @@ export function ExerciseRenderer({ exercise, onComplete, onNext, hasNext = false
     if (isSpeaking) return { transcript: spokenResponse || textResponse, selfChecks };
     return { text: textResponse };
   }
+
+  const resultEncouragement = lastResult ? getExerciseEncouragement(lastResult.score, exercise.minScoreToPass) : null;
+  const ResultIcon = resultEncouragement?.icon ?? Target;
 
   return (
     <div className="rounded-2xl bg-surface-container-lowest border border-outline-variant/10 p-5 sm:p-6 whisper-shadow">
@@ -272,11 +276,20 @@ export function ExerciseRenderer({ exercise, onComplete, onNext, hasNext = false
         {lastResult && (
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className={cn(
-              'inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm text-on-surface',
-              lastResult.passed ? 'bg-primary/10' : 'bg-surface-container-low',
+              'grid max-w-xl grid-cols-[2.75rem_1fr] gap-3 rounded-2xl px-4 py-3 text-sm text-on-surface',
+              resultEncouragement?.toneClass,
             )}>
-              {lastResult.passed && <CheckCircle className="h-4 w-4 text-primary" />}
-              <span><span className="font-headline font-black text-primary">{lastResult.score}%</span> {lastResult.feedback}</span>
+              <span className={cn('flex h-11 w-11 items-center justify-center rounded-2xl', resultEncouragement?.iconClass)}>
+                <ResultIcon className="h-5 w-5" />
+              </span>
+              <span>
+                <span className="block font-headline text-base font-black text-on-surface">
+                  {lastResult.score}% - {resultEncouragement?.title}
+                </span>
+                <span className="mt-0.5 block text-sm leading-6 text-on-surface-variant">
+                  {resultEncouragement?.body} {lastResult.feedback}
+                </span>
+              </span>
             </div>
             {hasNext && onNext && (
               <button
@@ -457,6 +470,74 @@ function wordAccuracy(expected: string, actual: string) {
 
 function isReadingExercise(type: ExerciseType) {
   return type === 'reading_main_idea' || type === 'reading_detail' || type === 'reading_true_false';
+}
+
+export function getExerciseEncouragement(score: number, minScoreToPass = 60) {
+  const roundedScore = Math.max(0, Math.min(100, Math.round(score)));
+
+  if (roundedScore === 100) {
+    return {
+      title: 'Perfect work',
+      body: 'Brilliant. That answer is exactly where it needs to be.',
+      toneClass: 'bg-primary/10 ring-1 ring-primary/15',
+      iconClass: 'bg-primary text-on-primary',
+      icon: Award,
+    };
+  }
+
+  if (roundedScore >= 85) {
+    return {
+      title: 'Excellent progress',
+      body: 'Strong answer. You are building real control here.',
+      toneClass: 'bg-primary/10 ring-1 ring-primary/15',
+      iconClass: 'bg-primary text-on-primary',
+      icon: Sparkles,
+    };
+  }
+
+  if (roundedScore >= minScoreToPass || roundedScore >= 60) {
+    return {
+      title: 'Good pass',
+      body: 'Nice work. This is good enough to move forward, and the feedback shows what to polish next.',
+      toneClass: 'bg-primary-container/70 ring-1 ring-primary/10',
+      iconClass: 'bg-primary-container text-primary',
+      icon: CheckCircle,
+    };
+  }
+
+  if (roundedScore >= 40) {
+    return {
+      title: 'Close attempt',
+      body: 'You are not far off. Fix the weak part and try once more.',
+      toneClass: 'bg-surface-container-low ring-1 ring-outline-variant/15',
+      iconClass: 'bg-tertiary-container text-tertiary',
+      icon: Target,
+    };
+  }
+
+  return {
+    title: 'Try again',
+    body: 'Start with the key words, then rebuild the answer slowly.',
+    toneClass: 'bg-surface-container-low ring-1 ring-outline-variant/15',
+    iconClass: 'bg-surface-container-high text-on-surface-variant',
+    icon: RotateCcw,
+  };
+}
+
+async function celebrateExerciseResult(score: number) {
+  if (typeof window === 'undefined' || score < 60 || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    return;
+  }
+
+  const { default: confetti } = await import('canvas-confetti');
+  const particleCount = score === 100 ? 90 : score >= 85 ? 60 : 36;
+  confetti({
+    particleCount,
+    spread: score === 100 ? 68 : 48,
+    startVelocity: score === 100 ? 38 : 28,
+    origin: { y: 0.78 },
+    scalar: score === 100 ? 0.9 : 0.75,
+  });
 }
 
 function isListeningComprehensionExercise(type: ExerciseType) {

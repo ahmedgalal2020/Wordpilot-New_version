@@ -23,7 +23,8 @@
     "test:curriculum-repository": "tsx scripts/curriculum-repository-smoke.ts",
     "test:dictation": "tsx scripts/dictation-analysis-smoke.ts",
     "test:exercise-audio": "tsx scripts/exercise-renderer-audio-smoke.ts",
-    "test": "npm run test:api-routes && npm run test:curriculum && npm run test:curriculum-quality && npm run test:curriculum-naturalness && npm run test:curriculum-diversity && npm run test:curriculum-coherence && npm run test:curriculum-repository && npm run test:dictation && npm run test:exercise-audio",
+    "test:exercise-encouragement": "tsx scripts/exercise-encouragement-smoke.ts",
+    "test": "npm run test:api-routes && npm run test:curriculum && npm run test:curriculum-quality && npm run test:curriculum-naturalness && npm run test:curriculum-diversity && npm run test:curriculum-coherence && npm run test:curriculum-repository && npm run test:dictation && npm run test:exercise-audio && npm run test:exercise-encouragement",
     "sync:curriculum-content": "tsx scripts/sync-curriculum-content.ts"
   },
   "dependencies": {

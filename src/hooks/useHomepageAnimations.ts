@@ -16,8 +16,8 @@ export function useHomepageAnimations(rootRef: RefObject<HTMLElement | null>) {
     }
 
     const isMobile = window.matchMedia('(max-width: 767px)').matches;
-    const revealY = isMobile ? 16 : 28;
-    const visualY = isMobile ? -18 : -42;
+    const revealY = isMobile ? 10 : 18;
+    const visualY = isMobile ? -8 : -18;
 
     const scope = createScope({ root }).add(() => {
       const heroCopy = root.querySelector<HTMLElement>('[data-homepage-hero-copy]');
@@ -29,7 +29,7 @@ export function useHomepageAnimations(rootRef: RefObject<HTMLElement | null>) {
         animate(heroCopy, {
           opacity: [0, 1],
           y: [revealY, 0],
-          duration: 780,
+          duration: 520,
           ease: 'outCubic',
         });
       }
@@ -39,8 +39,8 @@ export function useHomepageAnimations(rootRef: RefObject<HTMLElement | null>) {
           opacity: [0, 1],
           y: [12, 0],
           scale: [0.98, 1],
-          delay: stagger(80),
-          duration: 620,
+          delay: stagger(45),
+          duration: 420,
           ease: 'outCubic',
         });
       }
@@ -50,8 +50,8 @@ export function useHomepageAnimations(rootRef: RefObject<HTMLElement | null>) {
           opacity: [0, 1],
           y: [revealY, 0],
           scale: [0.985, 1],
-          delay: stagger(90),
-          duration: 680,
+          delay: stagger(55),
+          duration: 460,
           ease: 'outCubic',
         });
       }
@@ -61,8 +61,8 @@ export function useHomepageAnimations(rootRef: RefObject<HTMLElement | null>) {
           opacity: [0, 1],
           y: [revealY, 0],
           scale: [0.985, 1],
-          duration: 800,
-          delay: 120,
+          duration: 520,
+          delay: 80,
           ease: 'outCubic',
         });
 
@@ -72,9 +72,9 @@ export function useHomepageAnimations(rootRef: RefObject<HTMLElement | null>) {
           ease: 'linear',
           autoplay: onScroll({
             target: heroVisual,
-            enter: 'top 80%',
+            enter: 'top 88%',
             leave: 'bottom top',
-            sync: 0.45,
+            sync: 0.18,
           }),
         });
       }
@@ -83,13 +83,13 @@ export function useHomepageAnimations(rootRef: RefObject<HTMLElement | null>) {
         animate(element, {
           opacity: [0, 1],
           y: [revealY, 0],
-          duration: 700,
+          duration: 430,
           ease: 'outCubic',
           autoplay: onScroll({
             target: element,
-            enter: 'bottom 94%',
-            leave: 'top 20%',
-            sync: 0.22,
+            enter: 'bottom 98%',
+            leave: 'top 12%',
+            sync: 0.08,
           }),
         });
       });
@@ -101,16 +101,16 @@ export function useHomepageAnimations(rootRef: RefObject<HTMLElement | null>) {
 
         animate(visibleStaggerItems, {
           opacity: [0, 1],
-          y: [isMobile ? 12 : 24, 0],
-          scale: [0.98, 1],
-          delay: stagger(isMobile ? 35 : 70),
-          duration: 640,
+          y: [isMobile ? 8 : 16, 0],
+          scale: [0.99, 1],
+          delay: stagger(isMobile ? 20 : 35),
+          duration: 390,
           ease: 'outCubic',
           autoplay: onScroll({
             target: group,
-            enter: 'bottom 95%',
-            leave: 'top 16%',
-            sync: 0.18,
+            enter: 'bottom 98%',
+            leave: 'top 10%',
+            sync: 0.06,
           }),
         });
       });
@@ -118,13 +118,13 @@ export function useHomepageAnimations(rootRef: RefObject<HTMLElement | null>) {
       root.querySelectorAll<HTMLElement>('[data-homepage-float]').forEach((element) => {
         animate(element, {
           y: [isMobile ? 8 : 18, isMobile ? -8 : -18],
-          scale: [0.99, 1],
+          scale: [0.995, 1],
           ease: 'linear',
           autoplay: onScroll({
             target: element,
             enter: 'bottom bottom',
             leave: 'top top',
-            sync: 0.55,
+            sync: 0.16,
           }),
         });
       });
