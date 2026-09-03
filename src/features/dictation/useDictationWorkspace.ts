@@ -9,12 +9,22 @@ import { useEntitlements } from '../../hooks/useEntitlements';
 import { LearningLanguage, normalizeCefrLevel, normalizeLearningLanguage } from '../../lib/learning';
 import { INITIAL_SOURCE } from './constants';
 import { getSkillMode } from './components';
+import { getDictationCelebrationBursts } from './celebration';
 import { analyzeDictation, calculateWordDelay, detectPracticeLanguage, getLearningLanguageFromCode, getMistakeStatus, getNextSourceIndexFromCaret, getPracticeLanguageCode, getPreferredVoice, getSpokenToken, getWordRanges, readStoredWorkspaceDraft, revealRangeInTextarea, syncOverlayScroll, writeStoredWorkspaceDraft } from './text';
 import type { MistakeRow, PracticeLanguage, PracticePathContext, SkillMode } from './types';
 
 async function fireConfetti(options: import('canvas-confetti').Options) {
   const { default: confetti } = await import('canvas-confetti');
   confetti(options);
+}
+
+async function celebrateDictationScore(accuracy: number) {
+  if (typeof window === 'undefined' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    return;
+  }
+
+  const bursts = getDictationCelebrationBursts(accuracy);
+  await Promise.all(bursts.map((burst) => fireConfetti(burst)));
 }
 
 export function useDictationWorkspace() {
@@ -715,14 +725,7 @@ export function useDictationWorkspace() {
     setShowResultModal(true);
     void markPracticePathCompleted(sessionLanguageLabel, sessionLevel);
 
-    if (accuracy >= 80) {
-      void fireConfetti({
-        particleCount: 150,
-        spread: 70,
-        origin: { y: 0.6 },
-        colors: ['#26ccff', '#a25afd', '#ff5e7e', '#88ff5a', '#fcff42', '#ffa62d', '#ff36ff'],
-      });
-    }
+    void celebrateDictationScore(accuracy);
 
     const firstIssue = mistakeRows[0];
     if (firstIssue) {
