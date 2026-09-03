@@ -308,6 +308,7 @@ function buildExerciseModel(exercise: CurriculumExercise) {
   const language = readCurriculumLanguage(content.language, inferLanguageFromExerciseId(exercise.id));
   const locale = readString(content.locale) || CURRICULUM_SPEECH_LOCALES[language];
   const targetSentence = readString(content.targetSentence);
+  const listeningScript = readString(content.listeningScript);
   const readingText = readString(content.readingText);
   const basePrompt = readString(content.prompt) || `Complete the ${theme} task.`;
   const prompt = isReadingExercise(exercise.type) && readingText ? readingText : basePrompt;
@@ -320,7 +321,7 @@ function buildExerciseModel(exercise: CurriculumExercise) {
   const distractors = vocabulary.filter((word) => normalize(word) !== normalize(targetText)).slice(0, 3);
   const choices = contentChoices.length > 0 ? contentChoices : shuffleUnique([targetText, ...distractors, basePrompt].filter(Boolean)).slice(0, 4);
   const orderTokens = shuffleOrderTokens(readOrderTokens(content.orderTokens, targetSentence || targetText));
-  const audioText = isReadingExercise(exercise.type) ? targetSentence || targetText : targetText || targetSentence || prompt;
+  const audioText = getExerciseAudioText(exercise.type, { listeningScript, targetText, targetSentence, prompt });
 
   return {
     language,
@@ -333,6 +334,34 @@ function buildExerciseModel(exercise: CurriculumExercise) {
     vocabulary,
     chunks,
   };
+}
+
+export function getExerciseAudioText(
+  type: ExerciseType,
+  sources: { listeningScript?: string; targetText?: string; targetSentence?: string; prompt?: string },
+) {
+  const listeningScript = sources.listeningScript?.trim() ?? '';
+  const targetText = sources.targetText?.trim() ?? '';
+  const targetSentence = sources.targetSentence?.trim() ?? '';
+  const prompt = sources.prompt?.trim() ?? '';
+
+  if (isListeningComprehensionExercise(type)) {
+    return listeningScript || targetSentence || targetText || prompt;
+  }
+
+  if (isDictationExercise(type)) {
+    return targetText || targetSentence || prompt;
+  }
+
+  if (type === 'pronunciation_repeat') {
+    return targetSentence || targetText || prompt;
+  }
+
+  if (isReadingExercise(type)) {
+    return targetSentence || targetText || prompt;
+  }
+
+  return targetText || targetSentence || prompt;
 }
 
 function scoreExercise(exercise: CurriculumExercise, model: ReturnType<typeof buildExerciseModel>, response: Record<string, unknown>): ExerciseResult {
@@ -428,6 +457,14 @@ function wordAccuracy(expected: string, actual: string) {
 
 function isReadingExercise(type: ExerciseType) {
   return type === 'reading_main_idea' || type === 'reading_detail' || type === 'reading_true_false';
+}
+
+function isListeningComprehensionExercise(type: ExerciseType) {
+  return type === 'audio_choice' || type === 'listen_and_select' || type === 'listen_for_detail';
+}
+
+function isDictationExercise(type: ExerciseType) {
+  return type === 'dictation_word' || type === 'dictation_sentence' || type === 'dictation_gap';
 }
 
 function isChoiceExercise(type: ExerciseType) {
