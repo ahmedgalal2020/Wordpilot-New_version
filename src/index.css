@@ -81,6 +81,130 @@
     background: linear-gradient(135deg, #0053db 0%, #0048c1 100%);
   }
 
+  @keyframes dictationFireworkBurst {
+    0% {
+      opacity: 0;
+      transform: scale(0.15);
+      filter: blur(0);
+    }
+
+    18% {
+      opacity: 1;
+    }
+
+    100% {
+      opacity: 0;
+      transform: scale(1.9);
+      filter: blur(1px);
+    }
+  }
+
+  @keyframes dictationSparkFall {
+    0% {
+      opacity: 0;
+      transform: translate3d(0, -22px, 0) scale(0.65);
+    }
+
+    18% {
+      opacity: 1;
+    }
+
+    100% {
+      opacity: 0;
+      transform: translate3d(var(--spark-x), 86px, 0) scale(0.2);
+    }
+  }
+
+  .dictation-firework {
+    position: absolute;
+    width: 12rem;
+    height: 12rem;
+    border-radius: 999px;
+    background:
+      radial-gradient(circle, #ffffff 0 5%, transparent 6%),
+      conic-gradient(from 20deg, #26ccff, #a25afd, #ff5e7e, #88ff5a, #fcff42, #ffa62d, #ff36ff, #26ccff);
+    mask: radial-gradient(circle, transparent 0 20%, #000 21% 34%, transparent 35% 100%);
+    animation: dictationFireworkBurst 980ms ease-out both;
+    mix-blend-mode: multiply;
+  }
+
+  .dictation-firework-left {
+    left: -2.25rem;
+    top: -2rem;
+  }
+
+  .dictation-firework-right {
+    right: -2.25rem;
+    top: 2.25rem;
+    animation-delay: 120ms;
+  }
+
+  .dictation-spark {
+    --spark-x: 0px;
+    position: absolute;
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 999px;
+    background: #0053db;
+    box-shadow: 0 0 0 6px rgba(0, 83, 219, 0.08);
+    animation: dictationSparkFall 1.15s ease-out both;
+  }
+
+  .dictation-spark-1 {
+    --spark-x: -54px;
+    left: 22%;
+    top: 12%;
+    background: #ff5e7e;
+  }
+
+  .dictation-spark-2 {
+    --spark-x: 42px;
+    left: 39%;
+    top: 7%;
+    background: #26ccff;
+    animation-delay: 90ms;
+  }
+
+  .dictation-spark-3 {
+    --spark-x: -28px;
+    left: 56%;
+    top: 11%;
+    background: #88ff5a;
+    animation-delay: 150ms;
+  }
+
+  .dictation-spark-4 {
+    --spark-x: 58px;
+    left: 72%;
+    top: 15%;
+    background: #ffa62d;
+    animation-delay: 30ms;
+  }
+
+  .dictation-spark-5 {
+    --spark-x: -40px;
+    left: 83%;
+    top: 30%;
+    background: #a25afd;
+    animation-delay: 180ms;
+  }
+
+  .dictation-spark-6 {
+    --spark-x: 35px;
+    left: 14%;
+    top: 34%;
+    background: #fcff42;
+    animation-delay: 210ms;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .dictation-firework,
+    .dictation-spark {
+      animation: none;
+      display: none;
+    }
+  }
+
   .wp-shell {
     width: 100%;
     max-width: 1440px;

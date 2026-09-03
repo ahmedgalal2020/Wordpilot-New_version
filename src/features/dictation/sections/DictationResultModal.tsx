@@ -22,17 +22,30 @@ export function DictationResultModal({ workspace }: { workspace: DictationWorksp
   } = workspace;
 
   if (!showResultModal) return null;
+  const shouldCelebrate = accuracy >= 60;
 
   return (
 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-surface-container-lowest border border-outline-variant/10 shadow-2xl rounded-3xl p-6 sm:p-8 max-w-2xl w-full relative animate-in zoom-in-95 duration-200">
+          <div className="bg-surface-container-lowest border border-outline-variant/10 shadow-2xl rounded-3xl p-6 sm:p-8 max-w-2xl w-full relative overflow-hidden animate-in zoom-in-95 duration-200">
+            {shouldCelebrate && (
+              <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden="true">
+                <span className="dictation-firework dictation-firework-left" />
+                <span className="dictation-firework dictation-firework-right" />
+                <span className="dictation-spark dictation-spark-1" />
+                <span className="dictation-spark dictation-spark-2" />
+                <span className="dictation-spark dictation-spark-3" />
+                <span className="dictation-spark dictation-spark-4" />
+                <span className="dictation-spark dictation-spark-5" />
+                <span className="dictation-spark dictation-spark-6" />
+              </div>
+            )}
             <button
               onClick={() => setShowResultModal(false)}
-              className="absolute top-4 right-4 text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded-full p-1 transition"
+              className="absolute top-4 right-4 z-10 text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded-full p-1 transition"
             >
               <X className="w-5 h-5" />
             </button>
-            <div className="space-y-6">
+            <div className="relative z-10 space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5">
                 <div>
                   <p className="text-[0.6875rem] uppercase tracking-widest font-bold text-primary mb-2">Session Report</p>
