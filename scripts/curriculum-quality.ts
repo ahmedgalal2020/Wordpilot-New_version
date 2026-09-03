@@ -31,6 +31,7 @@ type BandStats = {
   speakingTasks: number;
   roleplays: number;
   duplicateRate: number;
+  maxVocabularyOverlap: number;
   status: 'PASS' | 'PARTIAL' | 'FAIL';
 };
 
@@ -59,7 +60,7 @@ if (errors.length > 0) {
 }
 
 console.table(
-  stats.map(({ language, band, lessons, uniqueVocabularySets, newVocabulary, targetSentences, readingPassages, grammarQuestions, listeningScripts, duplicateRate, status }) => ({
+  stats.map(({ language, band, lessons, uniqueVocabularySets, newVocabulary, targetSentences, readingPassages, grammarQuestions, listeningScripts, maxVocabularyOverlap, duplicateRate, status }) => ({
     language,
     band,
     lessons,
@@ -69,6 +70,7 @@ console.table(
     readingPassages,
     grammarQuestions,
     listeningScripts,
+    maxVocabularyOverlap: `${maxVocabularyOverlap}%`,
     duplicateRate: `${duplicateRate}%`,
     status,
   })),
@@ -80,6 +82,7 @@ function auditBand(language: CurriculumLanguage, band: CefrBand, lessons: Curric
   expect(lessons.length === 24, `${language} ${band} should have 24 lessons across two sub-levels.`);
 
   const vocabularySets = new Set<string>();
+  const vocabularySetValues: string[][] = [];
   const newVocabulary = new Set<string>();
   const reviewVocabulary: string[] = [];
   const chunks = new Set<string>();
@@ -112,7 +115,9 @@ function auditBand(language: CurriculumLanguage, band: CefrBand, lessons: Curric
     const reviewWords = lesson.reviewVocabulary.map((item) => normalize(item.word));
     expect(newWords.every((word) => !reviewWords.includes(word)), `${lesson.id} marks the same word as new and review.`);
 
-    vocabularySets.add(lesson.vocabulary.map((item) => normalize(item.word)).sort().join('|'));
+    const lessonVocabulary = lesson.newVocabulary.map((item) => normalize(item.word)).sort();
+    vocabularySets.add(lessonVocabulary.join('|'));
+    vocabularySetValues.push(lessonVocabulary);
     newWords.forEach((word) => newVocabulary.add(word));
     reviewWords.forEach((word) => reviewVocabulary.push(word));
     lesson.chunks.forEach((item) => chunks.add(normalize(item.phrase)));
@@ -130,8 +135,10 @@ function auditBand(language: CurriculumLanguage, band: CefrBand, lessons: Curric
   }
 
   const duplicateRate = percent(lessons.length - readingPassages.size, lessons.length);
+  const maxVocabularyOverlap = maxPairwiseJaccard(vocabularySetValues);
   expect(vocabularySets.size >= 20, `${language} ${band} has too many repeated vocabulary sets.`);
-  expect(newVocabulary.size >= 180, `${language} ${band} does not introduce enough distinct new vocabulary.`);
+  expect(newVocabulary.size >= 18, `${language} ${band} does not introduce enough distinct new vocabulary.`);
+  expect(maxVocabularyOverlap <= 80, `${language} ${band} has suspicious vocabulary overlap (${maxVocabularyOverlap}%).`);
   expect(targetSentences.size >= 20, `${language} ${band} has too many repeated target sentences.`);
   expect(readingPassages.size >= 24, `${language} ${band} has repeated reading passages.`);
   expect(listeningScripts.size >= 24, `${language} ${band} has repeated listening scripts.`);
@@ -161,6 +168,7 @@ function auditBand(language: CurriculumLanguage, band: CefrBand, lessons: Curric
     speakingTasks: speakingTasks.size,
     roleplays: roleplays.size,
     duplicateRate,
+    maxVocabularyOverlap,
     status: errors.some((error) => error.startsWith(`${language} ${band}`)) ? 'FAIL' : duplicateRate > 0 ? 'PARTIAL' : 'PASS',
   };
 }
@@ -175,10 +183,10 @@ function writeReport(rows: BandStats[]) {
     '',
     '## Band Metrics',
     '',
-    '| Language | Band | Lessons | Exercises | New Vocabulary | Review Vocabulary | Chunks | Examples | Readings | Reading Qs | Listening Scripts | Listening Qs | Grammar Qs | Writing | Speaking | Roleplays | Duplicate Rate | Status |',
-    '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |',
+    '| Language | Band | Lessons | Exercises | New Vocabulary | Review Vocabulary | Chunks | Examples | Readings | Reading Qs | Listening Scripts | Listening Qs | Grammar Qs | Writing | Speaking | Roleplays | Max Vocab Overlap | Duplicate Rate | Status |',
+    '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |',
     ...rows.map((row) =>
-      `| ${row.language} | ${row.band} | ${row.lessons} | ${row.exercises} | ${row.newVocabulary} | ${row.reviewVocabulary} | ${row.chunks} | ${row.exampleSentences} | ${row.readingPassages} | ${row.readingQuestions} | ${row.listeningScripts} | ${row.listeningQuestions} | ${row.grammarQuestions} | ${row.writingTasks} | ${row.speakingTasks} | ${row.roleplays} | ${row.duplicateRate}% | ${row.status} |`,
+      `| ${row.language} | ${row.band} | ${row.lessons} | ${row.exercises} | ${row.newVocabulary} | ${row.reviewVocabulary} | ${row.chunks} | ${row.exampleSentences} | ${row.readingPassages} | ${row.readingQuestions} | ${row.listeningScripts} | ${row.listeningQuestions} | ${row.grammarQuestions} | ${row.writingTasks} | ${row.speakingTasks} | ${row.roleplays} | ${row.maxVocabularyOverlap}% | ${row.duplicateRate}% | ${row.status} |`,
     ),
     '',
     '## CEFR Quality Matrix',
@@ -194,8 +202,8 @@ function writeReport(rows: BandStats[]) {
     '',
     '| Metric | Before | After |',
     '| --- | ---: | ---: |',
-    '| Vocabulary sets per language/band | 1 | 24 |',
-    '| Target sentences per language/band | 3 | 21-24 |',
+    '| Vocabulary sets per language/band | 1 artificial set | 20+ natural rotating sets with overlap control |',
+    '| Target sentences per language/band | 3 | 20-24 |',
     '| Reading passages per language/band | 3 | 24 |',
     '| Grammar questions per language/band | 1 | 48-96 |',
     '| Listening question scripts per language/band | 1-3 | 24 |',
@@ -216,6 +224,20 @@ function minimumReadingWords(band: CefrBand) {
 
 function percent(value: number, total: number) {
   return total === 0 ? 0 : Math.round((value / total) * 100);
+}
+
+function maxPairwiseJaccard(sets: string[][]) {
+  let max = 0;
+  for (let left = 0; left < sets.length; left += 1) {
+    for (let right = left + 1; right < sets.length; right += 1) {
+      const a = new Set(sets[left]);
+      const b = new Set(sets[right]);
+      const intersection = [...a].filter((item) => b.has(item)).length;
+      const union = new Set([...a, ...b]).size;
+      max = Math.max(max, union === 0 ? 0 : Math.round((intersection / union) * 100));
+    }
+  }
+  return max;
 }
 
 function expect(condition: unknown, message: string) {

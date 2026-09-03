@@ -15,8 +15,10 @@ type NaturalnessStats = {
   syntheticTokens: number;
   fakeResources: number;
   mixedLanguage: number;
+  vocabularyThemeConcats: number;
   targetSimilarityRate: number;
   readingSimilarityRate: number;
+  listeningSimilarityRate: number;
   writingSimilarityRate: number;
   speakingSimilarityRate: number;
   roleplaySimilarityRate: number;
@@ -59,14 +61,16 @@ if (errors.length > 0) {
 }
 
 console.table(
-  stats.map(({ language, band, syntheticTokens, fakeResources, mixedLanguage, targetSimilarityRate, readingSimilarityRate, status }) => ({
+  stats.map(({ language, band, syntheticTokens, fakeResources, mixedLanguage, vocabularyThemeConcats, targetSimilarityRate, readingSimilarityRate, listeningSimilarityRate, status }) => ({
     language,
     band,
     syntheticTokens,
     fakeResources,
     mixedLanguage,
+    vocabularyThemeConcats,
     targetSimilarityRate: `${targetSimilarityRate}%`,
     readingSimilarityRate: `${readingSimilarityRate}%`,
+    listeningSimilarityRate: `${listeningSimilarityRate}%`,
     status,
   })),
 );
@@ -77,8 +81,10 @@ function auditBand(language: CurriculumLanguage, band: CefrBand, lessons: Curric
   const syntheticTokens = countMatches(learnerStrings, syntheticPatterns());
   const fakeResources = countMatches(learnerStrings, fakeResourcePatterns());
   const mixedLanguage = language === 'English' ? 0 : countMatches(learnerStrings, englishContaminationPatterns());
+  const vocabularyThemeConcats = countVocabularyThemeConcats(lessons);
   const targetSimilarityRate = duplicateSkeletonRate(lessons.map((lesson) => lesson.targetSentence), language);
   const readingSimilarityRate = duplicateSkeletonRate(lessons.map((lesson) => lesson.readingText), language);
+  const listeningSimilarityRate = duplicateSkeletonRate(lessons.map((lesson) => lesson.listeningScript), language);
   const writingSimilarityRate = duplicateSkeletonRate(lessons.map((lesson) => lesson.writingTask.situation), language);
   const speakingSimilarityRate = duplicateSkeletonRate(lessons.map((lesson) => lesson.speakingTask.prompt), language);
   const roleplaySimilarityRate = duplicateSkeletonRate(lessons.map((lesson) => lesson.roleplay.goal), language);
@@ -86,8 +92,10 @@ function auditBand(language: CurriculumLanguage, band: CefrBand, lessons: Curric
   expect(syntheticTokens === 0, `${language} ${band} still has ${syntheticTokens} learner-facing synthetic token(s).`);
   expect(fakeResources === 0, `${language} ${band} still has ${fakeResources} numbered pseudo-resource token(s).`);
   expect(mixedLanguage === 0, `${language} ${band} still has ${mixedLanguage} English contamination token(s).`);
+  expect(vocabularyThemeConcats === 0, `${language} ${band} still has ${vocabularyThemeConcats} vocabulary/theme concatenation token(s).`);
   expect(targetSimilarityRate <= 70, `${language} ${band} target sentence skeleton repetition is too high (${targetSimilarityRate}%).`);
   expect(readingSimilarityRate <= 55, `${language} ${band} reading skeleton repetition is too high (${readingSimilarityRate}%).`);
+  expect(listeningSimilarityRate <= 70, `${language} ${band} listening skeleton repetition is too high (${listeningSimilarityRate}%).`);
   expect(writingSimilarityRate <= 97, `${language} ${band} writing task skeleton repetition is too high (${writingSimilarityRate}%).`);
   expect(speakingSimilarityRate <= 60, `${language} ${band} speaking task skeleton repetition is too high (${speakingSimilarityRate}%).`);
   expect(roleplaySimilarityRate <= 35, `${language} ${band} roleplay skeleton repetition is too high (${roleplaySimilarityRate}%).`);
@@ -96,8 +104,10 @@ function auditBand(language: CurriculumLanguage, band: CefrBand, lessons: Curric
     syntheticTokens === 0 &&
     fakeResources === 0 &&
     mixedLanguage === 0 &&
+    vocabularyThemeConcats === 0 &&
     targetSimilarityRate <= 70 &&
     readingSimilarityRate <= 55 &&
+    listeningSimilarityRate <= 70 &&
     writingSimilarityRate <= 97 &&
     speakingSimilarityRate <= 60 &&
     roleplaySimilarityRate <= 35
@@ -113,8 +123,10 @@ function auditBand(language: CurriculumLanguage, band: CefrBand, lessons: Curric
     syntheticTokens,
     fakeResources,
     mixedLanguage,
+    vocabularyThemeConcats,
     targetSimilarityRate,
     readingSimilarityRate,
+    listeningSimilarityRate,
     writingSimilarityRate,
     speakingSimilarityRate,
     roleplaySimilarityRate,
@@ -191,6 +203,16 @@ function syntheticPatterns() {
     /\btime marker\b/i,
     /\bbasic question\b/i,
     /\bmain point about\b/i,
+    /\bin the context of\b/i,
+    /\bkey fact about\b/i,
+    /\bder wichtigste Punkt\b/i,
+    /\bim Kontext\b/i,
+    /\bel punto principal\b/i,
+    /\ben el contexto de\b/i,
+    /\bil punto principale\b/i,
+    /\bnel contesto di\b/i,
+    /\ble point principal\b/i,
+    /\bdans le contexte de\b/i,
     /\bsimple need\b/i,
     /\bhabit change\b/i,
     /\bsummary line\b/i,
@@ -231,6 +253,33 @@ function countMatches(values: string[], patterns: RegExp[]) {
   for (const value of values) {
     for (const pattern of patterns) {
       if (pattern.test(value)) count += 1;
+    }
+  }
+  return count;
+}
+
+function countVocabularyThemeConcats(lessons: CurriculumLesson[]) {
+  let count = 0;
+  for (const lesson of lessons) {
+    const theme = normalize(lesson.theme);
+    if (!theme) continue;
+    const values = collectLearnerStrings(lesson).flatMap((value) => value.split(/[.!?;:,]+/)).map(normalize);
+    for (const item of lesson.vocabulary) {
+      const word = normalize(item.word);
+      if (!word || word === theme) continue;
+      const joinedForms = [
+        `${word} ${theme}`,
+        `${theme} ${word}`,
+        `${word} de ${theme}`,
+        `${word} del ${theme}`,
+        `${word} di ${theme}`,
+        `${word} du ${theme}`,
+        `${word} pour ${theme}`,
+        `${word} para ${theme}`,
+        `${word} für ${theme}`,
+        `${word} im kontext ${theme}`,
+      ];
+      if (values.some((value) => joinedForms.some((form) => value.includes(form)))) count += 1;
     }
   }
   return count;
@@ -279,11 +328,11 @@ function writeNaturalnessReport(rows: NaturalnessStats[], totals: { syntheticTok
     '',
     '## Naturalness & Authenticity Audit',
     '',
-    '| Language | Band | Lessons | Synthetic Tokens | Fake Resources | Mixed-Language Contamination | Target Similarity | Reading Similarity | Writing Similarity | Speaking Similarity | Roleplay Similarity | Status |',
-    '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |',
+    '| Language | Band | Lessons | Synthetic Tokens | Fake Resources | Mixed-Language Contamination | Vocab/Theme Concat | Target Similarity | Reading Similarity | Listening Similarity | Writing Similarity | Speaking Similarity | Roleplay Similarity | Status |',
+    '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |',
     ...rows.map(
       (row) =>
-        `| ${row.language} | ${row.band} | ${row.lessons} | ${row.syntheticTokens} | ${row.fakeResources} | ${row.mixedLanguage} | ${row.targetSimilarityRate}% | ${row.readingSimilarityRate}% | ${row.writingSimilarityRate}% | ${row.speakingSimilarityRate}% | ${row.roleplaySimilarityRate}% | ${row.status} |`,
+        `| ${row.language} | ${row.band} | ${row.lessons} | ${row.syntheticTokens} | ${row.fakeResources} | ${row.mixedLanguage} | ${row.vocabularyThemeConcats} | ${row.targetSimilarityRate}% | ${row.readingSimilarityRate}% | ${row.listeningSimilarityRate}% | ${row.writingSimilarityRate}% | ${row.speakingSimilarityRate}% | ${row.roleplaySimilarityRate}% | ${row.status} |`,
     ),
     '',
     '## Naturalness Before/After',
