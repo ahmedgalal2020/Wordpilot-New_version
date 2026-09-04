@@ -35,7 +35,7 @@ function adaptStructuredLesson(lesson: CurriculumLesson, number: number): Practi
 
   return {
     ...adaptedLesson,
-    exercises: PRACTICE_PATH_SKILLS.map((skill) => {
+    exercises: getAvailablePracticeSkills(structuredBySkill).map((skill) => {
       const exercise = structuredBySkill.get(skill);
       const template = getTemplate(lesson.language, skill);
       return {
@@ -75,6 +75,10 @@ function buildExerciseMap(exercises: CurriculumExercise[]) {
   pick('Progress Check', ['test']);
 
   return map;
+}
+
+function getAvailablePracticeSkills(structuredBySkill: Map<PracticePathSkill, CurriculumExercise>) {
+  return PRACTICE_PATH_SKILLS.filter((skill) => structuredBySkill.has(skill));
 }
 
 function buildStructuredSourceText(lesson: CurriculumLesson, skill: PracticePathSkill) {

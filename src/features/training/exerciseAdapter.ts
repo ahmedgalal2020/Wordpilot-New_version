@@ -8,6 +8,8 @@ import {
   type SpeakingTask,
   type WritingTask,
 } from '../../lib/curriculumCore';
+import { parseExerciseContract, type ExerciseContract } from './exerciseContracts';
+import { getScoringMode } from './exerciseTaxonomy';
 import { isChoiceType, type TrainingExperience } from './registry';
 
 export type TrainingQuestion = {
@@ -35,6 +37,7 @@ export type TrainingExerciseModel = {
   usefulLanguage: string[];
   minScoreToPass: number;
   objectivelyScorable: boolean;
+  contract: ExerciseContract;
 };
 
 export function buildTrainingExerciseModel(
@@ -43,15 +46,16 @@ export function buildTrainingExerciseModel(
   experience: TrainingExperience,
 ): TrainingExerciseModel {
   const content = exercise.content;
+  const contract = parseExerciseContract(exercise);
   const language = readLanguage(content.language, lesson.language);
-  const targetText = readString(content.targetSentence) || readAnswer(exercise.correctAnswer) || lesson.targetSentence;
-  const readingText = readString(content.readingText) || lesson.readingText;
-  const listeningScript = readString(content.listeningScript) || lesson.listeningScript;
-  const prompt = readString(content.prompt) || readString(content.question) || exercise.instruction || lesson.canDo;
+  const targetText = getContractTargetText(contract);
+  const readingText = contract.kind === 'reading' ? contract.sourceText : '';
+  const listeningScript = contract.kind === 'listening' ? contract.audioText : '';
+  const prompt = getContractPrompt(contract) || exercise.instruction;
   const writingTask = readObject<WritingTask>(content.writingTask) ?? lesson.writingTask;
   const speakingTask = readObject<SpeakingTask>(content.speakingTask) ?? lesson.speakingTask;
   const roleplay = readObject<RoleplayTask>(content.roleplay) ?? lesson.roleplay;
-  const questions = getQuestions(lesson, exercise, experience);
+  const questions = getQuestions(exercise, contract);
 
   return {
     id: exercise.id,
@@ -70,7 +74,8 @@ export function buildTrainingExerciseModel(
     roleplay,
     usefulLanguage: getUsefulLanguage(lesson, writingTask, roleplay),
     minScoreToPass: exercise.minScoreToPass,
-    objectivelyScorable: isChoiceType(exercise.type) || questions.length > 0 || exercise.type === 'gap_fill' || exercise.type === 'sentence_order',
+    objectivelyScorable: getScoringMode(exercise.type) !== 'subjective' && (isChoiceType(exercise.type) || questions.length > 0 || exercise.type === 'gap_fill' || exercise.type === 'sentence_order'),
+    contract,
   };
 }
 
@@ -99,28 +104,18 @@ export function scoreTrainingChoice(model: TrainingExerciseModel, selected: stri
   };
 }
 
-function getQuestions(lesson: CurriculumLesson, exercise: CurriculumExercise, experience: TrainingExperience): TrainingQuestion[] {
-  if (experience === 'reading') return fromChoiceQuestions(lesson.readingQuestions, exercise.id);
-  if (experience === 'listening') return fromChoiceQuestions(lesson.listeningQuestions, exercise.id);
-
-  const contentQuestion = readString(exercise.content.question) || readString(exercise.content.prompt);
-  const contentChoices = readStringArray(exercise.content.choices);
-  const answer = readAnswer(exercise.correctAnswer);
-
-  if (contentQuestion && contentChoices.length > 0 && answer) {
-    return [{ id: `${exercise.id}-question`, prompt: contentQuestion, choices: contentChoices, correctAnswer: answer }];
+function getQuestions(exercise: CurriculumExercise, contract: ExerciseContract): TrainingQuestion[] {
+  if (contract.kind === 'multiple_choice') {
+    return [{ id: `${exercise.id}-question`, prompt: contract.prompt, choices: contract.choices, correctAnswer: contract.correctAnswer }];
+  }
+  if (contract.kind === 'reading') {
+    return [{ id: `${exercise.id}-question`, prompt: contract.question, choices: contract.choices, correctAnswer: contract.correctAnswer }];
+  }
+  if (contract.kind === 'listening') {
+    return [{ id: `${exercise.id}-question`, prompt: contract.question, choices: contract.choices, correctAnswer: contract.correctAnswer }];
   }
 
   return [];
-}
-
-function fromChoiceQuestions(questions: ChoiceQuestion[], seed: string): TrainingQuestion[] {
-  return questions.map((question, index) => ({
-    id: `${seed}-${index}`,
-    prompt: question.question,
-    choices: question.choices,
-    correctAnswer: question.answer,
-  }));
 }
 
 function getUsefulLanguage(lesson: CurriculumLesson, writingTask?: WritingTask, roleplay?: RoleplayTask) {
@@ -157,4 +152,29 @@ function readLanguage(value: unknown, fallback: CurriculumLanguage): CurriculumL
 
 function normalize(value: string) {
   return value.toLowerCase().normalize('NFKC').replace(/[^\p{L}\p{N}\s]/gu, '').trim();
+}
+
+function getContractPrompt(contract: ExerciseContract) {
+  if (contract.kind === 'invalid') return '';
+  if (contract.kind === 'multiple_choice') return contract.prompt;
+  if (contract.kind === 'gap_fill') return contract.template;
+  if (contract.kind === 'sentence_order') return contract.correctAnswer;
+  if (contract.kind === 'vocabulary_match') return 'Match each term to its meaning.';
+  if (contract.kind === 'reading') return contract.question;
+  if (contract.kind === 'listening') return contract.question;
+  if (contract.kind === 'dictation') return 'Type exactly what you hear.';
+  if (contract.kind === 'pronunciation') return contract.targetText;
+  if (contract.kind === 'speaking') return contract.prompt;
+  return contract.prompt;
+}
+
+function getContractTargetText(contract: ExerciseContract) {
+  if (contract.kind === 'sentence_order') return contract.correctAnswer;
+  if (contract.kind === 'dictation') return contract.acceptedAnswers[0] ?? '';
+  if (contract.kind === 'pronunciation') return contract.targetText;
+  if (contract.kind === 'gap_fill') return contract.acceptedAnswers[0] ?? '';
+  if (contract.kind === 'multiple_choice') return contract.correctAnswer;
+  if (contract.kind === 'reading') return contract.correctAnswer;
+  if (contract.kind === 'listening') return contract.correctAnswer;
+  return '';
 }

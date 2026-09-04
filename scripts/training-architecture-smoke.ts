@@ -79,9 +79,9 @@ function makeLesson(): CurriculumLesson {
       successCriteria: ['Use a greeting'],
     },
     exercises: [
-      makeExercise('listen-1', 'listening', 'listen_for_detail', { listeningScript: 'Good morning. I am Mia, and I am ready for class.' }, 'Class'),
+      makeExercise('listen-1', 'listening', 'listen_for_detail', { listeningScript: 'Good morning. I am Mia, and I am ready for class.', prompt: 'What is Mia ready for?' }, 'Class'),
       makeExercise('dictation-1', 'dictation', 'dictation_sentence', { targetSentence: 'Good morning, I am ready.' }, 'Good morning, I am ready.'),
-      makeExercise('reading-1', 'reading', 'reading_detail', { readingText: 'Mia meets Tom at school.' }, 'At school'),
+      makeExercise('reading-1', 'reading', 'reading_detail', { readingText: 'Mia meets Tom at school.', prompt: 'Where does Mia meet Tom?' }, 'At school'),
       makeExercise('speaking-1', 'speaking', 'guided_speaking', { prompt: 'Greet a classmate.' }, undefined),
       makeExercise('writing-1', 'writing', 'guided_writing', { prompt: 'Write two simple greetings.' }, undefined),
       makeExercise('grammar-1', 'grammar', 'grammar_choice', { question: 'I ___ ready.', choices: ['am', 'is', 'are'] }, 'am'),

@@ -1,6 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Award, CheckCircle, Mic, Play, RotateCcw, Sparkles, Target, Volume2 } from 'lucide-react';
 import { CURRICULUM_SPEECH_LOCALES, type CurriculumExercise, type CurriculumLanguage, type ExerciseType, type ScoringRubric } from '../lib/curriculumCore';
+import { isInvalidExerciseContract, parseExerciseContract, type ExerciseContract } from '../features/training/exerciseContracts';
+import { getExerciseRendererKind } from '../features/training/exerciseRendererRegistry';
+import { getScoringMode } from '../features/training/exerciseTaxonomy';
 import { cn } from '../lib/utils';
 
 type SpeechRecognitionLike = {
@@ -56,12 +59,15 @@ export function ExerciseRenderer({ exercise, onComplete, onNext, hasNext = false
   const speechRecognitionAvailable = Boolean(speechWindow?.SpeechRecognition || speechWindow?.webkitSpeechRecognition);
 
   const model = useMemo(() => buildExerciseModel(exercise), [exercise]);
-  const isWriting = exercise.type === 'guided_writing';
-  const isSpeaking = exercise.type === 'pronunciation_repeat' || exercise.type === 'guided_speaking' || exercise.type === 'roleplay';
-  const isDictation = exercise.type === 'dictation_word' || exercise.type === 'dictation_sentence' || exercise.type === 'dictation_gap';
-  const needsTextInput = isWriting || isSpeaking || isDictation || exercise.type === 'gap_fill' || exercise.type === 'lesson_test';
+  const rendererKind = getExerciseRendererKind(exercise.type);
+  const scoringMode = getScoringMode(exercise.type);
+  const isWriting = rendererKind === 'writing';
+  const isSpeaking = rendererKind === 'speaking';
+  const isDictation = rendererKind === 'dictation';
+  const needsTextInput = isWriting || isSpeaking || isDictation || exercise.type === 'gap_fill' || exercise.type === 'grammar_gap' || scoringMode === 'subjective' || exercise.type === 'lesson_test';
   const needsChoices = isChoiceExercise(exercise.type);
-  const needsOrdering = exercise.type === 'sentence_order';
+  const needsOrdering = rendererKind === 'ordering';
+  const invalidContract = isInvalidExerciseContract(model.contract);
 
   useEffect(() => {
     clearAutoAdvanceTimer();
@@ -164,8 +170,12 @@ export function ExerciseRenderer({ exercise, onComplete, onNext, hasNext = false
 
       <div className="mt-5 rounded-2xl bg-surface-container-low p-4">
         <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Prompt</p>
-        <p className="mt-2 text-base leading-7 text-on-surface">{model.prompt}</p>
-        {(exercise.type.includes('audio') || exercise.type.includes('listen') || isDictation || isSpeaking) && (
+        {invalidContract ? (
+          <InvalidExerciseState exercise={exercise} contract={model.contract} />
+        ) : (
+          <p className="mt-2 text-base leading-7 text-on-surface">{model.prompt}</p>
+        )}
+        {!invalidContract && (exercise.type.includes('audio') || exercise.type.includes('listen') || exercise.type === 'subtext_inference' || isDictation || isSpeaking) && (
           <button
             type="button"
             onClick={() => speak(model.audioText)}
@@ -177,7 +187,7 @@ export function ExerciseRenderer({ exercise, onComplete, onNext, hasNext = false
         )}
       </div>
 
-      {needsChoices && (
+      {!invalidContract && needsChoices && (
         <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
           {model.choices.map((choice) => (
             <button
@@ -195,7 +205,7 @@ export function ExerciseRenderer({ exercise, onComplete, onNext, hasNext = false
         </div>
       )}
 
-      {needsOrdering && (
+      {!invalidContract && needsOrdering && (
         <div className="mt-5 space-y-4">
           <div className="flex min-h-14 flex-wrap gap-2 rounded-2xl bg-surface-container-low p-3">
             {orderedTokens.length === 0 ? (
@@ -226,7 +236,7 @@ export function ExerciseRenderer({ exercise, onComplete, onNext, hasNext = false
         </div>
       )}
 
-      {isSpeaking && (
+      {!invalidContract && isSpeaking && (
         <div className="mt-5 rounded-2xl bg-surface-container-low p-4">
           <div className="flex flex-wrap gap-3">
             {speechRecognitionAvailable ? (
@@ -259,7 +269,7 @@ export function ExerciseRenderer({ exercise, onComplete, onNext, hasNext = false
         </div>
       )}
 
-      {needsTextInput && (
+      {!invalidContract && needsTextInput && (
         <textarea
           value={textResponse}
           onChange={(event) => setTextResponse(event.target.value)}
@@ -270,7 +280,7 @@ export function ExerciseRenderer({ exercise, onComplete, onNext, hasNext = false
       )}
 
       <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <button type="button" onClick={submit} className="inline-flex items-center justify-center rounded-full bg-primary px-5 py-3 text-sm font-bold text-on-primary hover:bg-primary-dim">
+        <button type="button" onClick={submit} disabled={invalidContract} className="inline-flex items-center justify-center rounded-full bg-primary px-5 py-3 text-sm font-bold text-on-primary hover:bg-primary-dim disabled:cursor-not-allowed disabled:opacity-55">
           Grade exercise
         </button>
         {lastResult && (
@@ -315,26 +325,16 @@ export function ExerciseRenderer({ exercise, onComplete, onNext, hasNext = false
 
 function buildExerciseModel(exercise: CurriculumExercise) {
   const content = exercise.content;
-  const vocabulary = readStringArray(content.vocabulary);
-  const chunks = readStringArray(content.chunks);
-  const theme = String(content.theme ?? 'practice');
+  const contract = parseExerciseContract(exercise);
+  const vocabulary: string[] = [];
+  const chunks: string[] = [];
   const language = readCurriculumLanguage(content.language, inferLanguageFromExerciseId(exercise.id));
   const locale = readString(content.locale) || CURRICULUM_SPEECH_LOCALES[language];
-  const targetSentence = readString(content.targetSentence);
-  const listeningScript = readString(content.listeningScript);
-  const readingText = readString(content.readingText);
-  const basePrompt = readString(content.prompt) || `Complete the ${theme} task.`;
-  const prompt = isReadingExercise(exercise.type) && readingText ? readingText : basePrompt;
-  const targetText = Array.isArray(exercise.correctAnswer)
-    ? String(exercise.correctAnswer[0] ?? targetSentence ?? chunks[0] ?? vocabulary[0] ?? prompt)
-    : typeof exercise.correctAnswer === 'string'
-      ? exercise.correctAnswer
-      : String(targetSentence || chunks[0] || vocabulary[0] || prompt);
-  const contentChoices = readStringArray(content.choices);
-  const distractors = vocabulary.filter((word) => normalize(word) !== normalize(targetText)).slice(0, 3);
-  const choices = contentChoices.length > 0 ? contentChoices : shuffleUnique([targetText, ...distractors, basePrompt].filter(Boolean)).slice(0, 4);
-  const orderTokens = shuffleOrderTokens(readOrderTokens(content.orderTokens, targetSentence || targetText));
-  const audioText = getExerciseAudioText(exercise.type, { listeningScript, targetText, targetSentence, prompt });
+  const prompt = getContractPrompt(contract);
+  const targetText = getContractTargetText(contract);
+  const choices = getContractChoices(contract);
+  const orderTokens = getContractOrderTokens(contract);
+  const audioText = getContractAudioText(contract);
 
   return {
     language,
@@ -346,6 +346,7 @@ function buildExerciseModel(exercise: CurriculumExercise) {
     orderTokens,
     vocabulary,
     chunks,
+    contract,
   };
 }
 
@@ -390,14 +391,14 @@ function scoreExercise(exercise: CurriculumExercise, model: ReturnType<typeof bu
     return result(score, score >= exercise.minScoreToPass ? 'Sentence order is strong.' : `Target order: ${model.targetText}`, response, exercise);
   }
 
-  if (exercise.type === 'guided_writing') {
+  if (isWritingExercise(exercise.type)) {
     const text = String(response.text ?? '');
     const rubric = scoreRubricText(text, model.vocabulary, 5);
     const score = averageRubric(rubric);
     return { score, feedback: buildWritingFeedback(rubric), rubricScores: rubric, response, passed: score >= exercise.minScoreToPass };
   }
 
-  if (exercise.type === 'pronunciation_repeat' || exercise.type === 'guided_speaking' || exercise.type === 'roleplay') {
+  if (isSpeakingExercise(exercise.type)) {
     const transcript = String(response.transcript ?? '');
     const selfChecks = response.selfChecks && typeof response.selfChecks === 'object' ? response.selfChecks as Record<string, boolean> : {};
     const checkedScore = Math.round((Object.values(selfChecks).filter(Boolean).length / 5) * 50);
@@ -413,6 +414,17 @@ function scoreExercise(exercise: CurriculumExercise, model: ReturnType<typeof bu
   }
 
   const text = String(response.text ?? '');
+  if (getScoringMode(exercise.type) === 'subjective') {
+    const words = text.trim().split(/\s+/).filter(Boolean).length;
+    const score = words >= 12 ? 100 : words >= 6 ? 75 : words >= 3 ? 60 : 0;
+    return {
+      score,
+      feedback: 'Completed as a self-review task. No fake AI evaluation was generated.',
+      rubricScores: { ...exercise.scoringRubric, taskCompletion: score },
+      response,
+      passed: score >= exercise.minScoreToPass,
+    };
+  }
   const expected = exercise.type === 'gap_fill' || exercise.type === 'dictation_gap'
     ? model.vocabulary[0] ?? model.targetText
     : model.targetText;
@@ -469,7 +481,23 @@ function wordAccuracy(expected: string, actual: string) {
 }
 
 function isReadingExercise(type: ExerciseType) {
-  return type === 'reading_main_idea' || type === 'reading_detail' || type === 'reading_true_false';
+  return [
+    'reading_main_idea',
+    'reading_detail',
+    'reading_true_false',
+    'reading_heading_match',
+    'reading_inference',
+    'reference_tracking',
+    'paragraph_order',
+    'stance_detection',
+    'irony_interpretation',
+    'ambiguity_analysis',
+    'hidden_assumption',
+    'rhetorical_effect',
+    'comparative_reading',
+    'comparative_critique',
+    'discourse_reconstruction',
+  ].includes(type);
 }
 
 export function getExerciseEncouragement(score: number, minScoreToPass = 60) {
@@ -541,7 +569,7 @@ async function celebrateExerciseResult(score: number) {
 }
 
 function isListeningComprehensionExercise(type: ExerciseType) {
-  return type === 'audio_choice' || type === 'listen_and_select' || type === 'listen_for_detail';
+  return type === 'audio_choice' || type === 'listen_and_select' || type === 'listen_for_detail' || type === 'listening_inference' || type === 'speaker_intention' || type === 'subtext_inference';
 }
 
 function isDictationExercise(type: ExerciseType) {
@@ -551,18 +579,36 @@ function isDictationExercise(type: ExerciseType) {
 function isChoiceExercise(type: ExerciseType) {
   return [
     'vocabulary_match',
+    'vocabulary_choice',
+    'picture_or_context_match',
     'audio_choice',
     'listen_and_select',
     'listen_for_detail',
+    'listening_inference',
+    'speaker_intention',
     'grammar_choice',
+    'vocabulary_in_context',
+    'collocation_choice',
+    'paraphrase_choice',
+    'contextual_grammar',
     'reading_main_idea',
     'reading_detail',
+    'reading_inference',
+    'reference_tracking',
     'reading_true_false',
+    'stance_detection',
+    'subtext_inference',
+    'irony_interpretation',
+    'hidden_assumption',
+    'rhetorical_effect',
+    'comparative_reading',
   ].includes(type);
 }
 
 function getPlaceholder(type: ExerciseType) {
   if (type === 'guided_writing') return 'Write your own answer. You are graded by rubric, not exact matching.';
+  if (isWritingExercise(type)) return 'Write your answer. This is saved as a self-review task unless AI review is added later.';
+  if (isSpeakingExercise(type)) return 'Record or type your spoken response notes.';
   if (type.includes('dictation')) return 'Type exactly what you hear.';
   if (type === 'lesson_test') return 'Write the final lesson answer here.';
   return 'Type your answer.';
@@ -578,6 +624,38 @@ function readStringArray(value: unknown) {
 
 function readString(value: unknown) {
   return typeof value === 'string' ? value : '';
+}
+
+function isWritingExercise(type: ExerciseType) {
+  return [
+    'guided_writing',
+    'free_writing',
+    'functional_writing',
+    'register_shift',
+    'precision_rewrite',
+    'argument_repair',
+    'source_synthesis',
+    'comparative_critique',
+    'micro_editing',
+    'advanced_writing',
+  ].includes(type);
+}
+
+function isSpeakingExercise(type: ExerciseType) {
+  return [
+    'pronunciation_repeat',
+    'guided_speaking',
+    'free_speaking',
+    'roleplay',
+    'shadowing',
+    'mini_dialogue',
+    'extended_speaking',
+    'scenario_response',
+    'guided_argument',
+    'strategic_response',
+    'expert_roleplay',
+    'synthesis_speaking',
+  ].includes(type);
 }
 
 function readCurriculumLanguage(value: unknown, fallback: CurriculumLanguage): CurriculumLanguage {
@@ -629,6 +707,72 @@ function inferLanguageFromExerciseId(id: string): CurriculumLanguage {
   if (id.startsWith('italian')) return 'Italian';
   if (id.startsWith('french')) return 'French';
   return 'English';
+}
+
+function InvalidExerciseState({ exercise, contract }: { exercise: CurriculumExercise; contract: Extract<ExerciseContract, { kind: 'invalid' }> }) {
+  useEffect(() => {
+    console.warn('Exercise content unavailable', {
+      exerciseId: exercise.id,
+      exerciseType: exercise.type,
+      missing: contract.missing,
+    });
+  }, [contract.missing, exercise.id, exercise.type]);
+
+  return (
+    <div className="mt-3 rounded-2xl border border-outline-variant/20 bg-surface-container-lowest p-4">
+      <p className="font-headline text-base font-black text-on-surface">Exercise content unavailable</p>
+      <p className="mt-2 text-sm leading-6 text-on-surface-variant">
+        This exercise needs authored content before it can be shown safely.
+      </p>
+      <p className="mt-3 text-xs font-semibold text-on-surface-variant">
+        Type: {exercise.type} · Missing: {contract.missing.join(', ')}
+      </p>
+    </div>
+  );
+}
+
+function getContractPrompt(contract: ExerciseContract) {
+  if (contract.kind === 'invalid') return '';
+  if (contract.kind === 'multiple_choice') return contract.prompt;
+  if (contract.kind === 'gap_fill') return contract.template;
+  if (contract.kind === 'sentence_order') return contract.correctAnswer;
+  if (contract.kind === 'vocabulary_match') return 'Match each term to its meaning.';
+  if (contract.kind === 'reading') return contract.sourceText;
+  if (contract.kind === 'listening') return contract.question;
+  if (contract.kind === 'dictation') return 'Type exactly what you hear.';
+  if (contract.kind === 'pronunciation') return contract.targetText;
+  if (contract.kind === 'speaking') return contract.prompt;
+  return contract.prompt;
+}
+
+function getContractTargetText(contract: ExerciseContract) {
+  if (contract.kind === 'sentence_order') return contract.correctAnswer;
+  if (contract.kind === 'dictation') return contract.acceptedAnswers[0] ?? '';
+  if (contract.kind === 'pronunciation') return contract.targetText;
+  if (contract.kind === 'gap_fill') return contract.acceptedAnswers[0] ?? '';
+  if (contract.kind === 'multiple_choice') return contract.correctAnswer;
+  if (contract.kind === 'reading') return contract.correctAnswer;
+  if (contract.kind === 'listening') return contract.correctAnswer;
+  return '';
+}
+
+function getContractChoices(contract: ExerciseContract) {
+  if (contract.kind === 'multiple_choice' || contract.kind === 'reading' || contract.kind === 'listening') return contract.choices;
+  if (contract.kind === 'gap_fill') return contract.choices ?? [];
+  return [];
+}
+
+function getContractOrderTokens(contract: ExerciseContract): OrderToken[] {
+  if (contract.kind !== 'sentence_order') return [];
+  return contract.tokens.map((word, index) => ({ id: `${index}-${normalize(word)}`, word }));
+}
+
+function getContractAudioText(contract: ExerciseContract) {
+  if (contract.kind === 'listening') return contract.audioText;
+  if (contract.kind === 'dictation') return contract.audioText;
+  if (contract.kind === 'pronunciation') return contract.audioText;
+  if (contract.kind === 'speaking') return contract.prompt;
+  return getContractTargetText(contract);
 }
 
 

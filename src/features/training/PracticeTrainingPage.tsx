@@ -195,6 +195,10 @@ function ListeningExperience({ model, onComplete }: { model: TrainingExerciseMod
 
   return (
     <TrainingCard eyebrow="Listening first" title={model.title} instruction={model.instruction}>
+      {model.contract.kind === 'invalid' ? (
+        <InvalidTrainingState model={model} />
+      ) : (
+      <>
       <AudioControls text={model.audioText} locale={model.locale} />
       {question && <ChoiceBlock question={question.prompt} choices={question.choices} selected={selected} setSelected={setSelected} />}
       <ActionRow onSubmit={submit} disabled={!selected} result={result} label="Submit answer" />
@@ -205,6 +209,8 @@ function ListeningExperience({ model, onComplete }: { model: TrainingExerciseMod
         </button>
       )}
       {transcriptVisible && <SourceText title="Transcript" text={model.transcript} />}
+      </>
+      )}
     </TrainingCard>
   );
 }
@@ -223,9 +229,15 @@ function ReadingExperience({ model, onComplete }: { model: TrainingExerciseModel
 
   return (
     <TrainingCard eyebrow="Read, then answer" title={model.title} instruction={model.instruction}>
+      {model.contract.kind === 'invalid' ? (
+        <InvalidTrainingState model={model} />
+      ) : (
+      <>
       <SourceText title="Reading text" text={model.readingText} />
       {question && <ChoiceBlock question={question.prompt} choices={question.choices} selected={selected} setSelected={setSelected} />}
       <ActionRow onSubmit={submit} disabled={!selected} result={result} label="Check reading" />
+      </>
+      )}
     </TrainingCard>
   );
 }
@@ -244,8 +256,12 @@ function WritingExperience({ model, onComplete }: { model: TrainingExerciseModel
 
   return (
     <TrainingCard eyebrow="Original writing" title={model.title} instruction={model.instruction}>
+      {model.contract.kind === 'invalid' ? (
+        <InvalidTrainingState model={model} />
+      ) : (
+      <>
       <div className="grid gap-3 md:grid-cols-2">
-        <InfoCard label="Task" value={task?.prompt || model.prompt} />
+        <InfoCard label="Task" value={model.prompt || task?.prompt || model.instruction} />
         <InfoCard label="Purpose" value={task?.purpose || 'Produce your own answer using the lesson focus.'} />
         <InfoCard label="Audience" value={task?.audience || 'General reader'} />
         <InfoCard label="Length" value={task?.approximateLength || task?.expectedOutput || 'Write enough to complete the task.'} />
@@ -265,6 +281,8 @@ function WritingExperience({ model, onComplete }: { model: TrainingExerciseModel
         </button>
       </div>
       <ActionRow onSubmit={complete} disabled={wordCount < 3} result={result} label="Complete writing" />
+      </>
+      )}
     </TrainingCard>
   );
 }
@@ -310,8 +328,12 @@ function SpeakingExperience({ model, onComplete }: { model: TrainingExerciseMode
 
   return (
     <TrainingCard eyebrow="Produce speech" title={model.title} instruction={model.instruction}>
+      {model.contract.kind === 'invalid' ? (
+        <InvalidTrainingState model={model} />
+      ) : (
+      <>
       <div className="grid gap-3 md:grid-cols-2">
-        <InfoCard label="Scenario" value={roleplay?.scenario || model.speakingTask?.prompt || model.prompt} />
+        <InfoCard label="Scenario" value={model.prompt || roleplay?.scenario || model.speakingTask?.prompt} />
         <InfoCard label="Goal" value={roleplay?.goal || model.speakingTask?.focus?.join(', ') || 'Answer naturally.'} />
         <InfoCard label="Your role" value={roleplay?.learnerRole || 'Learner'} />
         <InfoCard label="Partner role" value={roleplay?.partnerRole || 'Practice partner'} />
@@ -334,6 +356,8 @@ function SpeakingExperience({ model, onComplete }: { model: TrainingExerciseMode
       </div>
       {audioUrl && <audio controls src={audioUrl} className="mt-5 w-full" />}
       <ActionRow onSubmit={complete} disabled={!audioUrl} result={result} label="Complete speaking" />
+      </>
+      )}
     </TrainingCard>
   );
 }
@@ -351,7 +375,7 @@ function MixedPracticeExperience({
 }) {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [result, setResult] = useState<CompletedResult | null>(null);
-  const objectiveModels = models.filter((model) => model.questions[0]);
+  const objectiveModels = models.filter((model) => model.contract.kind !== 'invalid' && model.questions[0]);
 
   function submit() {
     const scored = objectiveModels.map((model) => scoreTrainingChoice(model, answers[model.id] ?? ''));
@@ -373,23 +397,127 @@ function MixedPracticeExperience({
           <div key={model.id} className="rounded-2xl bg-surface-container-low p-4">
             <p className="text-[10px] font-bold uppercase tracking-widest text-primary">{model.experience}</p>
             <h3 className="mt-1 font-headline text-lg font-black text-on-surface">{model.title}</h3>
-            {model.experience === 'listening' && <AudioControls text={model.audioText} locale={model.locale} compact />}
-            {model.experience === 'reading' && <SourceText title="Reading text" text={model.readingText} compact />}
-            {model.questions[0] ? (
-              <ChoiceBlock
-                question={model.questions[0].prompt}
-                choices={model.questions[0].choices}
-                selected={answers[model.id] ?? ''}
-                setSelected={(value) => setAnswers((current) => ({ ...current, [model.id]: value }))}
-              />
-            ) : (
-              <p className="mt-3 text-sm leading-6 text-on-surface-variant">{model.prompt}</p>
-            )}
+            <NativeContractPreview model={model} selected={answers[model.id] ?? ''} setSelected={(value) => setAnswers((current) => ({ ...current, [model.id]: value }))} />
           </div>
         ))}
       </div>
       <ActionRow onSubmit={submit} disabled={objectiveModels.some((model) => !answers[model.id])} result={result} label={assessment ? 'Finish check' : 'Finish review'} />
     </TrainingCard>
+  );
+}
+
+function NativeContractPreview({
+  model,
+  selected,
+  setSelected,
+}: {
+  model: TrainingExerciseModel;
+  selected: string;
+  setSelected: (value: string) => void;
+}) {
+  const contract = model.contract;
+
+  if (contract.kind === 'invalid') return <InvalidTrainingState model={model} />;
+
+  if (contract.kind === 'listening') {
+    return (
+      <>
+        <AudioControls text={contract.audioText} locale={model.locale} compact />
+        <ChoiceBlock question={contract.question} choices={contract.choices} selected={selected} setSelected={setSelected} />
+      </>
+    );
+  }
+
+  if (contract.kind === 'reading') {
+    return (
+      <>
+        <SourceText title="Reading text" text={contract.sourceText} compact />
+        <ChoiceBlock question={contract.question} choices={contract.choices} selected={selected} setSelected={setSelected} />
+      </>
+    );
+  }
+
+  if (contract.kind === 'multiple_choice') {
+    return <ChoiceBlock question={contract.prompt} choices={contract.choices} selected={selected} setSelected={setSelected} />;
+  }
+
+  if (contract.kind === 'gap_fill') {
+    return (
+      <div className="mt-4">
+        <p className="rounded-2xl bg-surface-container-lowest px-4 py-3 text-base font-semibold text-on-surface">{contract.template}</p>
+        {contract.choices ? (
+          <ChoiceBlock question="Choose the missing answer." choices={contract.choices} selected={selected} setSelected={setSelected} />
+        ) : (
+          <input
+            value={selected}
+            onChange={(event) => setSelected(event.target.value)}
+            className="mt-3 w-full rounded-2xl border border-outline-variant/20 bg-surface-container-lowest px-4 py-3 text-sm text-on-surface outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10"
+            placeholder="Type the missing word or phrase."
+          />
+        )}
+      </div>
+    );
+  }
+
+  if (contract.kind === 'sentence_order') {
+    return (
+      <div className="mt-4">
+        <p className="text-sm font-semibold text-on-surface-variant">Order these segments:</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {contract.tokens.map((token, index) => (
+            <button
+              key={`${token}-${index}`}
+              type="button"
+              onClick={() => setSelected([selected, token].filter(Boolean).join(' '))}
+              className="cursor-pointer rounded-full bg-surface-container-lowest px-3 py-2 text-xs font-bold text-on-surface transition hover:bg-surface-container focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary active:scale-[0.98]"
+            >
+              {token}
+            </button>
+          ))}
+          <button type="button" onClick={() => setSelected('')} className="cursor-pointer rounded-full bg-surface-container px-3 py-2 text-xs font-bold text-on-surface-variant hover:bg-surface-container-high">
+            Reset
+          </button>
+        </div>
+        <p className="mt-3 min-h-10 rounded-2xl bg-surface-container-lowest px-4 py-3 text-sm text-on-surface">
+          {selected || 'Your ordered sentence appears here.'}
+        </p>
+      </div>
+    );
+  }
+
+  if (contract.kind === 'vocabulary_match') {
+    return (
+      <div className="mt-4 grid gap-2 sm:grid-cols-2">
+        {contract.pairs.map((pair) => (
+          <div key={`${pair.term}-${pair.meaning}`} className="rounded-2xl bg-surface-container-lowest p-3">
+            <p className="font-headline text-sm font-black text-on-surface">{pair.term}</p>
+            <p className="mt-1 text-xs leading-5 text-on-surface-variant">{pair.meaning}</p>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (contract.kind === 'dictation' || contract.kind === 'pronunciation') {
+    return <AudioControls text={contract.audioText} locale={model.locale} compact />;
+  }
+
+  return <p className="mt-3 text-sm leading-6 text-on-surface-variant">{model.prompt}</p>;
+}
+
+function InvalidTrainingState({ model }: { model: TrainingExerciseModel }) {
+  if (model.contract.kind !== 'invalid') return null;
+
+  return (
+    <div className="rounded-2xl border border-outline-variant/20 bg-surface-container-low p-4">
+      <p className="font-headline text-base font-black text-on-surface">Exercise content unavailable</p>
+      <p className="mt-2 text-sm leading-6 text-on-surface-variant">
+        This exercise needs authored content before WordPilot can show it safely.
+      </p>
+      <p className="mt-3 text-xs font-semibold text-on-surface-variant">
+        Missing: {model.contract.missing.join(', ')}
+      </p>
+    </div>
   );
 }
 
