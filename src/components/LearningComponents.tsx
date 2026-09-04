@@ -15,6 +15,10 @@ import {
   PracticeStatus,
 } from '../lib/learning';
 
+type LearningCardExercise = Omit<PracticeExercise, 'skill'> & {
+  skill: PracticeExercise['skill'] | 'Speaking' | 'Review' | 'Progress Check';
+};
+
 export function CurrentLevelCard({
   language,
   level,
@@ -156,13 +160,13 @@ export function PracticeRecommendationCard({
   );
 }
 
-export function PracticeExerciseCard({
+export function PracticeExerciseCard<TExercise extends LearningCardExercise>({
   exercise,
   onStart,
 }: {
   key?: React.Key;
-  exercise: PracticeExercise;
-  onStart: (exercise: PracticeExercise) => void;
+  exercise: TExercise;
+  onStart: (exercise: TExercise) => void;
 }) {
   const { language: interfaceLanguage } = useI18n();
   const copy = learningComponentsCopy[interfaceLanguage];
@@ -319,16 +323,19 @@ function StatusPill({ status }: { status: PracticeStatus }) {
   );
 }
 
-function formatPracticeSkill(skill: PracticeExercise['skill'], interfaceLanguage: 'en' | 'de') {
+function formatPracticeSkill(skill: LearningCardExercise['skill'], interfaceLanguage: 'en' | 'de') {
   if (interfaceLanguage === 'en') {
     return skill;
   }
 
-  const labels: Record<PracticeExercise['skill'], string> = {
+  const labels: Record<LearningCardExercise['skill'], string> = {
     Dictation: 'Diktat',
     Reading: 'Lesen',
     Listening: 'Hören',
+    Speaking: 'Sprechen',
     Writing: 'Schreiben',
+    Review: 'Wiederholung',
+    'Progress Check': 'Fortschrittsprüfung',
   };
 
   return labels[skill];

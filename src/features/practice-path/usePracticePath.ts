@@ -10,13 +10,12 @@ import {
   type CefrLevel,
   normalizeCefrLevel,
   normalizeLearningLanguage,
-  type PracticeExercise,
   type LearningLanguage,
-  type PracticeLesson,
 } from '../../lib/learning';
 import { buildPracticePathCopy } from './copy';
-import type { PracticePathLevelMap, PracticePathState } from './types';
+import type { PracticePathExercise, PracticePathLesson, PracticePathLevelMap, PracticePathState } from './types';
 import { loadStructuredLevelMap, loadStructuredPracticeLessons } from './structuredCurriculum';
+import { getTrainingRoute, type TrainingExperience } from '../training/registry';
 
 export function usePracticePath(): PracticePathState {
   const navigate = useNavigate();
@@ -30,7 +29,7 @@ export function usePracticePath(): PracticePathState {
   const [status, setStatus] = useState<string | null>(null);
   const [contentLoading, setContentLoading] = useState(true);
   const [contentError, setContentError] = useState<string | null>(null);
-  const [baseLessons, setBaseLessons] = useState<PracticeLesson[]>([]);
+  const [baseLessons, setBaseLessons] = useState<PracticePathLesson[]>([]);
   const [phaseOneLevels, setPhaseOneLevels] = useState<PracticePathLevelMap[]>([]);
   const { report, loading: reportLoading } = useWeeklyReport(user, selectedLanguage);
   const practiceProgress = usePracticeProgress(user, selectedLanguage, selectedLevel);
@@ -110,7 +109,7 @@ export function usePracticePath(): PracticePathState {
     setStatus(formatPreviewMessage(displayLanguage, level, interfaceLanguage));
   }
 
-  async function startExercise(exercise: PracticeExercise) {
+  async function startExercise(exercise: PracticePathExercise) {
     if (exercise.status === 'not_started') {
       const result = await practiceProgress.upsertProgress({
         language: selectedLanguage,
@@ -126,19 +125,30 @@ export function usePracticePath(): PracticePathState {
       }
     }
 
-    navigate('/workspace', {
-      state: {
-        sourceText: exercise.sourceText,
-        title: exercise.title,
-        language: exercise.language,
-        cefrLevel: exercise.level,
-        practiceCategory: exercise.skill,
-        lessonTitle: exercise.lessonTitle,
-        practicePath: true,
-        practiceExerciseId: exercise.id,
-        practiceLessonId: exercise.lessonId,
-      },
-    });
+    if (exercise.skill === 'Dictation') {
+      navigate('/workspace', {
+        state: {
+          sourceText: exercise.sourceText,
+          title: exercise.title,
+          language: exercise.language,
+          cefrLevel: exercise.level,
+          practiceCategory: exercise.skill,
+          lessonTitle: exercise.lessonTitle,
+          practicePath: true,
+          practiceExerciseId: exercise.id,
+          practiceLessonId: exercise.lessonId,
+        },
+      });
+      return;
+    }
+
+    navigate(getTrainingRoute({
+      experience: toTrainingExperience(exercise.skill),
+      language: exercise.language,
+      levelNumber: exercise.levelNumber,
+      lessonId: exercise.lessonId ?? '',
+      exerciseId: exercise.curriculumExerciseId ?? exercise.id,
+    }));
   }
 
   return {
@@ -174,6 +184,11 @@ function formatSavedMessage(language: string, level: CefrLevel, interfaceLanguag
   return interfaceLanguage === 'de'
     ? `${language} ${level} ist jetzt dein aktiver Lernweg.`
     : `${language} ${level} is now your active training path.`;
+}
+
+function toTrainingExperience(skill: PracticePathExercise['skill']): TrainingExperience {
+  if (skill === 'Progress Check') return 'progress-check';
+  return skill.toLowerCase() as TrainingExperience;
 }
 
 function formatPreviewMessage(language: string, level: CefrLevel, interfaceLanguage: 'en' | 'de') {

@@ -52,7 +52,7 @@ type NavItem = {
 
 const mainNavItems: NavItem[] = [
   { to: '/dashboard', labelKey: 'nav.dashboard', icon: LayoutDashboard, userOnly: true },
-  { to: '/practice-path', labelKey: 'nav.practicePath', icon: Route, userOnly: true, match: ['/practice-path', '/curriculum'] },
+  { to: '/practice-path', labelKey: 'nav.practicePath', icon: Route, userOnly: true, match: ['/practice-path', '/practice', '/curriculum'] },
   { to: '/workspace', labelKey: 'nav.exercises', icon: Keyboard, userOnly: true },
   { to: '/shadowing', labelKey: 'nav.shadowing', icon: Mic2, userOnly: true },
   { to: '/ai-lab', labelKey: 'nav.aiLab', icon: Bot, userOnly: true },

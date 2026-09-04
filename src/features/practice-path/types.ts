@@ -1,6 +1,15 @@
-import type { CefrLevel, LearningLanguage, PracticeExercise, PracticeLesson } from '../../lib/learning';
+import type { CefrLevel, LearningLanguage, PracticeLesson, PracticeStatus } from '../../lib/learning';
 import type { WeeklyReport } from '../../hooks/useWeeklyReport';
 import type { CurriculumLevelSummary } from '../../lib/curriculumRepository';
+
+export type PracticePathSkill =
+  | 'Listening'
+  | 'Dictation'
+  | 'Reading'
+  | 'Speaking'
+  | 'Writing'
+  | 'Review'
+  | 'Progress Check';
 
 export type PathCopy = {
   pageEyebrow: string;
@@ -45,8 +54,28 @@ export type PathCopy = {
 
 export type PracticePathLevelMap = CurriculumLevelSummary;
 
-export type PracticePathLesson = PracticeLesson;
-export type PracticePathExercise = PracticeExercise;
+export type PracticePathExercise = {
+  id: string;
+  lessonId?: string;
+  lessonTitle?: string;
+  levelNumber: number;
+  title: string;
+  skill: PracticePathSkill;
+  level: CefrLevel;
+  focus: string;
+  duration: string;
+  difficulty: 'Foundation' | 'Steady' | 'Challenging' | 'Advanced';
+  status: PracticeStatus;
+  description: string;
+  sourceText: string;
+  language: LearningLanguage;
+  curriculumExerciseId?: string;
+};
+
+export type PracticePathLesson = Omit<PracticeLesson, 'exercises'> & {
+  levelNumber: number;
+  exercises: PracticePathExercise[];
+};
 
 export type PracticePathState = {
   selectedLanguage: LearningLanguage;

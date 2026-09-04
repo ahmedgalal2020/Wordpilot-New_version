@@ -25,6 +25,7 @@ const AccountPage = lazy(() => import('./pages/AccountPage'));
 const CertificatesPage = lazy(() => import('./pages/CertificatesPage'));
 const LibraryPage = lazy(() => import('./pages/LibraryPage'));
 const PracticePathPage = lazy(() => import('./pages/PracticePathPage'));
+const PracticeTrainingPage = lazy(() => import('./pages/PracticeTrainingPage'));
 const CurriculumPage = lazy(() => import('./pages/CurriculumPage'));
 const ShadowingPracticePage = lazy(() => import('./pages/ShadowingPracticePage'));
 const HistoryPage = lazy(() => import('./pages/HistoryPage'));
@@ -73,6 +74,7 @@ export default function App() {
                   <Route path="/ai-lab" element={<AILab />} />
                   <Route path="/workspace" element={<DictationWorkspace />} />
                   <Route path="/practice-path" element={<PracticePathPage />} />
+                  <Route path="/practice/:experience/:language/:levelNumber/:lessonId/:exerciseId" element={<PracticeTrainingPage />} />
                   <Route path="/curriculum" element={<CurriculumPage />} />
                   <Route path="/shadowing" element={<ShadowingPracticePage />} />
                   <Route path="/history" element={<HistoryPage />} />

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { hasSupabaseEnv } from '../lib/env';
 import { supabase } from '../lib/supabase';
-import type { PracticeExercise, PracticeStatus } from '../lib/learning';
+import type { PracticeStatus } from '../lib/learning';
 
 export type PracticeProgressRow = {
   id: string;
@@ -74,7 +74,7 @@ export function usePracticeProgress(user: User | null, language?: string, cefrLe
   }, [rows]);
 
   const applyProgress = useCallback(
-    <T extends PracticeExercise>(exercises: T[]) =>
+    <T extends { id: string; status: PracticeStatus }>(exercises: T[]) =>
       exercises.map((exercise) => ({
         ...exercise,
         status: statusByExerciseId[exercise.id] ?? 'not_started',
