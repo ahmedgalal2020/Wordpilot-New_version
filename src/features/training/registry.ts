@@ -54,7 +54,8 @@ export function getExercisesForExperience(lesson: CurriculumLesson, experience: 
     const requested = requestedExerciseId ? lesson.exercises.find((exercise) => exercise.id === requestedExerciseId) : null;
     const checkItems = lesson.exercises.filter((exercise) => getExperienceForExercise(exercise) === 'progress-check' || exercise.skill === 'test');
     const supportItems = lesson.exercises.filter((exercise) => ['vocabulary', 'listening', 'grammar', 'reading', 'writing', 'speaking', 'conversation'].includes(exercise.skill));
-    return uniqueById([...(requested ? [requested] : []), ...checkItems, ...supportItems]).slice(0, 6);
+    const items = uniqueById([...checkItems, ...supportItems]);
+    return requested && items.some((item) => item.id === requested.id) ? [requested, ...items.filter((item) => item.id !== requested.id)] : items;
   }
 
   if (experience === 'review') {
@@ -64,7 +65,8 @@ export function getExercisesForExperience(lesson: CurriculumLesson, experience: 
       ['vocabulary', 'grammar', 'sentence_building', 'listening', 'reading', 'writing'].includes(exercise.skill) &&
       getExperienceForExercise(exercise) !== 'progress-check',
     );
-    return uniqueById([...(requested ? [requested] : []), ...reviewItems, ...recapItems]).slice(0, 6);
+    const items = uniqueById([...reviewItems, ...recapItems]);
+    return requested && items.some((item) => item.id === requested.id) ? [requested, ...items.filter((item) => item.id !== requested.id)] : items;
   }
 
   const matching = lesson.exercises.filter((exercise) => getExperienceForExercise(exercise) === experience);

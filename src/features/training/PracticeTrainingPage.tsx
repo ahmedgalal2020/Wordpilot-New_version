@@ -13,11 +13,18 @@ import {
 } from '../../lib/curriculumCore';
 import { CurriculumRepositoryError, loadCurriculumLevel } from '../../lib/curriculumRepository';
 import { cn } from '../../lib/utils';
-import { buildTrainingExerciseModel, scoreTrainingChoice, type TrainingExerciseModel } from './exerciseAdapter';
-import { getExercisesForExperience, parseTrainingExperience, TRAINING_EXPERIENCE_LABELS, type TrainingExperience } from './registry';
+import { buildTrainingExerciseModel, scoreTrainingResponse, type TrainingExerciseModel } from './exerciseAdapter';
+import { getExercisesForExperience, getTrainingRoute, parseTrainingExperience, TRAINING_EXPERIENCE_LABELS, type TrainingExperience } from './registry';
+import { getContinueLabel, getTrainingFlowState, type TrainingFlowState } from './trainingFlow';
+import { TrainingCompletionPanel, type TrainingCompletionResult } from './trainingCompletion';
 
 type RecordingState = 'idle' | 'recording' | 'ready';
-type CompletedResult = { score: number | null; message: string; passed: boolean };
+type CompletedResult = TrainingCompletionResult;
+type CompletionContext = {
+  result: CompletedResult;
+  exerciseId: string;
+  flow: TrainingFlowState;
+};
 
 export default function PracticeTrainingPage() {
   const params = useParams();
@@ -31,6 +38,12 @@ export default function PracticeTrainingPage() {
   const [levelLoading, setLevelLoading] = useState(true);
   const [levelError, setLevelError] = useState<string | null>(null);
   const [lesson, setLesson] = useState<CurriculumLesson | null>(null);
+  const [levelLessons, setLevelLessons] = useState<CurriculumLesson[]>([]);
+  const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const [completionContext, setCompletionContext] = useState<CompletionContext | null>(null);
   const progress = usePracticeProgress(user, language ?? undefined, lesson?.cefrLevel);
 
   useEffect(() => {
@@ -51,7 +64,11 @@ export default function PracticeTrainingPage() {
         if (!nextLesson) {
           throw new CurriculumRepositoryError('The requested lesson could not be found in the active curriculum.', 'missing_content');
         }
-        if (!cancelled) setLesson(nextLesson);
+        if (!cancelled) {
+          setLevelLessons(level.lessons);
+          setLesson(nextLesson);
+          setCompletionContext(null);
+        }
       } catch (error) {
         if (!cancelled) setLevelError(error instanceof Error ? error.message : 'Could not load this training experience.');
       } finally {
@@ -76,15 +93,81 @@ export default function PracticeTrainingPage() {
     return exercises.map((exercise) => buildTrainingExerciseModel(lesson, exercise, experience));
   }, [exercises, experience, lesson]);
 
-  async function completeTraining(_result: CompletedResult, completedExerciseId = exerciseId || exercises[0]?.id) {
-    if (!language || !lesson || !completedExerciseId) return;
-    await progress.upsertProgress({
-      language,
-      cefrLevel: lesson.cefrLevel,
-      lessonId: lesson.id,
-      exerciseId: completedExerciseId,
-      status: 'completed',
+  const syncedCompletedIds = useMemo(() => {
+    const ids = new Set(completedIds);
+    progress.rows.forEach((row) => {
+      if (row.status === 'completed' || row.completed_at) ids.add(row.exercise_id);
     });
+    return ids;
+  }, [completedIds, progress.rows]);
+
+  async function completeTraining(result: CompletedResult, completedExerciseId = exerciseId || exercises[0]?.id) {
+    if (!language || !lesson || !experience || !completedExerciseId || !result.passed || savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const saved = await progress.upsertProgress({ language, cefrLevel: lesson.cefrLevel, lessonId: lesson.id, exerciseId: completedExerciseId, status: 'completed' });
+      if (saved.error) { setSaveError('Your progress could not be saved. Please submit again.'); return; }
+    } catch {
+      setSaveError('Your progress could not be saved. Please submit again.');
+      return;
+    } finally { savingRef.current = false; setSaving(false); }
+    const flow = getTrainingFlowState({
+      currentExerciseId: completedExerciseId,
+      completedIds: syncedCompletedIds,
+      experienceExerciseIds: getExercisesForExperience(lesson, experience).map((exercise) => exercise.id),
+      lessonExerciseIds: lesson.exercises.map((exercise) => exercise.id),
+    });
+    setCompletedIds((current) => new Set([...current, completedExerciseId]));
+    setCompletionContext({ result, exerciseId: completedExerciseId, flow });
+
+  }
+
+  function continueAfterCompletion() {
+    if (!completionContext || !experience || !language || !lesson) return;
+    if (completionContext.flow.nextExerciseId) {
+      setCompletionContext(null);
+      navigate(getTrainingRoute({
+        experience,
+        language,
+        levelNumber,
+        lessonId: lesson.id,
+        exerciseId: completionContext.flow.nextExerciseId,
+      }));
+      return;
+    }
+
+    if (completionContext.flow.lessonComplete) {
+      const nextLesson = findNextLesson(levelLessons, lesson);
+      setCompletionContext(null);
+      if (nextLesson) {
+        navigate(getTrainingRoute({
+          experience: 'listening',
+          language,
+          levelNumber: nextLesson.levelNumber,
+          lessonId: nextLesson.id,
+          exerciseId: getExercisesForExperience(nextLesson, 'listening')[0]?.id ?? '',
+        }));
+        return;
+      }
+      navigate('/practice-path');
+      return;
+    }
+
+    const nextSkill = getNextSkillRoute(lesson, experience, new Set([...syncedCompletedIds, completionContext.exerciseId]));
+    setCompletionContext(null);
+    if (nextSkill) {
+      navigate(getTrainingRoute({
+        experience: nextSkill.experience,
+        language,
+        levelNumber,
+        lessonId: lesson.id,
+        exerciseId: nextSkill.exerciseId,
+      }));
+      return;
+    }
+    navigate('/practice-path');
   }
 
   if (!experience || !language || !CURRICULUM_LEVELS.some((level) => level.levelNumber === levelNumber)) {
@@ -116,14 +199,29 @@ export default function PracticeTrainingPage() {
   return (
     <TrainingShell title={TRAINING_EXPERIENCE_LABELS[experience]} subtitle={`${lesson.title} - ${lesson.language} ${lesson.cefrLevel}.${lesson.cefrSubLevel}`}>
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_20rem] xl:items-start">
-        <section className="space-y-6">
-          <LessonContext lesson={lesson} />
-          {experience === 'listening' && <ListeningExperience model={models[0]} onComplete={(result) => void completeTraining(result, models[0].id)} />}
-          {experience === 'reading' && <ReadingExperience model={models[0]} onComplete={(result) => void completeTraining(result, models[0].id)} />}
-          {experience === 'writing' && <WritingExperience model={models[0]} onComplete={(result) => void completeTraining(result, models[0].id)} />}
-          {experience === 'speaking' && <SpeakingExperience model={models[0]} onComplete={(result) => void completeTraining(result, models[0].id)} />}
-          {experience === 'review' && <MixedPracticeExperience title="Review set" models={models} onComplete={(result) => void completeTraining(result)} />}
-          {experience === 'progress-check' && <MixedPracticeExperience title="Progress Check Complete" models={models} assessment onComplete={(result) => void completeTraining(result)} />}
+        <section key={`${user?.id}:${experience}:${lesson.id}:${exerciseId}`} className="space-y-6 [&_button]:focus-visible:outline [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-primary">
+          {saveError && <p role="alert" className="text-sm text-error">{saveError}</p>}
+          <fieldset disabled={saving} className="min-w-0 space-y-6 border-0 p-0">
+          {saving && <p role="status">Saving progress...</p>}
+          <LessonContext lesson={lesson} experience={experience} />
+          {completionContext && completionContext.flow.experienceComplete && (
+            <ExperienceCompletionPanel
+              title={completionContext.flow.lessonComplete ? 'Lesson complete' : `${TRAINING_EXPERIENCE_LABELS[experience]} complete`}
+              result={completionContext.result}
+              experience={experience}
+              flow={completionContext.flow}
+              totalExperience={exercises.length}
+              totalLesson={lesson.exercises.length}
+              onContinue={continueAfterCompletion}
+            />
+          )}
+          {experience === 'listening' && <ListeningExperience model={models[0]} onComplete={(result) => void completeTraining(result, models[0].id)} onContinue={continueAfterCompletion} completion={completionContext?.exerciseId === models[0].id ? completionContext : null} />}
+          {experience === 'reading' && <ReadingExperience model={models[0]} onComplete={(result) => void completeTraining(result, models[0].id)} onContinue={continueAfterCompletion} completion={completionContext?.exerciseId === models[0].id ? completionContext : null} />}
+          {experience === 'writing' && <WritingExperience model={models[0]} onComplete={(result) => void completeTraining(result, models[0].id)} onContinue={continueAfterCompletion} completion={completionContext?.exerciseId === models[0].id ? completionContext : null} />}
+          {experience === 'speaking' && <SpeakingExperience model={models[0]} onComplete={(result) => void completeTraining(result, models[0].id)} onContinue={continueAfterCompletion} completion={completionContext?.exerciseId === models[0].id ? completionContext : null} />}
+          {experience === 'review' && <MixedPracticeExperience title="Review" models={models} onComplete={(result, id) => void completeTraining(result, id)} onContinue={continueAfterCompletion} completion={completionContext} position={getExercisesForExperience(lesson, experience).findIndex((item) => item.id === models[0].id) + 1} />}
+          {experience === 'progress-check' && <MixedPracticeExperience title="Progress Check" models={models} assessment onComplete={(result, id) => void completeTraining(result, id)} onContinue={continueAfterCompletion} completion={completionContext} position={getExercisesForExperience(lesson, experience).findIndex((item) => item.id === models[0].id) + 1} />}
+          </fieldset>
         </section>
         <aside className="rounded-3xl bg-surface-container-lowest p-5 whisper-shadow">
           <p className="text-[0.6875rem] font-bold uppercase tracking-widest text-primary">Lesson support</p>
@@ -166,32 +264,46 @@ function TrainingShell({ title, subtitle, children }: { title: string; subtitle:
   );
 }
 
-function LessonContext({ lesson }: { lesson: CurriculumLesson }) {
+function LessonContext({ lesson, experience }: { lesson: CurriculumLesson; experience: TrainingExperience }) {
+  const showModelSentence = experience === 'speaking' || experience === 'writing';
+
   return (
     <div className="rounded-3xl bg-surface-container-lowest p-5 whisper-shadow sm:p-6">
       <p className="text-[0.6875rem] font-bold uppercase tracking-widest text-primary">Learning goal</p>
       <h2 className="mt-2 font-headline text-2xl font-black text-on-surface">{lesson.objective}</h2>
-      <div className="mt-5 grid gap-3 md:grid-cols-3">
+      <div className={cn('mt-5 grid gap-3', showModelSentence ? 'md:grid-cols-3' : 'md:grid-cols-2')}>
         <InfoCard label="Can do" value={lesson.canDo} />
         <InfoCard label="Grammar" value={lesson.grammarFocus} />
-        <InfoCard label="Target" value={lesson.targetSentence} />
+        {showModelSentence && <InfoCard label="Model sentence" value={lesson.targetSentence} subtle />}
       </div>
     </div>
   );
 }
 
-function ListeningExperience({ model, onComplete }: { model: TrainingExerciseModel; onComplete: (result: CompletedResult) => void }) {
+function ListeningExperience({
+  model,
+  completion,
+  onComplete,
+  onContinue,
+}: {
+  model: TrainingExerciseModel;
+  completion: CompletionContext | null;
+  onComplete: (result: CompletedResult) => void;
+  onContinue: () => void;
+}) {
   const [selected, setSelected] = useState('');
   const [result, setResult] = useState<CompletedResult | null>(null);
   const [transcriptVisible, setTranscriptVisible] = useState(false);
   const question = model.questions[0];
 
   function submit() {
-    const scored = scoreTrainingChoice(model, selected);
+    const scored = scoreTrainingResponse(model, selected);
     const nextResult = { score: scored.score, passed: scored.passed, message: scored.feedback };
     setResult(nextResult);
     if (scored.passed) onComplete(nextResult);
   }
+
+  const completed = completion?.result ?? null;
 
   return (
     <TrainingCard eyebrow="Listening first" title={model.title} instruction={model.instruction}>
@@ -201,8 +313,18 @@ function ListeningExperience({ model, onComplete }: { model: TrainingExerciseMod
       <>
       <AudioControls text={model.audioText} locale={model.locale} />
       {question && <ChoiceBlock question={question.prompt} choices={question.choices} selected={selected} setSelected={setSelected} />}
-      <ActionRow onSubmit={submit} disabled={!selected} result={result} label="Submit answer" />
-      {result && (
+      {!completed && <ActionRow onSubmit={submit} disabled={!selected} result={result} label="Submit answer" />}
+      {result && !result.passed && <InlineFeedback result={result} />}
+      {completed && !completion.flow.experienceComplete && (
+        <TrainingCompletionPanel
+          result={completed}
+          experience="listening"
+          objective
+          continueLabel={getContinueLabel(completion.flow)}
+          onContinue={onContinue}
+        />
+      )}
+      {completed && (
         <button type="button" onClick={() => setTranscriptVisible((visible) => !visible)} className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-full bg-surface-container-low px-4 py-2 text-sm font-bold text-on-surface hover:bg-surface-container">
           <Eye className="h-4 w-4" />
           {transcriptVisible ? 'Hide transcript' : 'View transcript'}
@@ -215,17 +337,29 @@ function ListeningExperience({ model, onComplete }: { model: TrainingExerciseMod
   );
 }
 
-function ReadingExperience({ model, onComplete }: { model: TrainingExerciseModel; onComplete: (result: CompletedResult) => void }) {
+function ReadingExperience({
+  model,
+  completion,
+  onComplete,
+  onContinue,
+}: {
+  model: TrainingExerciseModel;
+  completion: CompletionContext | null;
+  onComplete: (result: CompletedResult) => void;
+  onContinue: () => void;
+}) {
   const [selected, setSelected] = useState('');
   const [result, setResult] = useState<CompletedResult | null>(null);
   const question = model.questions[0];
 
   function submit() {
-    const scored = scoreTrainingChoice(model, selected);
+    const scored = scoreTrainingResponse(model, selected);
     const nextResult = { score: scored.score, passed: scored.passed, message: scored.feedback };
     setResult(nextResult);
     if (scored.passed) onComplete(nextResult);
   }
+
+  const completed = completion?.result ?? null;
 
   return (
     <TrainingCard eyebrow="Read, then answer" title={model.title} instruction={model.instruction}>
@@ -235,14 +369,34 @@ function ReadingExperience({ model, onComplete }: { model: TrainingExerciseModel
       <>
       <SourceText title="Reading text" text={model.readingText} />
       {question && <ChoiceBlock question={question.prompt} choices={question.choices} selected={selected} setSelected={setSelected} />}
-      <ActionRow onSubmit={submit} disabled={!selected} result={result} label="Check reading" />
+      {!completed && <ActionRow onSubmit={submit} disabled={!selected} result={result} label="Check reading" />}
+      {result && !result.passed && <InlineFeedback result={result} />}
+      {completed && !completion.flow.experienceComplete && (
+        <TrainingCompletionPanel
+          result={completed}
+          experience="reading"
+          objective
+          continueLabel={getContinueLabel(completion.flow)}
+          onContinue={onContinue}
+        />
+      )}
       </>
       )}
     </TrainingCard>
   );
 }
 
-function WritingExperience({ model, onComplete }: { model: TrainingExerciseModel; onComplete: (result: CompletedResult) => void }) {
+function WritingExperience({
+  model,
+  completion,
+  onComplete,
+  onContinue,
+}: {
+  model: TrainingExerciseModel;
+  completion: CompletionContext | null;
+  onComplete: (result: CompletedResult) => void;
+  onContinue: () => void;
+}) {
   const [text, setText] = useState('');
   const [result, setResult] = useState<CompletedResult | null>(null);
   const task = model.writingTask;
@@ -253,6 +407,8 @@ function WritingExperience({ model, onComplete }: { model: TrainingExerciseModel
     setResult(nextResult);
     onComplete(nextResult);
   }
+
+  const completed = completion?.result ?? null;
 
   return (
     <TrainingCard eyebrow="Original writing" title={model.title} instruction={model.instruction}>
@@ -280,14 +436,33 @@ function WritingExperience({ model, onComplete }: { model: TrainingExerciseModel
           Clear
         </button>
       </div>
-      <ActionRow onSubmit={complete} disabled={wordCount < 3} result={result} label="Complete writing" />
+      {!completed && <ActionRow onSubmit={complete} disabled={wordCount < 3} result={result} label="Complete writing" />}
+      {completed && !completion.flow.experienceComplete && (
+        <TrainingCompletionPanel
+          result={completed}
+          experience="writing"
+          objective={false}
+          continueLabel={getContinueLabel(completion.flow)}
+          onContinue={onContinue}
+        />
+      )}
       </>
       )}
     </TrainingCard>
   );
 }
 
-function SpeakingExperience({ model, onComplete }: { model: TrainingExerciseModel; onComplete: (result: CompletedResult) => void }) {
+function SpeakingExperience({
+  model,
+  completion,
+  onComplete,
+  onContinue,
+}: {
+  model: TrainingExerciseModel;
+  completion: CompletionContext | null;
+  onComplete: (result: CompletedResult) => void;
+  onContinue: () => void;
+}) {
   const [recordingState, setRecordingState] = useState<RecordingState>('idle');
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [result, setResult] = useState<CompletedResult | null>(null);
@@ -295,10 +470,21 @@ function SpeakingExperience({ model, onComplete }: { model: TrainingExerciseMode
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const roleplay = model.roleplay;
+  const [recordingError, setRecordingError] = useState<string | null>(null);
+  useEffect(() => () => {
+    const recorder = recorderRef.current;
+    if (recorder) { recorder.onstop = null; if (recorder.state !== 'inactive') recorder.stop(); }
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+  }, []);
+  useEffect(() => () => { if (audioUrl) URL.revokeObjectURL(audioUrl); }, [audioUrl]);
 
   async function startRecording() {
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') return;
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    setRecordingError(null);
+    window.speechSynthesis?.cancel();
+    let stream: MediaStream;
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+    catch { setRecordingError('Microphone access failed. Check your browser permission and try again.'); return; }
     streamRef.current = stream;
     chunksRef.current = [];
     const recorder = new MediaRecorder(stream);
@@ -306,7 +492,7 @@ function SpeakingExperience({ model, onComplete }: { model: TrainingExerciseMode
       if (event.data.size > 0) chunksRef.current.push(event.data);
     };
     recorder.onstop = () => {
-      const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+      const blob = new Blob(chunksRef.current, { type: recorder.mimeType });
       setAudioUrl(URL.createObjectURL(blob));
       setRecordingState('ready');
       streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -317,7 +503,7 @@ function SpeakingExperience({ model, onComplete }: { model: TrainingExerciseMode
   }
 
   function stopRecording() {
-    recorderRef.current?.stop();
+    if (recorderRef.current?.state === 'recording') recorderRef.current.stop();
   }
 
   function complete() {
@@ -325,6 +511,8 @@ function SpeakingExperience({ model, onComplete }: { model: TrainingExerciseMode
     setResult(nextResult);
     onComplete(nextResult);
   }
+
+  const completed = completion?.result ?? null;
 
   return (
     <TrainingCard eyebrow="Produce speech" title={model.title} instruction={model.instruction}>
@@ -354,8 +542,18 @@ function SpeakingExperience({ model, onComplete }: { model: TrainingExerciseMode
           </button>
         )}
       </div>
+      {recordingError && <p role="alert" className="mt-3 text-sm text-error">{recordingError}</p>}
       {audioUrl && <audio controls src={audioUrl} className="mt-5 w-full" />}
-      <ActionRow onSubmit={complete} disabled={!audioUrl} result={result} label="Complete speaking" />
+      {!completed && <ActionRow onSubmit={complete} disabled={!audioUrl || recordingState === 'recording'} result={result} label="Complete speaking" />}
+      {completed && !completion.flow.experienceComplete && (
+        <TrainingCompletionPanel
+          result={completed}
+          experience="speaking"
+          objective={false}
+          continueLabel={getContinueLabel(completion.flow)}
+          onContinue={onContinue}
+        />
+      )}
       </>
       )}
     </TrainingCard>
@@ -363,45 +561,115 @@ function SpeakingExperience({ model, onComplete }: { model: TrainingExerciseMode
 }
 
 function MixedPracticeExperience({
+  position,
   title,
   models,
   assessment = false,
+  completion,
   onComplete,
+  onContinue,
 }: {
   title: string;
+  position: number;
   models: TrainingExerciseModel[];
   assessment?: boolean;
-  onComplete: (result: CompletedResult) => void;
+  completion: CompletionContext | null;
+  onComplete: (result: CompletedResult, exerciseId: string) => void;
+  onContinue: () => void;
 }) {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [result, setResult] = useState<CompletedResult | null>(null);
-  const objectiveModels = models.filter((model) => model.contract.kind !== 'invalid' && model.questions[0]);
+  const activeIndex = 0;
+  const activeModel = models[Math.min(activeIndex, models.length - 1)];
+  const selected = activeModel ? answers[activeModel.id] ?? '' : '';
+  const isObjective = Boolean(activeModel && !['invalid', 'writing', 'speaking', 'pronunciation'].includes(activeModel.contract.kind));
+
+
 
   function submit() {
-    const scored = objectiveModels.map((model) => scoreTrainingChoice(model, answers[model.id] ?? ''));
-    const score = scored.length ? Math.round(scored.reduce((sum, item) => sum + item.score, 0) / scored.length) : null;
-    const passed = score === null ? true : score >= 60;
-    const nextResult = {
-      score,
-      passed,
-      message: score === null ? 'Completed. This set is ready for review.' : `${scored.filter((item) => item.passed).length}/${scored.length} objective items correct.`,
-    };
+    if (!activeModel || !isObjective) return;
+    const scored = isObjective ? scoreTrainingResponse(activeModel, selected) : { score: null, passed: true, feedback: 'Practice completed. This activity is ready for review.' };
+    const nextResult = { score: scored.score, passed: scored.passed, message: scored.feedback };
     setResult(nextResult);
-    if (passed) onComplete(nextResult);
+    if (nextResult.passed) onComplete(nextResult, activeModel.id);
   }
+
+  const continueMixed = onContinue;
+
+  if (!activeModel) return null;
+  if (activeModel.contract.kind === 'writing') return <WritingExperience model={activeModel} completion={completion} onComplete={(value) => onComplete(value, activeModel.id)} onContinue={onContinue} />;
+  if (activeModel.contract.kind === 'speaking' || activeModel.contract.kind === 'pronunciation') return <SpeakingExperience model={activeModel} completion={completion} onComplete={(value) => onComplete(value, activeModel.id)} onContinue={onContinue} />;
 
   return (
     <TrainingCard eyebrow={assessment ? 'Mini assessment' : 'Mixed review'} title={title} instruction={assessment ? 'Answer a compact mix of objective and production tasks.' : 'Review the lesson with a compact mix of learned material.'}>
-      <div className="space-y-4">
-        {models.slice(0, 6).map((model) => (
-          <div key={model.id} className="rounded-2xl bg-surface-container-low p-4">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-primary">{model.experience}</p>
-            <h3 className="mt-1 font-headline text-lg font-black text-on-surface">{model.title}</h3>
-            <NativeContractPreview model={model} selected={answers[model.id] ?? ''} setSelected={(value) => setAnswers((current) => ({ ...current, [model.id]: value }))} />
-          </div>
-        ))}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <p className="rounded-full bg-primary-container px-4 py-2 text-xs font-black uppercase tracking-widest text-primary">
+          {position} of {models.length}
+        </p>
+        <p className="text-sm font-semibold text-on-surface-variant">
+          {assessment ? 'Progress Check item' : 'Review item'}
+        </p>
       </div>
-      <ActionRow onSubmit={submit} disabled={objectiveModels.some((model) => !answers[model.id])} result={result} label={assessment ? 'Finish check' : 'Finish review'} />
+      <div className="rounded-2xl bg-surface-container-low p-4">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-primary">{activeModel.experience}</p>
+        <h3 className="mt-1 font-headline text-lg font-black text-on-surface">{activeModel.title}</h3>
+        <NativeContractPreview
+          model={activeModel}
+          selected={selected}
+          setSelected={(value) => setAnswers((current) => ({ ...current, [activeModel.id]: value }))}
+        />
+      </div>
+      {!completion && <ActionRow onSubmit={submit} disabled={!isObjective || !selected} result={result} label={assessment ? 'Submit check item' : 'Submit review item'} />}
+      {result && !result.passed && <InlineFeedback result={result} />}
+      {completion && !completion.flow.experienceComplete && (
+        <TrainingCompletionPanel
+          result={completion.result}
+          experience={assessment ? 'progress-check' : 'review'}
+          objective={isObjective}
+          continueLabel={getContinueLabel(completion.flow)}
+          meta={`${completion.flow.completedExperienceCount} of ${models.length} completed`}
+          onContinue={continueMixed}
+        />
+      )}
+    </TrainingCard>
+  );
+}
+
+function ExperienceCompletionPanel({
+  title,
+  result,
+  experience,
+  flow,
+  totalExperience,
+  totalLesson,
+  onContinue,
+}: {
+  title: string;
+  result: CompletedResult;
+  experience: TrainingExperience;
+  flow: TrainingFlowState;
+  totalExperience: number;
+  totalLesson: number;
+  onContinue: () => void;
+}) {
+  return (
+    <TrainingCard
+      eyebrow={flow.lessonComplete ? 'Lesson complete' : 'Experience complete'}
+      title={title}
+      instruction={flow.lessonComplete ? 'Every required activity in this lesson is complete.' : 'This skill is complete for the current lesson.'}
+    >
+      <div className="grid gap-3 sm:grid-cols-2">
+        <InfoCard label="Skill progress" value={`${flow.completedExperienceCount} of ${totalExperience} activities completed`} />
+        <InfoCard label="Lesson progress" value={`${flow.completedLessonCount} of ${totalLesson} activities completed`} />
+      </div>
+      <TrainingCompletionPanel
+        result={result}
+        experience={experience}
+        objective={result.score !== null}
+        continueLabel={flow.lessonComplete ? 'Next lesson' : getContinueLabel(flow)}
+        meta={flow.lessonComplete ? 'Ready for the next lesson' : 'Ready for the next skill'}
+        onContinue={onContinue}
+      />
     </TrainingCard>
   );
 }
@@ -486,23 +754,49 @@ function NativeContractPreview({
   }
 
   if (contract.kind === 'vocabulary_match') {
+    let answers: string[] = [];
+    try { answers = JSON.parse(selected || '[]'); } catch { answers = []; }
+    const meanings = [...new Set(contract.pairs.map((pair) => pair.meaning))].sort();
     return (
       <div className="mt-4 grid gap-2 sm:grid-cols-2">
-        {contract.pairs.map((pair) => (
+        {contract.pairs.map((pair, index) => (
           <div key={`${pair.term}-${pair.meaning}`} className="rounded-2xl bg-surface-container-lowest p-3">
             <p className="font-headline text-sm font-black text-on-surface">{pair.term}</p>
-            <p className="mt-1 text-xs leading-5 text-on-surface-variant">{pair.meaning}</p>
+            <select aria-label={pair.term} value={answers[index] || ''} className="mt-2 w-full cursor-pointer rounded-lg p-2 text-sm" onChange={(event) => {
+              const next = [...answers]; next[index] = event.target.value; setSelected(JSON.stringify(next));
+            }}>
+              <option value="">Choose a meaning</option>
+              {meanings.map((meaning) => <option key={meaning} value={meaning}>{meaning}</option>)}
+            </select>
           </div>
         ))}
       </div>
     );
   }
 
-  if (contract.kind === 'dictation' || contract.kind === 'pronunciation') {
+  if (contract.kind === 'dictation') {
+    return <><AudioControls text={contract.audioText} locale={model.locale} compact /><textarea aria-label="Your dictation" value={selected} onChange={(event) => setSelected(event.target.value)} className="mt-4 min-h-28 w-full rounded-lg border p-3" /></>;
+  }
+  if (contract.kind === 'pronunciation') {
     return <AudioControls text={contract.audioText} locale={model.locale} compact />;
   }
 
   return <p className="mt-3 text-sm leading-6 text-on-surface-variant">{model.prompt}</p>;
+}
+
+function InlineFeedback({ result }: { result: CompletedResult }) {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className={cn(
+        'mt-5 rounded-2xl px-4 py-3 text-sm font-semibold',
+        result.passed ? 'bg-primary-container text-primary' : 'bg-surface-container-low text-on-surface-variant',
+      )}
+    >
+      {result.passed ? result.message : 'Not quite - try again.'}
+    </div>
+  );
 }
 
 function InvalidTrainingState({ model }: { model: TrainingExerciseModel }) {
@@ -534,6 +828,7 @@ function TrainingCard({ eyebrow, title, instruction, children }: { eyebrow: stri
 
 function AudioControls({ text, locale, compact = false }: { text: string; locale: string; compact?: boolean }) {
   const [playing, setPlaying] = useState(false);
+  useEffect(() => () => { window.speechSynthesis?.cancel(); }, [text]);
 
   function speak() {
     if (!('speechSynthesis' in window)) return;
@@ -542,6 +837,7 @@ function AudioControls({ text, locale, compact = false }: { text: string; locale
     utterance.lang = locale;
     utterance.rate = 0.9;
     utterance.onend = () => setPlaying(false);
+    utterance.onerror = () => setPlaying(false);
     setPlaying(true);
     window.speechSynthesis.speak(utterance);
   }
@@ -593,15 +889,11 @@ function ChoiceBlock({ question, choices, selected, setSelected }: { question: s
 function ActionRow({ onSubmit, disabled, result, label }: { onSubmit: () => void; disabled: boolean; result: CompletedResult | null; label: string }) {
   return (
     <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <button type="button" onClick={onSubmit} disabled={disabled} className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-bold text-on-primary transition hover:bg-primary-dim disabled:cursor-not-allowed disabled:opacity-55">
+      <button type="button" onClick={onSubmit} disabled={disabled} className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-bold text-on-primary transition hover:bg-primary-dim focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-55">
         <Send className="h-4 w-4" />
-        {label}
+        {result && !result.passed ? 'Try again' : label}
       </button>
-      {result && (
-        <div className={cn('rounded-2xl px-4 py-3 text-sm font-semibold', result.passed ? 'bg-primary-container text-primary' : 'bg-surface-container-low text-on-surface-variant')}>
-          {result.score === null ? 'Completed' : `${result.score}%`} - {result.message}
-        </div>
-      )}
+      {result?.passed && <span className="text-sm font-bold text-primary">Ready to continue</span>}
     </div>
   );
 }
@@ -615,11 +907,11 @@ function SourceText({ title, text, compact = false }: { title: string; text: str
   );
 }
 
-function InfoCard({ label, value }: { label: string; value: string }) {
+function InfoCard({ label, value, subtle = false }: { label: string; value: string; subtle?: boolean }) {
   return (
-    <div className="rounded-2xl bg-surface-container-low p-4">
+    <div className={cn('rounded-2xl bg-surface-container-low p-4', subtle && 'bg-surface-container-low/70')}>
       <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">{label}</p>
-      <p className="mt-2 text-sm leading-6 text-on-surface">{value}</p>
+      <p className={cn('mt-2 leading-6 text-on-surface', subtle ? 'text-xs sm:text-sm' : 'text-sm')}>{value}</p>
     </div>
   );
 }
@@ -627,4 +919,22 @@ function InfoCard({ label, value }: { label: string; value: string }) {
 function parseLanguage(value?: string): CurriculumLanguage | null {
   const decoded = value ? decodeURIComponent(value) : '';
   return SUPPORTED_CURRICULUM_LANGUAGES.includes(decoded as CurriculumLanguage) ? (decoded as CurriculumLanguage) : null;
+}
+
+function getNextSkillRoute(lesson: CurriculumLesson, currentExperience: TrainingExperience, completedIds: Set<string>) {
+  const order: TrainingExperience[] = ['listening', 'reading', 'speaking', 'writing', 'review', 'progress-check'];
+  const currentIndex = order.indexOf(currentExperience);
+  const nextExperiences = [...order.slice(currentIndex + 1), ...order.slice(0, currentIndex)];
+
+  for (const nextExperience of nextExperiences) {
+    const nextExercise = getExercisesForExperience(lesson, nextExperience).find((exercise) => !completedIds.has(exercise.id));
+    if (nextExercise) return { experience: nextExperience, exerciseId: nextExercise.id };
+  }
+
+  return null;
+}
+
+function findNextLesson(levelLessons: CurriculumLesson[], currentLesson: CurriculumLesson) {
+  const currentIndex = levelLessons.findIndex((lesson) => lesson.id === currentLesson.id);
+  return currentIndex >= 0 ? levelLessons[currentIndex + 1] ?? null : null;
 }

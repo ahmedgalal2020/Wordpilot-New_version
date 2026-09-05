@@ -93,14 +93,47 @@ export function getTrainingAudioText(
 }
 
 export function scoreTrainingChoice(model: TrainingExerciseModel, selected: string) {
+  return scoreTrainingResponse(model, selected);
+}
+
+export function scoreTrainingResponse(model: TrainingExerciseModel, response: string) {
+  if (model.contract.kind === 'vocabulary_match') {
+    let answers: unknown;
+    try { answers = JSON.parse(response); } catch { answers = null; }
+    const pairs = model.contract.pairs;
+    const correctCount = Array.isArray(answers) ? pairs.filter((pair, index) => answers[index] === pair.meaning).length : 0;
+    return { score: Math.round(100 * correctCount / pairs.length), passed: correctCount === pairs.length, feedback: correctCount === pairs.length ? 'Good word choice.' : 'Not quite - try again.' };
+  }
+  if (model.contract.kind === 'dictation') {
+    const correct = model.contract.acceptedAnswers.some((answer) => normalize(response) === normalize(answer));
+    return { score: correct ? 100 : 0, passed: correct, feedback: correct ? 'Great listening.' : 'Not quite - try again.' };
+  }
+  if (model.contract.kind === 'gap_fill') {
+    const correct = model.contract.acceptedAnswers.some((answer) => normalize(response) === normalize(answer));
+    return {
+      score: correct ? 100 : 0,
+      passed: correct,
+      feedback: correct ? 'That form is correct.' : 'Not quite - try again.',
+    };
+  }
+
+  if (model.contract.kind === 'sentence_order') {
+    const correct = normalize(response) === normalize(model.contract.correctAnswer);
+    return {
+      score: correct ? 100 : 0,
+      passed: correct,
+      feedback: correct ? 'Great job.' : 'Not quite - try again.',
+    };
+  }
+
   const question = model.questions[0];
   if (!question) return { score: 0, passed: false, feedback: 'No objective question is available for this item.' };
 
-  const correct = normalize(selected) === normalize(question.correctAnswer);
+  const correct = normalize(response) === normalize(question.correctAnswer);
   return {
     score: correct ? 100 : 0,
     passed: correct,
-    feedback: correct ? 'Correct. Good comprehension.' : `Try again. Correct answer: ${question.correctAnswer}`,
+    feedback: correct ? 'Great job.' : 'Not quite - try again.',
   };
 }
 
