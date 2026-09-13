@@ -9,6 +9,7 @@ import { blobToBase64, getAudioExtension, getFriendlyEvaluationError } from './m
 import { clearPlaybackTimers, mapRemoteAttempt, mapRemoteSession, mergeSessions, readSavedSessions, stripTemporaryRecordingUrls, writeSavedSessions } from './storage';
 import { buildPracticeSegments, buildReport, compareSpeech, getFriendlyTranscriptError, getSegmentShadowWords, getSpeechLanguage, getYouTubeId, repairCaptionArtifacts, splitTranscript } from './transcript';
 import { useYouTubeEmbed } from './hooks/useYouTubeEmbed';
+import { useShadowingQuota } from './hooks/useShadowingQuota';
 import type { RecordingContext, ShadowingAttempt, ShadowingSegment, ShadowingSession, YouTubeTranscriptCue, YouTubeTranscriptResponse } from './types';
 
 declare global {
@@ -77,8 +78,10 @@ export function useShadowingPractice() {
   const [transcriptLanguageCode, setTranscriptLanguageCode] = useState<string | null>(null);
   const [fetchedCues, setFetchedCues] = useState<YouTubeTranscriptCue[] | null>(null);
   const [remoteSessionId, setRemoteSessionId] = useState<string | null>(null);
+  const [lessonVideoId, setLessonVideoId] = useState('');
 
   const videoId = useMemo(() => getYouTubeId(videoUrl), [videoUrl]);
+  const quota = useShadowingQuota(user?.id, videoId);
   const currentSegment = segments[currentIndex] ?? null;
   const completedCount = segments.filter((segment) => segment.status === 'completed').length;
   const remainingCount = Math.max(segments.length - completedCount, 0);
@@ -179,7 +182,7 @@ export function useShadowingPractice() {
       setIsFetchingTranscript(false);
     }
   }
-  function buildSegments() {
+  async function buildSegments() {
     const cleaned = transcript.trim();
     if (!videoId) {
       setStatus('Paste a valid YouTube URL first.');
@@ -192,7 +195,9 @@ export function useShadowingPractice() {
     }
 
     const nextSegments = buildPracticeSegments(cleaned, fetchedCues);
+    if (!nextSegments.length || !await quota.ensure()) return;
 
+    setLessonVideoId(videoId);
     setSegments(nextSegments);
     setCurrentIndex(0);
     setFeedback(null);
@@ -242,12 +247,13 @@ export function useShadowingPractice() {
     playSegment(currentSegment);
   }
 
-  function playSegment(segment: ShadowingSegment) {
+  async function playSegment(segment: ShadowingSegment) {
     if (!videoId) {
       setStatus('Paste a valid YouTube URL first.');
       return;
     }
 
+    if (lessonVideoId !== videoId || !await quota.ensure()) return;
     clearPlaybackTimers(playbackTimersRef.current);
     setPlayerActivated(true);
     setIsPlayingSegment(true);
@@ -277,6 +283,7 @@ export function useShadowingPractice() {
 
   async function startRecording(withReferenceAudio = false) {
     if (!currentSegment) return;
+    if (lessonVideoId !== videoId || !await quota.ensure()) return;
 
     const recordingContext: RecordingContext = {
       segmentId: currentSegment.id,
@@ -459,6 +466,7 @@ export function useShadowingPractice() {
           ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
         },
         body: JSON.stringify({
+          videoId,
           targetText: context.targetText,
           audioBase64,
           mimeType: audioBlob.type || 'audio/webm',
@@ -560,12 +568,14 @@ export function useShadowingPractice() {
     setStatus(`${attempt.score}% retry. Review the highlighted words, then press Play once if you want to listen again.`);
   }
   async function resumeSession(session: ShadowingSession) {
+    if (!await quota.ensure(session.videoId)) return;
     const restoredSegments = await hydrateRemoteSessionSegments(session);
     const safeIndex = Math.min(session.currentIndex ?? 0, Math.max((restoredSegments.length || 1) - 1, 0));
     const activeSegment = restoredSegments[safeIndex] ?? null;
     const lastAttempt = activeSegment?.attempts.at(-1) ?? null;
 
     setVideoUrl(session.videoUrl);
+    setLessonVideoId(session.videoId);
     setTranscript(session.transcript ?? '');
     setTranscriptSource(session.transcriptSource ?? 'Saved session');
     setFetchedCues(null);
@@ -586,7 +596,7 @@ export function useShadowingPractice() {
   }
 
   function buildCurrentSessionSnapshot(): ShadowingSession | null {
-    if (!videoId || segments.length === 0) return null;
+    if (!videoId || lessonVideoId !== videoId || segments.length === 0) return null;
 
     return {
       id: `shadow-${videoId}`,
@@ -770,6 +780,7 @@ export function useShadowingPractice() {
 
 
   return {
+    quota,
     activeWordIndex,
     averageScore,
     bestScore,
@@ -778,7 +789,7 @@ export function useShadowingPractice() {
     currentIndex,
     currentSegment,
     estimatedSegments,
-    embedUrl,
+    embedUrl: lessonVideoId === videoId && quota.data && (quota.data.isPro || quota.data.videoIds.includes(videoId)) ? embedUrl : '',
     feedback,
     fileInputRef,
     handleTranscriptUpload,

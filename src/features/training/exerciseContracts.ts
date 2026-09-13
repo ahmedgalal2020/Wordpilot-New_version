@@ -57,6 +57,7 @@ function parseMultipleChoice(exercise: CurriculumExercise): MultipleChoiceContra
   const missing = [
     ...(!prompt ? ['prompt'] : []),
     ...(choices.length < 2 ? ['choices'] : []),
+    ...(new Set(choices).size !== choices.length ? ['distinct choices'] : []),
     ...(!correctAnswer ? ['correctAnswer'] : []),
     ...(correctAnswer && choices.length >= 2 && !choices.some((choice) => same(choice, correctAnswer)) ? ['correctAnswer in choices'] : []),
     ...(hasUnsafeGeneratedChoices(choices) ? ['authored choices'] : []),
@@ -72,6 +73,7 @@ function parseGapFill(exercise: CurriculumExercise): ExerciseContract {
     ...(!template || !template.includes('___') ? ['template with blank'] : []),
     ...(acceptedAnswers.length === 0 ? ['acceptedAnswers'] : []),
     ...(choices.length > 0 && hasUnsafeGeneratedChoices(choices) ? ['authored choices'] : []),
+    ...(choices.length > 0 && !acceptedAnswers.some((answer) => choices.includes(answer)) ? ['accepted answer in choices'] : []),
   ];
   return missing.length ? invalid('Gap-fill exercise needs a real blank and accepted answers.', missing) : { kind: 'gap_fill', template, acceptedAnswers, choices: choices.length ? choices : undefined };
 }
@@ -80,10 +82,11 @@ function parseSentenceOrder(exercise: CurriculumExercise): ExerciseContract {
   const tokens = readTokenList(exercise.content.segments) || readTokenList(exercise.content.tokens) || readTokenList(exercise.content.orderTokens);
   const targetText = readString(exercise.content.targetText) || readString(exercise.content.targetSentence);
   const safeTokens = tokens ?? (targetText ? targetText.split(/\s+/).filter(Boolean) : []);
-  const correctAnswer = targetText || safeTokens.join(' ');
+  const correctAnswer = readAnswer(exercise.correctAnswer) || targetText;
   const missing = [
     ...(safeTokens.length < 2 ? ['tokens'] : []),
     ...(!correctAnswer ? ['correctAnswer'] : []),
+    ...(correctAnswer && orderedWords(safeTokens.join(' ')) !== orderedWords(correctAnswer) ? ['answer must use the supplied tokens'] : []),
   ];
   return missing.length ? invalid('Sentence-order exercise needs exercise-specific ordered tokens.', missing) : { kind: 'sentence_order', tokens: safeTokens, correctAnswer };
 }
@@ -167,7 +170,7 @@ function readString(value: unknown) {
 }
 
 function readStringArray(value: unknown) {
-  return Array.isArray(value) ? value.map((item) => String(item).trim()).filter(Boolean) : [];
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string').map((item) => item.trim()).filter(Boolean) : [];
 }
 
 function readAnswer(value: CurriculumExercise['correctAnswer']) {
@@ -178,7 +181,11 @@ function readAnswer(value: CurriculumExercise['correctAnswer']) {
 }
 
 function readAnswers(acceptableAnswers: string[] | undefined, correctAnswer: CurriculumExercise['correctAnswer']) {
-  return unique([...(acceptableAnswers ?? []), readAnswer(correctAnswer)].filter(Boolean));
+  return unique([...readStringArray(acceptableAnswers), readAnswer(correctAnswer)].filter(Boolean));
+}
+
+function orderedWords(value: string) {
+  return normalize(value).split(/\s+/).filter(Boolean).sort().join(' ');
 }
 
 function readTokenList(value: unknown) {
@@ -231,7 +238,7 @@ function isPronunciationType(type: ExerciseType) {
 }
 
 function same(left: string, right: string) {
-  return normalize(left) === normalize(right);
+  return left === right;
 }
 
 function normalize(value: string) {

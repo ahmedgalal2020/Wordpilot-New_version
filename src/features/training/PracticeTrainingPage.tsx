@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, CheckCircle, Eye, LoaderCircle, Mic, Pause, Play, RotateCcw, Send, Trash2, Volume2 } from 'lucide-react';
+import { AlertCircle, ArrowLeft, CheckCircle, CheckCircle2, Eye, LoaderCircle, Mic, Pause, Play, RotateCcw, Send, Trash2, Volume2 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { usePracticeProgress } from '../../hooks/usePracticeProgress';
 import {
@@ -312,7 +312,7 @@ function ListeningExperience({
       ) : (
       <>
       <AudioControls text={model.audioText} locale={model.locale} />
-      {question && <ChoiceBlock question={question.prompt} choices={question.choices} selected={selected} setSelected={setSelected} />}
+      {question && <ChoiceBlock question={question.prompt} choices={question.choices} selected={selected} result={result} locked={Boolean(completed)} setSelected={(value) => { setSelected(value); setResult(null); }} />}
       {!completed && <ActionRow onSubmit={submit} disabled={!selected} result={result} label="Submit answer" />}
       {result && !result.passed && <InlineFeedback result={result} />}
       {completed && !completion.flow.experienceComplete && (
@@ -368,7 +368,7 @@ function ReadingExperience({
       ) : (
       <>
       <SourceText title="Reading text" text={model.readingText} />
-      {question && <ChoiceBlock question={question.prompt} choices={question.choices} selected={selected} setSelected={setSelected} />}
+      {question && <ChoiceBlock question={question.prompt} choices={question.choices} selected={selected} result={result} locked={Boolean(completed)} setSelected={(value) => { setSelected(value); setResult(null); }} />}
       {!completed && <ActionRow onSubmit={submit} disabled={!selected} result={result} label="Check reading" />}
       {result && !result.passed && <InlineFeedback result={result} />}
       {completed && !completion.flow.experienceComplete && (
@@ -616,7 +616,9 @@ function MixedPracticeExperience({
         <NativeContractPreview
           model={activeModel}
           selected={selected}
-          setSelected={(value) => setAnswers((current) => ({ ...current, [activeModel.id]: value }))}
+          result={result}
+          locked={Boolean(completion)}
+          setSelected={(value) => { if (completion) return; setResult(null); setAnswers((current) => ({ ...current, [activeModel.id]: value })); }}
         />
       </div>
       {!completion && <ActionRow onSubmit={submit} disabled={!isObjective || !selected} result={result} label={assessment ? 'Submit check item' : 'Submit review item'} />}
@@ -678,10 +680,14 @@ function NativeContractPreview({
   model,
   selected,
   setSelected,
+  result,
+  locked,
 }: {
   model: TrainingExerciseModel;
   selected: string;
   setSelected: (value: string) => void;
+  result: CompletedResult | null;
+  locked: boolean;
 }) {
   const contract = model.contract;
 
@@ -691,7 +697,7 @@ function NativeContractPreview({
     return (
       <>
         <AudioControls text={contract.audioText} locale={model.locale} compact />
-        <ChoiceBlock question={contract.question} choices={contract.choices} selected={selected} setSelected={setSelected} />
+        <ChoiceBlock question={contract.question} choices={contract.choices} selected={selected} setSelected={setSelected} result={result} locked={locked} />
       </>
     );
   }
@@ -700,13 +706,13 @@ function NativeContractPreview({
     return (
       <>
         <SourceText title="Reading text" text={contract.sourceText} compact />
-        <ChoiceBlock question={contract.question} choices={contract.choices} selected={selected} setSelected={setSelected} />
+        <ChoiceBlock question={contract.question} choices={contract.choices} selected={selected} setSelected={setSelected} result={result} locked={locked} />
       </>
     );
   }
 
   if (contract.kind === 'multiple_choice') {
-    return <ChoiceBlock question={contract.prompt} choices={contract.choices} selected={selected} setSelected={setSelected} />;
+    return <ChoiceBlock question={contract.prompt} choices={contract.choices} selected={selected} setSelected={setSelected} result={result} locked={locked} />;
   }
 
   if (contract.kind === 'gap_fill') {
@@ -714,7 +720,7 @@ function NativeContractPreview({
       <div className="mt-4">
         <p className="rounded-2xl bg-surface-container-lowest px-4 py-3 text-base font-semibold text-on-surface">{contract.template}</p>
         {contract.choices ? (
-          <ChoiceBlock question="Choose the missing answer." choices={contract.choices} selected={selected} setSelected={setSelected} />
+          <ChoiceBlock question="Choose the missing answer." choices={contract.choices} selected={selected} setSelected={setSelected} result={result} locked={locked} />
         ) : (
           <input
             value={selected}
@@ -863,7 +869,7 @@ function AudioControls({ text, locale, compact = false }: { text: string; locale
   );
 }
 
-function ChoiceBlock({ question, choices, selected, setSelected }: { question: string; choices: string[]; selected: string; setSelected: (value: string) => void }) {
+function ChoiceBlock({ question, choices, selected, setSelected, result, locked }: { question: string; choices: string[]; selected: string; setSelected: (value: string) => void; result: CompletedResult | null; locked: boolean }) {
   return (
     <div className="mt-5">
       <p className="font-headline text-lg font-black text-on-surface">{question}</p>
@@ -872,13 +878,20 @@ function ChoiceBlock({ question, choices, selected, setSelected }: { question: s
           <button
             key={choice}
             type="button"
+            disabled={locked}
+            aria-pressed={selected === choice}
+            data-answer-state={selected === choice && result ? result.passed ? 'correct' : 'incorrect' : 'neutral'}
             onClick={() => setSelected(choice)}
             className={cn(
               'cursor-pointer rounded-2xl border px-4 py-3 text-left text-sm font-bold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary active:scale-[0.99]',
-              selected === choice ? 'border-primary bg-primary text-on-primary' : 'border-outline-variant/20 bg-surface-container-low text-on-surface hover:border-primary/40',
+              selected === choice ? result
+                ? result.passed ? 'border-emerald-600 bg-emerald-50 text-emerald-900' : 'border-red-600 bg-red-50 text-red-900'
+                : 'border-primary bg-primary text-on-primary'
+                : 'border-outline-variant/20 bg-surface-container-low text-on-surface hover:border-primary/40',
             )}
           >
             {choice}
+            {selected === choice && result && <span className="ml-2 inline-flex items-center gap-1 text-xs">{result.passed ? <CheckCircle2 className="h-4 w-4" aria-hidden="true" /> : <AlertCircle className="h-4 w-4" aria-hidden="true" />}{result.passed ? 'Correct' : 'Try again'}</span>}
           </button>
         ))}
       </div>

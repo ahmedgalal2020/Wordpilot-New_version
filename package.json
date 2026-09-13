@@ -28,8 +28,9 @@
     "test:training-architecture": "tsx scripts/training-architecture-smoke.ts",
     "test:exercise-contracts": "tsx scripts/exercise-engine-contracts-smoke.ts",
     "test:training-success-flow": "tsx scripts/training-success-flow-smoke.ts",
-    "test": "npm run test:api-routes && npm run test:curriculum && npm run test:curriculum-quality && npm run test:curriculum-naturalness && npm run test:curriculum-diversity && npm run test:curriculum-coherence && npm run test:curriculum-repository && npm run test:dictation && npm run test:dictation-celebration && npm run test:exercise-audio && npm run test:exercise-encouragement && npm run test:training-architecture && npm run test:exercise-contracts && npm run test:training-success-flow",
-    "sync:curriculum-content": "tsx scripts/sync-curriculum-content.ts"
+    "test": "npm run test:api-routes && npm run test:curriculum && npm run test:curriculum-quality && npm run test:curriculum-naturalness && npm run test:curriculum-diversity && npm run test:curriculum-coherence && npm run test:curriculum-repository && npm run test:dictation && npm run test:dictation-celebration && npm run test:exercise-audio && npm run test:exercise-encouragement && npm run test:training-architecture && npm run test:exercise-contracts && npm run test:training-success-flow && npm run test:production-fixes",
+    "sync:curriculum-content": "tsx scripts/sync-curriculum-content.ts",
+    "test:production-fixes": "tsx scripts/production-fixes-smoke.ts"
   },
   "dependencies": {
     "@hallelx/youtube-transcript": "^0.2.0",

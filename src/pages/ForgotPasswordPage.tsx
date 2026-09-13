@@ -4,6 +4,10 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useI18n } from '../i18n';
 import { LanguageSwitch } from '../components/LanguageSwitch';
+import { AuthCaptcha, authCaptchaRequired } from '../components/AuthCaptcha';
+import { authSecurityCopy, isAuthRateLimited, type AuthFailure } from '../lib/authProtection';
+import { withAuthDeadline } from '../lib/oauthRecovery';
+import { useDeadlineCountdown } from '../hooks/useDeadlineCountdown';
 
 function isValidEmail(value: string) {
   return /\S+@\S+\.\S+/.test(value);
@@ -17,9 +21,19 @@ export default function ForgotPasswordPage() {
   const [submitting, setSubmitting] = React.useState(false);
   const [message, setMessage] = React.useState<string | null>(authMessage);
   const [isSuccess, setIsSuccess] = React.useState(false);
+  const busy = React.useRef(false);
+  const generation = React.useRef(0);
+  const [captchaToken, setCaptchaToken] = React.useState<string | undefined>();
+  const [captchaVersion, setCaptchaVersion] = React.useState(0);
+  const [retryAt, setRetryAt] = React.useState(0);
+  const remaining = useDeadlineCountdown(retryAt);
+  const securityCopy = authSecurityCopy[language];
+
+  React.useEffect(() => () => { generation.current += 1; }, []);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (busy.current || Date.now() < retryAt || !authReady) return;
     setMessage(null);
     setIsSuccess(false);
 
@@ -28,17 +42,26 @@ export default function ForgotPasswordPage() {
       return;
     }
 
+    if (authCaptchaRequired && !captchaToken) { setMessage(securityCopy.captcha); return; }
+    busy.current = true;
+    const requestId = ++generation.current;
     setSubmitting(true);
-    const result = await resetPassword(email.trim());
-    setSubmitting(false);
-
-    if (result.error) {
-      setMessage(result.error);
-      return;
+    try {
+      const result = await withAuthDeadline<AuthFailure>(resetPassword(email.trim(), captchaToken), 20000);
+      if (requestId !== generation.current) return;
+      setRetryAt(Date.now() + 60000);
+      setIsSuccess(!result.error);
+      setMessage(isAuthRateLimited(result) ? securityCopy.limited : result.error ? securityCopy.error : securityCopy.reset);
+    } catch {
+      if (requestId === generation.current) setMessage(securityCopy.error);
+    } finally {
+      if (requestId === generation.current) {
+        busy.current = false;
+        setSubmitting(false);
+        setCaptchaToken(undefined);
+        setCaptchaVersion(value => value + 1);
+      }
     }
-
-    setIsSuccess(true);
-    setMessage(result.message ?? copy.sent);
   }
 
   return (
@@ -73,8 +96,9 @@ export default function ForgotPasswordPage() {
               />
             </div>
 
+            <AuthCaptcha key={captchaVersion} onToken={setCaptchaToken} />
             {message && (
-              <div className={`rounded-xl border px-4 py-3 text-sm flex items-start gap-3 ${isSuccess ? 'bg-primary/10 text-on-surface border-primary/20' : 'bg-error/10 text-error border-error/20'}`}>
+              <div role="status" aria-live="polite" className={`rounded-xl border px-4 py-3 text-sm flex items-start gap-3 ${isSuccess ? 'bg-primary/10 text-on-surface border-primary/20' : 'bg-error/10 text-error border-error/20'}`}>
                 {isSuccess ? <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" /> : <Mail className="w-5 h-5 shrink-0 mt-0.5" />}
                 <span>{message}</span>
               </div>
@@ -82,7 +106,7 @@ export default function ForgotPasswordPage() {
 
             <button
               type="submit"
-              disabled={submitting || !authReady}
+              disabled={submitting || remaining > 0 || !authReady || (authCaptchaRequired && !captchaToken)}
               className="w-full py-4 px-6 primary-gradient text-on-primary rounded-full font-headline font-bold tracking-tight shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-70 inline-flex items-center justify-center gap-2"
             >
               {submitting && <LoaderCircle className="w-4 h-4 animate-spin" />}

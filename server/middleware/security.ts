@@ -67,12 +67,12 @@ export function buildContentSecurityPolicy(isProduction: boolean) {
     "frame-ancestors 'none'",
     "object-src 'none'",
     "form-action 'self'",
-    "script-src 'self' 'unsafe-inline'",
+    "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "img-src 'self' data: https:",
     "font-src 'self' data: https://fonts.gstatic.com",
     "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://api.resend.com https://generativelanguage.googleapis.com",
-    "frame-src https://www.youtube.com https://www.youtube-nocookie.com",
+    "frame-src https://www.youtube.com https://www.youtube-nocookie.com https://challenges.cloudflare.com",
     "media-src 'self' blob: https:",
   ];
 

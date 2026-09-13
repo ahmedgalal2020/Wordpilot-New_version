@@ -1,6 +1,7 @@
 import { GenericProxyConfig, WebshareProxyConfig, YouTubeTranscriptApi } from '@hallelx/youtube-transcript';
 import dotenv from 'dotenv';
 import express from 'express';
+import { authorizeShadowingVideo } from './server/shadowingQuota';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -387,6 +388,9 @@ app.post('/api/shadowing/evaluate', async (req, res) => {
   if (!targetText) return res.status(400).json({ error: 'Target sentence is required.' });
   if (!audioBase64) return res.status(400).json({ error: 'Audio recording is required.' });
   if (audioBase64.length > 7_000_000) return res.status(413).json({ error: 'Audio recording is too large.' });
+
+  const videoAccess = await authorizeShadowingVideo(getBearerToken(req) ?? '', req.body?.videoId);
+  if (!videoAccess.ok) return res.status(videoAccess.status).json({ error: 'Shadowing access could not be granted.', code: videoAccess.code });
 
   const result = await evaluateShadowingAudio({ targetText, audioBase64, mimeType, language });
   if (!result.ok) return res.status(result.status).json({ error: result.error, code: result.code });
@@ -3121,5 +3125,4 @@ function escapeHtml(value: string) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
-
 

@@ -13,6 +13,7 @@ import { LearningOnboardingPrompt } from './components/LearningOnboardingPrompt'
 import { LanguageProvider, useI18n } from './i18n';
 import LandingPage from './pages/LandingPage';
 import AuthPage from './pages/AuthPage';
+import { OAuthReturn } from './components/OAuthReturn';
 
 const PricingPage = lazy(() => import('./pages/PricingPage'));
 const InfoPage = lazy(() => import('./pages/InfoPages'));
@@ -56,7 +57,7 @@ export default function App() {
           <Navbar />
           <div className="flex-grow">
             <Suspense fallback={<PageLoadingState />}>
-              <Routes>
+              <OAuthReturn><Routes>
                 <Route path="/" element={<LandingPage />} />
                 <Route path="/pricing" element={<PricingPage />} />
                 <Route path="/privacy" element={<InfoPage />} />
@@ -87,7 +88,7 @@ export default function App() {
                   <Route path="/admin/users/:userId" element={<AdminUserPage />} />
                 </Route>
                 <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
+              </Routes></OAuthReturn>
             </Suspense>
           </div>
           <Footer />

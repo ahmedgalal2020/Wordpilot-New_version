@@ -1,3 +1,7 @@
+import { AuthCaptcha, authCaptchaRequired } from '../components/AuthCaptcha';
+import { authSecurityCopy, isAuthRateLimited, isCredentialFailure, passwordAttemptGuard, type AuthFailure } from '../lib/authProtection';
+import { useLoginCooldown } from '../hooks/useLoginCooldown';
+import { useDeadlineCountdown } from '../hooks/useDeadlineCountdown';
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -20,6 +24,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useI18n } from '../i18n';
 import { LanguageSwitch } from '../components/LanguageSwitch';
+import { oauthMessages, withAuthDeadline } from '../lib/oauthRecovery';
 
 type Notice = {
   kind: 'error' | 'success' | 'info';
@@ -40,6 +45,16 @@ export default function AuthPage() {
   const isLogin = location.pathname === '/login';
   const { language } = useI18n();
   const copy = authCopy[language];
+  const securityCopy = authSecurityCopy[language];
+  const cooldown = useLoginCooldown();
+  const formBusy = React.useRef(false);
+  const formGeneration = React.useRef(0);
+  const [captchaToken, setCaptchaToken] = React.useState<string | undefined>();
+  const [captchaVersion, setCaptchaVersion] = React.useState(0);
+  const [resendUntil, setResendUntil] = React.useState(0);
+  const resendSeconds = useDeadlineCountdown(resendUntil);
+  const [signupUntil, setSignupUntil] = React.useState(0);
+  const signupSeconds = useDeadlineCountdown(signupUntil);
   const { signIn, signInWithGoogle, signUp, resendConfirmation, authMessage, authReady } = useAuth();
 
   const [fullName, setFullName] = React.useState('');
@@ -55,17 +70,41 @@ export default function AuthPage() {
   const [sendingConfirmation, setSendingConfirmation] = React.useState(false);
   const [notice, setNotice] = React.useState<Notice | null>(authMessage ? { kind: 'info', message: authMessage } : null);
   const [lastAuthError, setLastAuthError] = React.useState<string | null>(null);
+  const googleAttempt = React.useRef(0);
+  const googleBusy = React.useRef(false);
 
   React.useEffect(() => {
-    setNotice(authMessage ? { kind: 'info', message: authMessage } : null);
-  }, [authMessage, isLogin]);
+    const failure = location.state?.oauthFailure;
+    setNotice(failure === 'cancelled' || failure === 'error'
+      ? { kind: failure === 'cancelled' ? 'info' : 'error', message: oauthMessages[language][failure] }
+      : location.state?.authNotice === 'signup' ? { kind: 'info', message: securityCopy.signup }
+      : authMessage ? { kind: 'info', message: authMessage } : null);
+  }, [authMessage, isLogin, location.state, language]);
+
+  React.useEffect(() => {
+    setGoogleSubmitting(false);
+    googleBusy.current = false;
+    function restore(event: PageTransitionEvent) {
+      if (!event.persisted) return;
+      googleAttempt.current += 1;
+      googleBusy.current = false;
+      setGoogleSubmitting(false);
+      setNotice({ kind: 'info', message: oauthMessages[language].cancelled });
+    }
+    window.addEventListener('pageshow', restore);
+    return () => {
+      window.removeEventListener('pageshow', restore);
+      googleAttempt.current += 1;
+      googleBusy.current = false;
+    };
+  }, [language]);
 
   function validateForm() {
     if (!isValidEmail(email.trim())) {
       return copy.errors.email;
     }
 
-    if (password.trim().length < 8) {
+    if (!password || (!isLogin && password.length < 8)) {
       return copy.errors.passwordLength;
     }
 
@@ -86,95 +125,113 @@ export default function AuthPage() {
     return null;
   }
 
+  React.useEffect(() => {
+    setSubmitting(false);
+    setSendingConfirmation(false);
+    formBusy.current = false;
+    return () => { formGeneration.current += 1; formBusy.current = false; };
+  }, [isLogin]);
+
+  function refreshCaptcha() {
+    setCaptchaToken(undefined);
+    setCaptchaVersion(value => value + 1);
+  }
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (formBusy.current || googleBusy.current || !authReady || (isLogin && passwordAttemptGuard.remaining() > 0) || (!isLogin && Date.now() < signupUntil)) return;
+    const validationError = validateForm();
+    if (validationError) { setNotice({ kind: 'error', message: validationError }); return; }
+    if (authCaptchaRequired && !captchaToken) { setNotice({ kind: 'error', message: securityCopy.captcha }); return; }
+    formBusy.current = true;
+    const generation = ++formGeneration.current;
     setNotice(null);
     setLastAuthError(null);
-
-    const validationError = validateForm();
-    if (validationError) {
-      setNotice({ kind: 'error', message: validationError });
-      return;
-    }
-
     setSubmitting(true);
-
-    if (isLogin) {
-      const result = await signIn(email.trim(), password);
-      setSubmitting(false);
-
-      if (result.error) {
-        setLastAuthError(result.error);
-        setNotice({ kind: 'error', message: result.error });
-        return;
+    try {
+      if (isLogin) {
+        const result = await withAuthDeadline<AuthFailure & {success: boolean}>(signIn(email.trim(), password, captchaToken), 20000);
+        if (generation !== formGeneration.current) return;
+        if (result.error || !result.success) {
+          if (isAuthRateLimited(result)) passwordAttemptGuard.rateLimited();
+          else if (isCredentialFailure(result)) passwordAttemptGuard.failed();
+          cooldown.refresh();
+          setLastAuthError('failed');
+          setNotice({ kind: 'error', message: isAuthRateLimited(result) ? securityCopy.limited : isCredentialFailure(result) ? securityCopy.credentials : securityCopy.error });
+          return;
+        }
+        passwordAttemptGuard.succeeded();
+        cooldown.refresh();
+        setPassword('');
+        navigate('/dashboard');
+      } else {
+        const result = await withAuthDeadline<AuthFailure & {needsEmailVerification: boolean}>(signUp(email.trim(), password, fullName.trim(), captchaToken), 20000);
+        if (generation !== formGeneration.current) return;
+        if (result.error) {
+          if (isAuthRateLimited(result)) setSignupUntil(Date.now() + 60000);
+          setNotice({ kind: 'error', message: isAuthRateLimited(result) ? securityCopy.limited : securityCopy.error });
+          return;
+        }
+        setPassword('');
+        setConfirmPassword('');
+        navigate(result.needsEmailVerification ? '/login' : '/dashboard', { state: { authNotice: 'signup' } });
       }
-
-      setNotice({ kind: 'success', message: copy.success.login });
-      navigate('/dashboard');
-      return;
+    } catch {
+      if (generation === formGeneration.current) setNotice({ kind: 'error', message: securityCopy.error });
+    } finally {
+      if (generation === formGeneration.current) {
+        formBusy.current = false;
+        setSubmitting(false);
+        refreshCaptcha();
+      }
     }
-
-    const result = await signUp(email.trim(), password, fullName.trim());
-    setSubmitting(false);
-
-    if (result.error) {
-      setLastAuthError(result.error);
-      setNotice({ kind: 'error', message: result.error });
-      return;
-    }
-
-    if (result.needsEmailVerification) {
-      setNotice({
-        kind: 'success',
-        message: copy.success.verifyEmail,
-      });
-      navigate('/login');
-      return;
-    }
-
-    setNotice({ kind: 'success', message: copy.success.signup });
-    navigate('/dashboard');
   }
 
   async function handleResendConfirmation() {
-    setNotice(null);
-
-    if (!isValidEmail(email.trim())) {
-      setNotice({ kind: 'error', message: copy.errors.resendEmail });
-      return;
-    }
-
+    if (formBusy.current || googleBusy.current || Date.now() < resendUntil) return;
+    if (!isValidEmail(email.trim())) { setNotice({kind:'error',message:copy.errors.resendEmail}); return; }
+    if (authCaptchaRequired && !captchaToken) { setNotice({kind:'error',message:securityCopy.captcha}); return; }
+    formBusy.current = true;
+    const generation = ++formGeneration.current;
     setSendingConfirmation(true);
-    const result = await resendConfirmation(email.trim());
-    setSendingConfirmation(false);
-
-    if (result.error) {
-      setNotice({ kind: 'error', message: result.error });
-      return;
+    try {
+      const result = await withAuthDeadline<AuthFailure>(resendConfirmation(email.trim(), captchaToken), 20000);
+      if (generation !== formGeneration.current) return;
+      setResendUntil(Date.now() + 60000);
+      setNotice({kind:result.error ? 'error' : 'info',message:isAuthRateLimited(result) ? securityCopy.limited : result.error ? securityCopy.error : securityCopy.confirmation});
+    } catch {
+      if (generation === formGeneration.current) setNotice({kind:'error',message:securityCopy.error});
+    } finally {
+      if (generation === formGeneration.current) { formBusy.current=false;setSendingConfirmation(false);refreshCaptcha(); }
     }
-
-    setNotice({ kind: 'success', message: result.message ?? copy.success.confirmationSent });
   }
 
   async function handleGoogleSignIn() {
+    if (googleBusy.current || formBusy.current) return;
+    googleBusy.current = true;
+    const attempt = ++googleAttempt.current;
     setNotice(null);
     setLastAuthError(null);
     setGoogleSubmitting(true);
-
-    const result = await signInWithGoogle();
-
-    if (result.error) {
-      setGoogleSubmitting(false);
-      setLastAuthError(result.error);
-      setNotice({ kind: 'error', message: result.error });
-      return;
+    try {
+      const result = await withAuthDeadline<{ error: string | null; url?: string | null }>(signInWithGoogle());
+      if (attempt !== googleAttempt.current) return;
+      if (result.error || !result.url) throw new Error('Sign-in unavailable');
+      window.location.assign(result.url);
+    } catch {
+      if (attempt === googleAttempt.current) {
+        setNotice({ kind: 'error', message: oauthMessages[language].error });
+      }
+    } finally {
+      if (attempt === googleAttempt.current) {
+        googleBusy.current = false;
+        setGoogleSubmitting(false);
+      }
     }
-
-    setNotice({ kind: 'info', message: copy.info.googleOpening });
   }
 
-  const submitDisabled = submitting || !authReady || (!isLogin && !agreedToTerms);
-  const showResendConfirmation = isLogin && isEmailNotConfirmedError(lastAuthError);
+  const submitDisabled = submitting || sendingConfirmation || googleSubmitting || !authReady || (isLogin && cooldown.seconds > 0) || (!isLogin && signupSeconds > 0) || (authCaptchaRequired && !captchaToken) || (!isLogin && !agreedToTerms);
+  const showResendConfirmation = isLogin && Boolean(lastAuthError);
 
   return (
     <main className="relative flex min-h-[calc(100vh-4rem)] flex-grow items-stretch overflow-x-hidden bg-surface">
@@ -215,7 +272,7 @@ export default function AuthPage() {
                   icon="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
                   label={copy.google}
                   loading={googleSubmitting}
-                  disabled={!authReady || googleSubmitting}
+                  disabled={!authReady || googleSubmitting || submitting || sendingConfirmation}
                   onClick={() => void handleGoogleSignIn()}
                 />
               </div>
@@ -269,13 +326,15 @@ export default function AuthPage() {
                   )}
                 </div>
 
+                <AuthCaptcha key={captchaVersion} onToken={setCaptchaToken} />
+                {isLogin && cooldown.seconds > 0 && <div role="status" aria-live="polite" className="text-sm text-error">{securityCopy.cooldown(cooldown.seconds)}</div>}
                 {notice && <NoticeCard notice={notice} />}
 
                 {showResendConfirmation && (
                   <button
                     type="button"
                     onClick={() => void handleResendConfirmation()}
-                    disabled={sendingConfirmation}
+                    disabled={sendingConfirmation || submitting || googleSubmitting || resendSeconds > 0 || (authCaptchaRequired && !captchaToken)}
                     className="w-full inline-flex items-center justify-center gap-2 text-sm text-primary font-semibold hover:underline disabled:opacity-60"
                   >
                     {sendingConfirmation ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
@@ -432,10 +491,11 @@ function FormField({
   onChange: (value: string) => void;
   autoComplete: string;
 }) {
+  const inputId = React.useId();
   return (
     <div className="space-y-2">
-      <label className="ml-1 text-[0.6875rem] font-bold uppercase tracking-wider text-on-surface-variant">{label}</label>
-      <input
+      <label htmlFor={inputId} className="ml-1 text-[0.6875rem] font-bold uppercase tracking-wider text-on-surface-variant">{label}</label>
+      <input id={inputId}
         className="w-full rounded-2xl border border-transparent bg-surface-container-low px-4 py-3.5 text-sm text-on-surface outline-none transition-all placeholder:text-outline focus:border-primary focus:bg-surface-container-lowest focus:ring-4 focus:ring-primary/10"
         placeholder={placeholder}
         type={type}
@@ -462,11 +522,12 @@ function PasswordField({
   onToggleVisibility: () => void;
   autoComplete: string;
 }) {
+  const inputId = React.useId();
   return (
     <div className="space-y-2">
-      <label className="ml-1 text-[0.6875rem] font-bold uppercase tracking-wider text-on-surface-variant">{label}</label>
+      <label htmlFor={inputId} className="ml-1 text-[0.6875rem] font-bold uppercase tracking-wider text-on-surface-variant">{label}</label>
       <div className="relative">
-        <input
+        <input id={inputId}
           className="w-full rounded-2xl border border-transparent bg-surface-container-low px-4 py-3.5 pr-12 text-sm text-on-surface outline-none transition-all placeholder:text-outline focus:border-primary focus:bg-surface-container-lowest focus:ring-4 focus:ring-primary/10"
           placeholder="••••••••"
           type={visible ? 'text' : 'password'}
@@ -623,7 +684,7 @@ function NoticeCard({ notice }: { notice: Notice }) {
         : 'bg-surface-container-low text-on-surface border-surface-container';
 
   return (
-    <div className={`rounded-xl border px-4 py-3 text-sm flex items-start gap-3 ${styles}`}>
+    <div role="status" className={`rounded-xl border px-4 py-3 text-sm flex items-start gap-3 ${styles}`}>
       {notice.kind === 'error' ? (
         <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
       ) : (

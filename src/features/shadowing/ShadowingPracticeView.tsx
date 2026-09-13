@@ -5,6 +5,7 @@ import { PracticeSection } from './sections/PracticeSection';
 import { PracticeSidebar } from './sections/PracticeSidebar';
 import { ProgressReviewSection } from './sections/ProgressReviewSection';
 import { VideoProgressSection } from './sections/VideoProgressSection';
+import { ShadowingQuotaNotice } from './sections/ShadowingQuotaNotice';
 import type { ShadowingPracticeController } from './useShadowingPractice';
 
 export function ShadowingPracticeView({ workspace }: { workspace: ShadowingPracticeController }) {
@@ -75,6 +76,7 @@ export function ShadowingPracticeView({ workspace }: { workspace: ShadowingPract
         </p>
       </header>
 
+      <ShadowingQuotaNotice quota={workspace.quota} />
       {status && (
         <div role="status" aria-live="polite" className={cn('mb-6 rounded-2xl border px-5 py-4 text-sm font-medium', transcriptNotice === 'needsManual' ? 'border-error/20 bg-error/5 text-on-surface' : 'border-primary/10 bg-primary/5 text-on-surface')}>
           {status}

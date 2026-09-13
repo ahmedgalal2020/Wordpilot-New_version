@@ -178,7 +178,7 @@ export default function CurriculumPage() {
     }
   }
   async function completeExercise(exercise: CurriculumExercise, result: ExerciseResult) {
-    if (!selectedLesson) return;
+    if (!selectedLesson || result.score === null) return;
     const attempt: ExerciseAttemptRow = {
       lesson_id: selectedLesson.id,
       exercise_id: exercise.id,

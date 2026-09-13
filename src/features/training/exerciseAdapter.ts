@@ -1,3 +1,4 @@
+import { scoreObjectiveContract } from './objectiveScoring';
 import {
   CURRICULUM_SPEECH_LOCALES,
   type ChoiceQuestion,
@@ -97,44 +98,7 @@ export function scoreTrainingChoice(model: TrainingExerciseModel, selected: stri
 }
 
 export function scoreTrainingResponse(model: TrainingExerciseModel, response: string) {
-  if (model.contract.kind === 'vocabulary_match') {
-    let answers: unknown;
-    try { answers = JSON.parse(response); } catch { answers = null; }
-    const pairs = model.contract.pairs;
-    const correctCount = Array.isArray(answers) ? pairs.filter((pair, index) => answers[index] === pair.meaning).length : 0;
-    return { score: Math.round(100 * correctCount / pairs.length), passed: correctCount === pairs.length, feedback: correctCount === pairs.length ? 'Good word choice.' : 'Not quite - try again.' };
-  }
-  if (model.contract.kind === 'dictation') {
-    const correct = model.contract.acceptedAnswers.some((answer) => normalize(response) === normalize(answer));
-    return { score: correct ? 100 : 0, passed: correct, feedback: correct ? 'Great listening.' : 'Not quite - try again.' };
-  }
-  if (model.contract.kind === 'gap_fill') {
-    const correct = model.contract.acceptedAnswers.some((answer) => normalize(response) === normalize(answer));
-    return {
-      score: correct ? 100 : 0,
-      passed: correct,
-      feedback: correct ? 'That form is correct.' : 'Not quite - try again.',
-    };
-  }
-
-  if (model.contract.kind === 'sentence_order') {
-    const correct = normalize(response) === normalize(model.contract.correctAnswer);
-    return {
-      score: correct ? 100 : 0,
-      passed: correct,
-      feedback: correct ? 'Great job.' : 'Not quite - try again.',
-    };
-  }
-
-  const question = model.questions[0];
-  if (!question) return { score: 0, passed: false, feedback: 'No objective question is available for this item.' };
-
-  const correct = normalize(response) === normalize(question.correctAnswer);
-  return {
-    score: correct ? 100 : 0,
-    passed: correct,
-    feedback: correct ? 'Great job.' : 'Not quite - try again.',
-  };
+  return scoreObjectiveContract(model.contract, response);
 }
 
 function getQuestions(exercise: CurriculumExercise, contract: ExerciseContract): TrainingQuestion[] {
@@ -184,14 +148,15 @@ function readLanguage(value: unknown, fallback: CurriculumLanguage): CurriculumL
 }
 
 function normalize(value: string) {
-  return value.toLowerCase().normalize('NFKC').replace(/[^\p{L}\p{N}\s]/gu, '').trim();
+  // Dictation/order/gaps ignore case and punctuation, but retain accents and word boundaries.
+  return value.toLowerCase().normalize('NFKC').replace(/[^\p{L}\p{N}\s]/gu, '').replace(/\s+/g, ' ').trim();
 }
 
 function getContractPrompt(contract: ExerciseContract) {
   if (contract.kind === 'invalid') return '';
   if (contract.kind === 'multiple_choice') return contract.prompt;
   if (contract.kind === 'gap_fill') return contract.template;
-  if (contract.kind === 'sentence_order') return contract.correctAnswer;
+  if (contract.kind === 'sentence_order') return 'Put the words in the correct order.';
   if (contract.kind === 'vocabulary_match') return 'Match each term to its meaning.';
   if (contract.kind === 'reading') return contract.question;
   if (contract.kind === 'listening') return contract.question;

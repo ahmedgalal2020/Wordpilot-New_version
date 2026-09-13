@@ -1,5 +1,6 @@
+import { scoreObjectiveContract } from '../features/training/objectiveScoring';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Award, CheckCircle, Mic, Play, RotateCcw, Sparkles, Target, Volume2 } from 'lucide-react';
+import { AlertCircle, Award, CheckCircle, Mic, Play, RotateCcw, Sparkles, Target, Volume2 } from 'lucide-react';
 import { CURRICULUM_SPEECH_LOCALES, type CurriculumExercise, type CurriculumLanguage, type ExerciseType, type ScoringRubric } from '../lib/curriculumCore';
 import { isInvalidExerciseContract, parseExerciseContract, type ExerciseContract } from '../features/training/exerciseContracts';
 import { getExerciseRendererKind } from '../features/training/exerciseRendererRegistry';
@@ -26,7 +27,7 @@ type SpeechWindow = Window & {
 };
 
 export type ExerciseResult = {
-  score: number;
+  score: number | null;
   feedback: string;
   rubricScores: ScoringRubric;
   response: Record<string, unknown>;
@@ -53,6 +54,9 @@ export function ExerciseRenderer({ exercise, onComplete, onNext, hasNext = false
   const [spokenResponse, setSpokenResponse] = useState('');
   const [selfChecks, setSelfChecks] = useState<Record<string, boolean>>({});
   const [lastResult, setLastResult] = useState<ExerciseResult | null>(null);
+  const [matches, setMatches] = useState<string[]>([]);
+  const completedRef = useRef(false);
+  const advancedRef = useRef(false);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const autoAdvanceTimerRef = useRef<number | null>(null);
   const speechWindow = typeof window !== 'undefined' ? (window as unknown as SpeechWindow) : null;
@@ -65,7 +69,8 @@ export function ExerciseRenderer({ exercise, onComplete, onNext, hasNext = false
   const isSpeaking = rendererKind === 'speaking';
   const isDictation = rendererKind === 'dictation';
   const needsTextInput = isWriting || isSpeaking || isDictation || exercise.type === 'gap_fill' || exercise.type === 'grammar_gap' || scoringMode === 'subjective' || exercise.type === 'lesson_test';
-  const needsChoices = isChoiceExercise(exercise.type);
+  const needsChoices = ['multiple_choice', 'reading', 'listening'].includes(model.contract.kind) ||
+    (model.contract.kind === 'gap_fill' && Boolean(model.contract.choices));
   const needsOrdering = rendererKind === 'ordering';
   const invalidContract = isInvalidExerciseContract(model.contract);
 
@@ -77,6 +82,9 @@ export function ExerciseRenderer({ exercise, onComplete, onNext, hasNext = false
     setSpokenResponse('');
     setSelfChecks({});
     setLastResult(null);
+    setMatches([]);
+    completedRef.current = false;
+    advancedRef.current = false;
     stopRecognition();
   }, [exercise.id]);
 
@@ -126,15 +134,17 @@ export function ExerciseRenderer({ exercise, onComplete, onNext, hasNext = false
   }
 
   function submit() {
+    if (invalidContract || completedRef.current) return;
     const response = buildResponse();
     const result = scoreExercise(exercise, model, response);
     setLastResult(result);
-    onComplete(result);
-    void celebrateExerciseResult(result.score);
+    completedRef.current = result.passed;
+    if (result.score !== null) onComplete(result);
+    if (result.passed && result.score !== null) void celebrateExerciseResult(result.score);
 
     if (result.passed && hasNext && autoAdvanceOnPass && onNext) {
       clearAutoAdvanceTimer();
-      autoAdvanceTimerRef.current = window.setTimeout(onNext, 1100);
+      autoAdvanceTimerRef.current = window.setTimeout(advance, 1100);
     }
   }
 
@@ -146,13 +156,21 @@ export function ExerciseRenderer({ exercise, onComplete, onNext, hasNext = false
   }
 
   function buildResponse() {
+    if (model.contract.kind === 'vocabulary_match') return { text: JSON.stringify(matches) };
     if (needsChoices) return { selected };
     if (needsOrdering) return { ordered: orderedTokens.map((token) => token.word), orderedTokenIds: orderedTokens.map((token) => token.id) };
     if (isSpeaking) return { transcript: spokenResponse || textResponse, selfChecks };
     return { text: textResponse };
   }
 
-  const resultEncouragement = lastResult ? getExerciseEncouragement(lastResult.score, exercise.minScoreToPass) : null;
+  function advance() {
+    if (advancedRef.current) return;
+    advancedRef.current = true;
+    clearAutoAdvanceTimer();
+    onNext?.();
+  }
+
+  const resultEncouragement = lastResult?.score != null ? getExerciseEncouragement(lastResult.score, exercise.minScoreToPass) : null;
   const ResultIcon = resultEncouragement?.icon ?? Target;
 
   return (
@@ -164,7 +182,7 @@ export function ExerciseRenderer({ exercise, onComplete, onNext, hasNext = false
           <p className="mt-2 text-sm leading-6 text-on-surface-variant">{exercise.instruction}</p>
         </div>
         <span className="inline-flex shrink-0 rounded-full bg-primary-container px-3 py-1 text-xs font-bold text-primary">
-          Pass {exercise.minScoreToPass}%
+          {isWriting || isSpeaking ? 'Self-review' : `Pass ${exercise.minScoreToPass}%`}
         </span>
       </div>
 
@@ -189,21 +207,41 @@ export function ExerciseRenderer({ exercise, onComplete, onNext, hasNext = false
 
       {!invalidContract && needsChoices && (
         <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {model.contract.kind === 'reading' && <p className="sm:col-span-2 font-semibold">{model.contract.question}</p>}
           {model.choices.map((choice) => (
             <button
               key={choice}
               type="button"
-              onClick={() => setSelected(choice)}
+              disabled={Boolean(lastResult?.passed)}
+              aria-pressed={selected === choice}
+              data-answer-state={selected === choice && lastResult ? lastResult.passed ? 'correct' : 'incorrect' : 'neutral'}
+              onClick={() => { setSelected(choice); setLastResult(null); }}
               className={cn(
                 'rounded-2xl border px-4 py-3 text-left text-sm font-bold transition',
-                selected === choice ? 'border-primary bg-primary text-on-primary' : 'border-outline-variant/20 bg-surface-container-low text-on-surface',
+                selected === choice ? lastResult ? lastResult.passed ? 'border-emerald-600 bg-emerald-50 text-emerald-900' : 'border-red-600 bg-red-50 text-red-900' : 'border-primary bg-primary text-on-primary' : 'border-outline-variant/20 bg-surface-container-low text-on-surface',
               )}
             >
               {choice}
+              {selected === choice && lastResult && <span className="mt-2 flex items-center gap-1 text-xs">
+                {lastResult.passed ? <CheckCircle className="h-4 w-4" aria-hidden="true" /> : <AlertCircle className="h-4 w-4" aria-hidden="true" />}
+                {lastResult.passed ? 'Correct' : 'Try again'}
+              </span>}
             </button>
           ))}
         </div>
       )}
+
+      {model.contract.kind === 'vocabulary_match' && <div className="mt-5 grid gap-3">
+        {model.contract.pairs.map((pair, index) => <label key={index} className="grid gap-2 text-sm font-semibold">
+          {pair.term}
+          <select aria-label={pair.term} disabled={Boolean(lastResult?.passed)} value={matches[index] ?? ''}
+            onChange={(event) => { setLastResult(null); setMatches(current => { const next = [...current]; next[index] = event.target.value; return next; }); }}
+            className="rounded-lg border border-outline-variant/30 bg-surface-container-lowest p-3">
+            <option value="">Choose a meaning</option>
+            {[...new Set(model.contract.kind === 'vocabulary_match' ? model.contract.pairs.map(item => item.meaning) : [])].sort().map(meaning => <option key={meaning}>{meaning}</option>)}
+          </select>
+        </label>)}
+      </div>}
 
       {!invalidContract && needsOrdering && (
         <div className="mt-5 space-y-4">
@@ -269,7 +307,7 @@ export function ExerciseRenderer({ exercise, onComplete, onNext, hasNext = false
         </div>
       )}
 
-      {!invalidContract && needsTextInput && (
+      {!invalidContract && needsTextInput && !needsChoices && (
         <textarea
           value={textResponse}
           onChange={(event) => setTextResponse(event.target.value)}
@@ -280,8 +318,8 @@ export function ExerciseRenderer({ exercise, onComplete, onNext, hasNext = false
       )}
 
       <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <button type="button" onClick={submit} disabled={invalidContract} className="inline-flex items-center justify-center rounded-full bg-primary px-5 py-3 text-sm font-bold text-on-primary hover:bg-primary-dim disabled:cursor-not-allowed disabled:opacity-55">
-          Grade exercise
+        <button type="button" onClick={submit} disabled={invalidContract || Boolean(lastResult?.passed)} className="inline-flex items-center justify-center rounded-full bg-primary px-5 py-3 text-sm font-bold text-on-primary hover:bg-primary-dim disabled:cursor-not-allowed disabled:opacity-55">
+          {isWriting || isSpeaking ? 'Review response' : 'Grade exercise'}
         </button>
         {lastResult && (
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -294,7 +332,7 @@ export function ExerciseRenderer({ exercise, onComplete, onNext, hasNext = false
               </span>
               <span>
                 <span className="block font-headline text-base font-black text-on-surface">
-                  {lastResult.score}% - {resultEncouragement?.title}
+                  {lastResult.score === null ? 'Not graded' : `${lastResult.score}% - ${resultEncouragement?.title}`}
                 </span>
                 <span className="mt-0.5 block text-sm leading-6 text-on-surface-variant">
                   {resultEncouragement?.body} {lastResult.feedback}
@@ -304,13 +342,10 @@ export function ExerciseRenderer({ exercise, onComplete, onNext, hasNext = false
             {hasNext && onNext && (
               <button
                 type="button"
-                onClick={() => {
-                  clearAutoAdvanceTimer();
-                  onNext();
-                }}
-                className="inline-flex items-center justify-center rounded-full bg-surface-container-low px-5 py-3 text-sm font-bold text-on-surface hover:bg-surface-container"
+                onClick={advance}
+                className={cn('inline-flex items-center justify-center rounded-full px-5 py-3 text-sm font-bold', lastResult.passed ? 'bg-primary text-on-primary hover:bg-primary-dim' : 'bg-surface-container-low text-on-surface hover:bg-surface-container')}
               >
-                Next exercise
+                {lastResult.passed ? 'Continue' : 'Next exercise'}
               </button>
             )}
           </div>
@@ -379,106 +414,14 @@ export function getExerciseAudioText(
 }
 
 function scoreExercise(exercise: CurriculumExercise, model: ReturnType<typeof buildExerciseModel>, response: Record<string, unknown>): ExerciseResult {
-  if (isChoiceExercise(exercise.type)) {
-    const selected = String(response.selected ?? '');
-    const correct = normalize(selected) === normalize(model.targetText);
-    return result(correct ? 100 : 0, correct ? 'Correct answer.' : `Expected: ${model.targetText}`, response, exercise);
-  }
-
-  if (exercise.type === 'sentence_order') {
-    const ordered = Array.isArray(response.ordered) ? response.ordered.join(' ') : '';
-    const score = wordAccuracy(model.targetText, ordered);
-    return result(score, score >= exercise.minScoreToPass ? 'Sentence order is strong.' : `Target order: ${model.targetText}`, response, exercise);
-  }
-
-  if (isWritingExercise(exercise.type)) {
-    const text = String(response.text ?? '');
-    const rubric = scoreRubricText(text, model.vocabulary, 5);
-    const score = averageRubric(rubric);
-    return { score, feedback: buildWritingFeedback(rubric), rubricScores: rubric, response, passed: score >= exercise.minScoreToPass };
-  }
-
-  if (isSpeakingExercise(exercise.type)) {
-    const transcript = String(response.transcript ?? '');
-    const selfChecks = response.selfChecks && typeof response.selfChecks === 'object' ? response.selfChecks as Record<string, boolean> : {};
-    const checkedScore = Math.round((Object.values(selfChecks).filter(Boolean).length / 5) * 50);
-    const transcriptScore = transcript ? Math.min(50, wordAccuracy(model.targetText, transcript) / 2 + 20) : 0;
-    const score = Math.round(checkedScore + transcriptScore);
-    return {
-      score,
-      feedback: transcript ? 'Speaking scored from transcript plus self-check.' : 'Speaking scored from structured self-check fallback.',
-      rubricScores: { pronunciation: checkedScore, fluency: checkedScore, grammar: transcriptScore, vocabulary: transcriptScore, taskCompletion: score },
-      response,
-      passed: score >= exercise.minScoreToPass,
-    };
-  }
-
-  const text = String(response.text ?? '');
-  if (getScoringMode(exercise.type) === 'subjective') {
-    const words = text.trim().split(/\s+/).filter(Boolean).length;
-    const score = words >= 12 ? 100 : words >= 6 ? 75 : words >= 3 ? 60 : 0;
-    return {
-      score,
-      feedback: 'Completed as a self-review task. No fake AI evaluation was generated.',
-      rubricScores: { ...exercise.scoringRubric, taskCompletion: score },
-      response,
-      passed: score >= exercise.minScoreToPass,
-    };
-  }
-  const expected = exercise.type === 'gap_fill' || exercise.type === 'dictation_gap'
-    ? model.vocabulary[0] ?? model.targetText
-    : model.targetText;
-  const score = wordAccuracy(expected, text);
-  return result(score, score >= exercise.minScoreToPass ? 'Answer accepted.' : `Expected close to: ${expected}`, response, exercise);
+  const answer = typeof response.selected === 'string' ? response.selected
+    : Array.isArray(response.ordered) ? response.ordered.join(' ')
+    : String(response.text ?? response.transcript ?? '');
+  const scored = scoreObjectiveContract(model.contract, answer);
+  return { score: scored.score, passed: scored.passed, feedback: scored.feedback,
+    rubricScores: scored.score === null ? {} : { accuracy: scored.score }, response };
 }
 
-function result(score: number, feedback: string, response: Record<string, unknown>, exercise: CurriculumExercise): ExerciseResult {
-  const roundedScore = Math.max(0, Math.min(100, Math.round(score)));
-  return {
-    score: roundedScore,
-    feedback,
-    rubricScores: { ...exercise.scoringRubric, accuracy: roundedScore },
-    response,
-    passed: roundedScore >= exercise.minScoreToPass,
-  };
-}
-
-function scoreRubricText(text: string, vocabulary: string[], minimumWords: number): ScoringRubric {
-  const words = text.trim().split(/\s+/).filter(Boolean);
-  const vocabularyHits = vocabulary.filter((word) => normalize(text).includes(normalize(word))).length;
-  const sentenceCount = text.split(/[.!?]+/).filter((part) => part.trim()).length;
-  return {
-    taskCompletion: words.length >= minimumWords ? 80 : Math.round((words.length / minimumWords) * 80),
-    grammar: sentenceCount > 0 && /^[A-ZÄÖÜ]/.test(text.trim()) ? 75 : 55,
-    vocabulary: Math.min(100, vocabularyHits * 25),
-    coherence: sentenceCount >= 2 ? 80 : 65,
-    spelling: / {2,}|[^\S\r\n]{2,}/.test(text) ? 70 : 85,
-    cefrAppropriateness: words.length > 40 ? 85 : 75,
-  };
-}
-
-function averageRubric(rubric: ScoringRubric) {
-  const values = Object.values(rubric).filter((value): value is number => typeof value === 'number');
-  return values.length ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length) : 0;
-}
-
-function buildWritingFeedback(rubric: ScoringRubric) {
-  const weak = Object.entries(rubric).filter(([, score]) => typeof score === 'number' && score < 70).map(([key]) => key);
-  return weak.length ? `Rubric feedback: improve ${weak.join(', ')}.` : 'Rubric feedback: task is complete and appropriate.';
-}
-
-function wordAccuracy(expected: string, actual: string) {
-  const expectedWords = expected.split(/\s+/).map(normalize).filter(Boolean);
-  const actualWords = actual.split(/\s+/).map(normalize).filter(Boolean);
-  if (expectedWords.length === 0) return actualWords.length === 0 ? 100 : 0;
-  let correct = 0;
-  expectedWords.forEach((word, index) => {
-    if (word === actualWords[index]) correct += 1;
-  });
-  const missing = Math.max(0, expectedWords.length - actualWords.length);
-  const extra = Math.max(0, actualWords.length - expectedWords.length);
-  return Math.max(0, ((correct - missing - extra) / expectedWords.length) * 100);
-}
 
 function isReadingExercise(type: ExerciseType) {
   return [
@@ -606,8 +549,8 @@ function isChoiceExercise(type: ExerciseType) {
 }
 
 function getPlaceholder(type: ExerciseType) {
-  if (type === 'guided_writing') return 'Write your own answer. You are graded by rubric, not exact matching.';
-  if (isWritingExercise(type)) return 'Write your answer. This is saved as a self-review task unless AI review is added later.';
+  if (type === 'guided_writing') return 'Write your response.';
+  if (isWritingExercise(type)) return 'Write your response.';
   if (isSpeakingExercise(type)) return 'Record or type your spoken response notes.';
   if (type.includes('dictation')) return 'Type exactly what you hear.';
   if (type === 'lesson_test') return 'Write the final lesson answer here.';
@@ -735,7 +678,7 @@ function getContractPrompt(contract: ExerciseContract) {
   if (contract.kind === 'invalid') return '';
   if (contract.kind === 'multiple_choice') return contract.prompt;
   if (contract.kind === 'gap_fill') return contract.template;
-  if (contract.kind === 'sentence_order') return contract.correctAnswer;
+  if (contract.kind === 'sentence_order') return 'Put the words in the correct order.';
   if (contract.kind === 'vocabulary_match') return 'Match each term to its meaning.';
   if (contract.kind === 'reading') return contract.sourceText;
   if (contract.kind === 'listening') return contract.question;

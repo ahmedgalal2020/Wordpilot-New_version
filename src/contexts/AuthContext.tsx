@@ -1,3 +1,4 @@
+import type { AuthFailure } from '../lib/authProtection';
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { getAppRedirectUrl, getMissingClientEnv, hasSupabaseEnv } from '../lib/env';
@@ -34,11 +35,11 @@ type AuthContextValue = {
     continueSession: () => Promise<void>;
     signOutNow: () => Promise<void>;
   };
-  signIn: (email: string, password: string) => Promise<{ error: string | null; success: boolean }>;
-  signInWithGoogle: () => Promise<{ error: string | null }>;
-  signUp: (email: string, password: string, fullName: string) => Promise<{ error: string | null; needsEmailVerification: boolean }>;
-  resendConfirmation: (email: string) => Promise<{ error: string | null; message: string | null }>;
-  resetPassword: (email: string) => Promise<{ error: string | null; message: string | null }>;
+  signIn: (email: string, password: string, captchaToken?: string) => Promise<AuthFailure & { error: string | null; success: boolean }>;
+  signInWithGoogle: () => Promise<{ error: string | null; url?: string | null }>;
+  signUp: (email: string, password: string, fullName: string, captchaToken?: string) => Promise<AuthFailure & { error: string | null; needsEmailVerification: boolean }>;
+  resendConfirmation: (email: string, captchaToken?: string) => Promise<AuthFailure & { error: string | null; message: string | null }>;
+  resetPassword: (email: string, captchaToken?: string) => Promise<AuthFailure & { error: string | null; message: string | null }>;
   changePassword: (password: string) => Promise<{ error: string | null; message: string | null }>;
   sendPasswordChangeCode: (currentPassword: string) => Promise<{ error: string | null; message: string | null }>;
   changePasswordWithCode: (password: string, code?: string) => Promise<{ error: string | null; message: string | null }>;
@@ -231,7 +232,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await fetchProfile(data.session?.user ?? null);
         clearAuthHashFromUrl();
       } catch (error) {
-        console.error('Failed to initialize auth session', error);
+        console.error('Failed to initialize auth session');
         if (mounted) {
           setSession(null);
           setUser(null);
@@ -260,7 +261,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Avoid awaiting Supabase calls inside onAuthStateChange to prevent auth deadlocks.
       window.setTimeout(() => {
         void fetchProfile(nextSession?.user ?? null).catch((error) => {
-          console.error('Failed during deferred auth state sync', error);
+          console.error('Failed during deferred auth state sync');
         });
       }, 0);
     });
@@ -368,18 +369,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await fetchProfile(data.session.user);
   }
 
-  async function signIn(email: string, password: string) {
+  async function signIn(email: string, password: string, captchaToken?: string) {
     if (!authReady) {
       return { error: authMessage, success: false };
     }
 
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password, options: { captchaToken } });
 
     if (!error && data.user) {
       await ensureProfile(data.user);
     }
 
-    return { error: error?.message ?? null, success: !error };
+    return { error: error ? 'Sign-in failed.' : null, status: error?.status, code: error?.code, success: !error };
   }
 
   async function signInWithGoogle() {
@@ -387,10 +388,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { error: authMessage };
     }
 
-    const { error } = await supabase.auth.signInWithOAuth({
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: getAppRedirectUrl('/dashboard'),
+        redirectTo: getAppRedirectUrl('/dashboard?oauth=callback'),
+        skipBrowserRedirect: true,
         queryParams: {
           access_type: 'offline',
           prompt: 'select_account',
@@ -398,10 +400,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
     });
 
-    return { error: error?.message ?? null };
+    return { error: error?.message ?? null, url: data.url };
   }
 
-  async function signUp(email: string, password: string, fullName: string) {
+  async function signUp(email: string, password: string, fullName: string, captchaToken?: string) {
     if (!authReady) {
       return { error: authMessage, needsEmailVerification: false };
     }
@@ -410,6 +412,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       email,
       password,
       options: {
+        captchaToken,
         data: {
           full_name: fullName,
         },
@@ -418,7 +421,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     if (error) {
-      return { error: error.message, needsEmailVerification: false };
+      return error.code === 'user_already_exists'
+        ? { error: null, needsEmailVerification: true }
+        : { error: 'Registration could not be completed.', status: error.status, code: error.code, needsEmailVerification: false };
     }
 
     const currentUser = data.user;
@@ -435,7 +440,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: null, needsEmailVerification: !data.session };
   }
 
-  async function resendConfirmation(email: string) {
+  async function resendConfirmation(email: string, captchaToken?: string) {
     if (!authReady) {
       return { error: authMessage, message: null };
     }
@@ -445,35 +450,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       email,
       options: {
         emailRedirectTo: getAppRedirectUrl('/dashboard'),
+        captchaToken,
       },
     });
 
     if (error) {
-      return { error: error.message, message: null };
+      return error.code === 'user_not_found' ? { error: null, message: null }
+        : { error: 'Request could not be completed.', status: error.status, code: error.code, message: null };
     }
 
     return {
       error: null,
-      message: 'Confirmation email sent again. Check your inbox and spam folder.',
+      message: 'If confirmation is needed for this email, instructions will be sent.',
     };
   }
 
-  async function resetPassword(email: string) {
+  async function resetPassword(email: string, captchaToken?: string) {
     if (!authReady) {
       return { error: authMessage, message: null };
     }
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: getAppRedirectUrl('/reset-password'),
+      captchaToken,
     });
 
     if (error) {
-      return { error: error.message, message: null };
+      return error.code === 'user_not_found' ? { error: null, message: null }
+        : { error: 'Request could not be completed.', status: error.status, code: error.code, message: null };
     }
 
     return {
       error: null,
-      message: 'Password reset email sent. Check your inbox and spam folder.',
+      message: 'If an account exists for this email, password reset instructions will be sent.',
     };
   }
 
@@ -570,7 +579,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       await supabase.auth.signOut({ scope: 'local' });
     } catch (error) {
-      console.error('Failed to sign out cleanly', error);
+      console.error('Failed to sign out cleanly');
     }
   }
 
