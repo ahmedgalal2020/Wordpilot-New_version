@@ -4,13 +4,13 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx server.ts",
-    "dev:server": "tsx server.ts",
+    "dev": "tsx server/start.ts",
+    "dev:server": "tsx server/start.ts",
     "dev:vite": "vite --host 0.0.0.0",
     "dev:windows": "node scripts/dev-windows.cjs",
     "dev:detached": "node scripts/start-dev-detached.cjs",
     "build": "vite build",
-    "preview": "tsx server.ts",
+    "preview": "tsx server/start.ts",
     "preview:vite": "vite preview --host 0.0.0.0",
     "clean": "node --eval \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "lint": "tsc --noEmit",
@@ -30,10 +30,12 @@
     "test:training-success-flow": "tsx scripts/training-success-flow-smoke.ts",
     "test": "npm run test:api-routes && npm run test:curriculum && npm run test:curriculum-quality && npm run test:curriculum-naturalness && npm run test:curriculum-diversity && npm run test:curriculum-coherence && npm run test:curriculum-repository && npm run test:dictation && npm run test:dictation-celebration && npm run test:exercise-audio && npm run test:exercise-encouragement && npm run test:training-architecture && npm run test:exercise-contracts && npm run test:training-success-flow && npm run test:production-fixes",
     "sync:curriculum-content": "tsx scripts/sync-curriculum-content.ts",
-    "test:production-fixes": "tsx scripts/production-fixes-smoke.ts"
+    "test:production-fixes": "tsx scripts/production-fixes-smoke.ts",
+    "test:netlify": "tsx scripts/netlify-adapter-smoke.ts"
   },
   "dependencies": {
     "@hallelx/youtube-transcript": "^0.2.0",
+    "@netlify/functions": "6.0.0",
     "@supabase/supabase-js": "^2.103.3",
     "@tailwindcss/vite": "^4.1.14",
     "@types/canvas-confetti": "^1.9.0",
@@ -49,6 +51,7 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.14.0",
+    "serverless-http": "4.0.0",
     "tailwind-merge": "^3.5.0",
     "vite": "^6.2.0"
   },

@@ -5,7 +5,6 @@ import { authorizeShadowingVideo } from './server/shadowingQuota';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createServer as createViteServer } from 'vite';
 import {
   getAllowedOrigins,
   getBearerToken,
@@ -22,8 +21,7 @@ dotenv.config({ path: path.resolve(__dirname, '.env.local') });
 dotenv.config({ path: path.resolve(__dirname, '.env') });
 
 const isProduction = process.env.NODE_ENV === 'production' || process.env.npm_lifecycle_event === 'preview';
-const app = express();
-const port = Number(process.env.PORT ?? 3000);
+export const app = express();
 
 type AuthenticatedUser = {
   id: string;
@@ -1181,26 +1179,6 @@ app.delete('/api/admin/users/:userId', async (req, res) => {
 app.post('/api/stripe/webhook', async (req, res) => {
   const result = await handleStripeWebhook(req);
   return res.status(result.status).json(result.body);
-});
-
-if (isProduction) {
-  app.use(express.static(path.resolve(__dirname, 'dist')));
-  app.get('*', (_req, res) => {
-    res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
-  });
-} else {
-  const vite = await createViteServer({
-    server: { middlewareMode: true },
-    appType: 'spa',
-  });
-  app.use(vite.middlewares);
-}
-
-const host = isProduction ? '0.0.0.0' : '127.0.0.1';
-
-app.listen(port, host, () => {
-  const publicUrl = process.env.PUBLIC_APP_URL || process.env.APP_URL || `http://localhost:${port}`;
-  console.log(`WordPilot running at ${publicUrl}`);
 });
 
 async function getAuthenticatedUserContext(req: express.Request) {
