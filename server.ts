@@ -15,10 +15,10 @@ import {
 import { createRateLimiter } from './server/middleware/rateLimit';
 import { createCorsHeaders, createOriginGuard, createSecurityHeaders } from './server/middleware/security';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const serverDirectory = path.dirname(fileURLToPath(import.meta.url));
 
-dotenv.config({ path: path.resolve(__dirname, '.env.local') });
-dotenv.config({ path: path.resolve(__dirname, '.env') });
+dotenv.config({ path: path.resolve(serverDirectory, '.env.local') });
+dotenv.config({ path: path.resolve(serverDirectory, '.env') });
 
 const isProduction = process.env.NODE_ENV === 'production' || process.env.npm_lifecycle_event === 'preview';
 export const app = express();
